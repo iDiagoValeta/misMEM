@@ -27,9 +27,9 @@ const now = (): number => Date.now();
 const CANDIDATE_POOL_LIMIT = 50;
 const MEMORY_FTS_SCAN_LIMIT = 200;
 const RRF_K = 60;
-// Mantiene la ventaja de aparecer en ambos rankings, sin volver inmortal a un
-// hit de salience mínima frente a una alternativa semántica muy relevante.
-const SALIENCE_RRF_WEIGHT = 0.02;
+// Menor que un puesto de RRF en la cima (1/61 - 1/62 ≈ 0.00026): la saliencia
+// desempata entre recuerdos casi igual de relevantes, nunca tapa la relevancia.
+const SALIENCE_RRF_WEIGHT = 0.0002;
 
 function escapeFts(query: string): string {
   // Escape FTS5 special chars by quoting tokens. Conservative: split on spaces.
@@ -121,7 +121,7 @@ function lexicalCandidates(
               m.last_accessed_at, m.salience_updated_at, rank AS fts_rank
        FROM memories_fts f JOIN memories m ON m.rowid = f.rowid
        WHERE memories_fts MATCH @q ${input.scope ? "AND m.scope = @scope" : ""}
-       ORDER BY m.salience DESC, rank, m.id LIMIT @limit`,
+       ORDER BY rank, m.salience DESC, m.id LIMIT @limit`,
     )
     .all({
       q: fts,
@@ -155,8 +155,8 @@ function lexicalCandidates(
     }))
     .sort(
       (a, b) =>
-        (b.salience ?? 0) - (a.salience ?? 0) ||
         Number(a.fts_rank) - Number(b.fts_rank) ||
+        (b.salience ?? 0) - (a.salience ?? 0) ||
         a.id.localeCompare(b.id),
     )
     .slice(0, CANDIDATE_POOL_LIMIT)

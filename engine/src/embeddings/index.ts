@@ -146,7 +146,7 @@ export function semanticSearchMemories(
       });
     }
   }
-  hits.sort((a, b) => b.score - a.score);
+  hits.sort((a, b) => b.score - a.score || b.salience - a.salience);
   return hits.slice(0, opts.limit);
 }
 

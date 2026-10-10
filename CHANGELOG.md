@@ -1,5 +1,17 @@
 # Changelog
 
+## Sin publicar
+
+### La relevancia manda sobre la saliencia
+
+- La saliencia sólo desempata entre recuerdos casi igual de relevantes
+  (`SALIENCE_RRF_WEIGHT` 0.02 → 0.0002). Antes un recuerdo muy usado tapaba al
+  correcto: sobre una copia real (1.353 memorias, 80 preguntas con otras
+  palabras), el correcto entraba entre los 5 primeros 4 veces; ahora 18, y 73
+  con un modelo de embeddings multilingüe.
+- La búsqueda por palabras ordena por coincidencia (bm25) y después por
+  saliencia; la semántica desempata por saliencia a igual parecido.
+
 ## 0.3.0 — 2026-07-28
 
 ### Decay y olvido coherentes
