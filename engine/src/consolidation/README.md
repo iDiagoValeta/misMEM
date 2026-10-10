@@ -26,7 +26,7 @@ mismem-consolidate [--dry-run] [--scope <name>] [--min-age-hours 24] [--min-epis
 | `DEEPSEEK_API_KEY` | — | Si está, consolida con DeepSeek directo (gana sobre OpenRouter) |
 | `OPENROUTER_API_KEY` | — | Alternativa; hace falta una de las dos (salvo `--dry-run`) |
 | `MISMEM_CONSOLIDATION_MODEL` | `deepseek-chat` / `deepseek/deepseek-chat` | En DeepSeek un nombre con `/` (de OpenRouter) se ignora |
-| `MISMEM_CONSOLIDATION_MAX_TOKENS` | `4096` | Tope de la respuesta del LLM |
+| `MISMEM_CONSOLIDATION_MAX_TOKENS` | `8192` | Tope de la respuesta; si se corta, la tanda se parte a la mitad |
 | `MISMEM_CONSOLIDATION_MAX_PROMPT_CHARS` | `60000` | Caracteres de episodios por llamada; lo que no entra va en la tanda siguiente |
 | `MISMEM_CONSOLIDATION_MAX_EPISODE_CHARS` | `12000` | Un episodio más largo viaja recortado (principio y final) |
 | `MISMEM_CONSOLIDATION_MAX_CALLS` | `60` | Llamadas por corrida; lo pendiente queda para la noche siguiente |

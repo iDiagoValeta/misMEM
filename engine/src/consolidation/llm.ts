@@ -23,11 +23,17 @@ export interface LlmConfig {
   maxTokens?: number;
 }
 
-const DEFAULT_MAX_TOKENS = 4096;
+// El máximo de salida de deepseek-chat: menos corta respuestas de tandas grandes.
+const DEFAULT_MAX_TOKENS = 8192;
 
 /** Credenciales o saldo: reintentar con otro ámbito daría el mismo error. */
 export class LlmFatalError extends Error {
   override name = "LlmFatalError";
+}
+
+/** La respuesta llegó al tope de tokens: con menos episodios entra. */
+export class LlmTruncatedError extends Error {
+  override name = "LlmTruncatedError";
 }
 
 function loadMaxTokens(): number {
@@ -98,9 +104,13 @@ export async function distill(
   }
 
   const json = (await res.json()) as {
-    choices?: { message?: { content?: string } }[];
+    choices?: { finish_reason?: string; message?: { content?: string } }[];
   };
-  const content = json.choices?.[0]?.message?.content;
+  const choice = json.choices?.[0];
+  if (choice?.finish_reason === "length") {
+    throw new LlmTruncatedError(`respuesta cortada en ${cfg.maxTokens ?? DEFAULT_MAX_TOKENS} tokens`);
+  }
+  const content = choice?.message?.content;
   if (!content) {
     throw new Error("Respuesta del LLM sin choices[0].message.content");
   }

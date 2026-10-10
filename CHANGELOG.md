@@ -15,8 +15,10 @@
 ### La consolidación vuelve a andar y tiene el costo acotado
 
 - `DEEPSEEK_API_KEY` consolida con DeepSeek directo; OpenRouter queda como alternativa.
-- Cada llamada pide como mucho 4096 tokens de respuesta. Antes no había tope, OpenRouter reservaba
-  unos 100.000 por llamada y respondía HTTP 402 por saldo.
+- Cada llamada pide como mucho 8192 tokens de respuesta, el máximo de `deepseek-chat`. Antes no había
+  tope, OpenRouter reservaba unos 100.000 por llamada y respondía HTTP 402 por saldo.
+- Si una respuesta igual llega cortada (`finish_reason: length`), la tanda se parte a la mitad y se
+  reintenta; el ámbito sigue con ese tamaño. Antes se perdía la tanda entera con "JSON inválido".
 - Un ámbito se consolida en tandas que entran en un presupuesto de caracteres; un episodio enorme viaja
   recortado (principio y final). Antes las tandas grandes pasaban el contexto del modelo (163.840
   tokens) y volvían con HTTP 400.
