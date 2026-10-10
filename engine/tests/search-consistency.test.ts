@@ -2,7 +2,7 @@ import { beforeEach, describe, expect, it } from "vitest";
 import type { Database as DB } from "better-sqlite3";
 import type { ServerResponse } from "node:http";
 import { openDb } from "../src/db.js";
-import { capture, consolidate, recallHybrid } from "../src/tools.js";
+import { capture, consolidate, recall, recallHybrid } from "../src/tools.js";
 import {
   embedPendingMemories,
   type EmbedFn,
@@ -75,23 +75,58 @@ describe("ranking híbrido", () => {
     expect(result.hits).toHaveLength(2);
   });
 
-  it("un match semántico fuerte puede desplazar a uno léxico débil", async () => {
-    const weak = makeMemory("deudas mencionadas de pasada");
-    const strong = makeMemory("cashflow apretado");
-    db.prepare("UPDATE memories SET salience = 0.01 WHERE id = ?").run(weak);
-    db.prepare("UPDATE memories SET salience = 1 WHERE id = ?").run(strong);
-    await embedPendingMemories(db, {
-      embedFn: fakeEmbed,
-      model: "fake",
-    });
+  it("la relevancia manda: un recuerdo poco usado pero más parecido gana a uno muy usado", async () => {
+    const vecs: Record<string, number[]> = {
+      "pregunta sobre husos horarios": [1, 0],
+      "fechas de postgres sin conversión de zona": [1, 0],
+      "configuración general del servidor": [0.8, 0.6],
+    };
+    const embed: EmbedFn = async (texts) =>
+      texts.map((t) => Float32Array.from(vecs[t] ?? [0, 1]));
+    const relevant = makeMemory("fechas de postgres sin conversión de zona");
+    const popular = makeMemory("configuración general del servidor");
+    db.prepare("UPDATE memories SET salience = 0.05 WHERE id = ?").run(relevant);
+    db.prepare("UPDATE memories SET salience = 1 WHERE id = ?").run(popular);
+    await embedPendingMemories(db, { embedFn: embed, model: "fake" });
 
     const result = await recallHybrid(
       db,
-      { query: "deudas", limit: 1 },
-      fakeEmbed,
+      { query: "pregunta sobre husos horarios", limit: 2 },
+      embed,
       { reinforce: false, embeddingModel: "fake" },
     );
-    expect(result.hits[0]?.id).toBe(strong);
+    expect(result.hits.map((hit) => hit.id)).toEqual([relevant, popular]);
+  });
+
+  it("a igual parecido, desempata la saliencia", async () => {
+    const embed: EmbedFn = async (texts) => texts.map(() => Float32Array.from([1, 0]));
+    const quiet = makeMemory("deploy con docker compose");
+    const used = makeMemory("deploy con docker y traefik");
+    db.prepare("UPDATE memories SET salience = 0.2 WHERE id = ?").run(quiet);
+    db.prepare("UPDATE memories SET salience = 0.9 WHERE id = ?").run(used);
+    await embedPendingMemories(db, { embedFn: embed, model: "fake" });
+
+    const result = await recallHybrid(
+      db,
+      { query: "zzz sin coincidencias", limit: 2 },
+      embed,
+      { reinforce: false, embeddingModel: "fake" },
+    );
+    expect(result.hits.map((hit) => hit.id)).toEqual([used, quiet]);
+  });
+
+  it("la búsqueda por palabras ordena por coincidencia, no por saliencia", () => {
+    const close = makeMemory("postgres fechas postgres zona postgres");
+    const loose = makeMemory(
+      "notas largas de una reunión sobre muchos temas distintos y al final postgres",
+    );
+    db.prepare("UPDATE memories SET salience = 0.1 WHERE id = ?").run(close);
+    db.prepare("UPDATE memories SET salience = 1 WHERE id = ?").run(loose);
+
+    const memories = recall(db, { query: "postgres", limit: 10 }, { reinforce: false }).hits.filter(
+      (hit) => hit.layer === "memory",
+    );
+    expect(memories.map((hit) => hit.id)).toEqual([close, loose]);
   });
 
   it("mantiene la propiedad de prefijo entre límites", async () => {
