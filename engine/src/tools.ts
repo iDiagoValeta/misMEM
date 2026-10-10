@@ -271,7 +271,7 @@ export async function recallHybrid(
   const lexical = lexicalCandidates(db, input, at);
   const cfg = loadEmbeddingConfig();
   const actualEmbedFn =
-    embedFn ?? ((texts: string[]) => embedTexts(texts, cfg));
+    embedFn ?? ((texts: string[]) => embedTexts(texts, cfg, "query"));
 
   const vecs = await actualEmbedFn([input.query]);
   const queryVec = vecs?.[0];
@@ -279,6 +279,7 @@ export async function recallHybrid(
     ? semanticSearchMemories(db, queryVec, {
         scope: input.scope,
         limit: CANDIDATE_POOL_LIMIT,
+        minScore: cfg.minScore,
         model: options.embeddingModel ?? (embedFn ? undefined : cfg.model),
       })
     : [];

@@ -6,46 +6,84 @@
  * para una memoria personal (miles de filas, no millones) sin agregar
  * fragilidad de instalación al paquete.
  *
- * Embeddings via Ollama local (default: nomic-embed-text). Si Ollama no está
- * corriendo, todo degrada silenciosamente a FTS5 puro.
+ * Embeddings via Ollama local (default: nomic-embed-text) o cualquier servidor
+ * compatible con OpenAI (`/v1/embeddings`, p. ej. llama-server). Si el servidor
+ * no responde, todo degrada silenciosamente a FTS5 puro.
  */
 import type { Database as DB } from "better-sqlite3";
 
+export type EmbeddingProvider = "ollama" | "openai";
+export type EmbedKind = "query" | "document";
+
 export interface EmbeddingConfig {
   enabled: boolean;
+  provider: EmbeddingProvider;
   url: string;
   model: string;
   timeoutMs: number;
+  /** Algunos modelos (EmbeddingGemma) esperan un prefijo distinto para consulta y documento. */
+  queryPrefix: string;
+  docPrefix: string;
+  /** Coseno mínimo para que un recuerdo cuente como parecido; depende del modelo. */
+  minScore: number;
 }
 
+const DEFAULT_MIN_SCORE = 0.5;
+
 export function loadEmbeddingConfig(): EmbeddingConfig {
+  const provider: EmbeddingProvider =
+    process.env.MISMEM_EMBEDDING_PROVIDER === "openai" ? "openai" : "ollama";
+  const minScore = Number(process.env.MISMEM_EMBEDDING_MIN_SCORE);
   return {
     enabled: (process.env.MISMEM_EMBEDDINGS ?? "auto") !== "off",
-    url: process.env.MISMEM_OLLAMA_URL ?? "http://127.0.0.1:11434",
+    provider,
+    url:
+      process.env.MISMEM_EMBEDDING_URL ??
+      process.env.MISMEM_OLLAMA_URL ??
+      "http://127.0.0.1:11434",
     model: process.env.MISMEM_EMBEDDING_MODEL ?? "nomic-embed-text",
     timeoutMs: Number(process.env.MISMEM_EMBEDDING_TIMEOUT_MS) || 3000,
+    queryPrefix: process.env.MISMEM_EMBEDDING_QUERY_PREFIX ?? "",
+    docPrefix: process.env.MISMEM_EMBEDDING_DOC_PREFIX ?? "",
+    minScore: Number.isFinite(minScore) && minScore > 0 ? minScore : DEFAULT_MIN_SCORE,
   };
 }
 
 export type EmbedFn = (texts: string[]) => Promise<Float32Array[] | null>;
 
-/** Llama a Ollama /api/embed. Devuelve null ante cualquier fallo (sin throw). */
+async function requestVectors(
+  input: string[],
+  cfg: EmbeddingConfig,
+): Promise<number[][] | null> {
+  const endpoint = cfg.provider === "openai" ? "/v1/embeddings" : "/api/embed";
+  const res = await fetch(`${cfg.url}${endpoint}`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ model: cfg.model, input }),
+    signal: AbortSignal.timeout(cfg.timeoutMs),
+  });
+  if (!res.ok) return null;
+  if (cfg.provider === "openai") {
+    const data = (await res.json()) as { data?: { index: number; embedding: number[] }[] };
+    if (!data.data) return null;
+    return [...data.data].sort((a, b) => a.index - b.index).map((d) => d.embedding);
+  }
+  const data = (await res.json()) as { embeddings?: number[][] };
+  return data.embeddings ?? null;
+}
+
+/** Pide los vectores al servidor configurado. Devuelve null ante cualquier fallo (sin throw). */
 export async function embedTexts(
   texts: string[],
   cfg: EmbeddingConfig = loadEmbeddingConfig(),
+  kind: EmbedKind = "document",
 ): Promise<Float32Array[] | null> {
   if (!cfg.enabled || texts.length === 0) return null;
+  const prefix = kind === "query" ? cfg.queryPrefix : cfg.docPrefix;
   try {
-    const res = await fetch(`${cfg.url}/api/embed`, {
-      method: "POST",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ model: cfg.model, input: texts }),
-      signal: AbortSignal.timeout(cfg.timeoutMs),
-    });
-    if (!res.ok) return null;
-    const data = (await res.json()) as { embeddings?: number[][] };
-    if (!data.embeddings || data.embeddings.length !== texts.length) return null;
-    return data.embeddings.map((e) => Float32Array.from(e));
+    const vectors = await requestVectors(texts.map((t) => prefix + t), cfg);
+    if (!vectors || vectors.length !== texts.length) return null;
+    return vectors.map((e) => Float32Array.from(e));
   } catch {
     return null;
   }

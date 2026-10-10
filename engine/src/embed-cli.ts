@@ -2,8 +2,8 @@
 /**
  * mismem-embed — backfill y reindexado de embeddings para memories.
  *
- * Requiere Ollama corriendo con el modelo de embeddings
- * (default: `ollama pull nomic-embed-text`). Idempotente: procesa vectores
+ * Requiere el servidor de embeddings configurado: Ollama (default:
+ * `ollama pull nomic-embed-text`) o uno compatible con OpenAI. Idempotente: procesa vectores
  * ausentes u obsoletos; `--force` reconstruye también los compatibles.
  *
  * Uso:
@@ -45,7 +45,9 @@ function parseArgs(argv: string[]): Args {
         console.log(
           "mismem-embed [--scope <name>] [--batch 32] [--status] [--force]\n" +
             `DB: ${defaultDbPath()} (override con MISMEM_DB)\n` +
-            "Env: MISMEM_OLLAMA_URL, MISMEM_EMBEDDING_MODEL, MISMEM_EMBEDDINGS=off",
+            "Env: MISMEM_EMBEDDING_PROVIDER (ollama|openai), MISMEM_EMBEDDING_URL o MISMEM_OLLAMA_URL,\n" +
+            "     MISMEM_EMBEDDING_MODEL, MISMEM_EMBEDDING_QUERY_PREFIX, MISMEM_EMBEDDING_DOC_PREFIX,\n" +
+            "     MISMEM_EMBEDDING_MIN_SCORE, MISMEM_EMBEDDINGS=off",
         );
         process.exit(0);
     }
@@ -72,7 +74,7 @@ async function main(): Promise<void> {
     }
 
     console.log(
-      `[embed] modelo=${cfg.model} ollama=${cfg.url} memorias=${status.memories} embebidas=${status.embedded}`,
+      `[embed] modelo=${cfg.model} ${cfg.provider}=${cfg.url} memorias=${status.memories} embebidas=${status.embedded}`,
     );
     const result = await embedPendingMemories(db, {
       scope: args.scope,
@@ -85,7 +87,9 @@ async function main(): Promise<void> {
     );
     if (result.failed > 0 && result.embedded === 0) {
       console.error(
-        `[embed] ¿Ollama está corriendo? Probá: curl ${cfg.url}/api/tags — y \`ollama pull ${cfg.model}\``,
+        cfg.provider === "openai"
+          ? `[embed] ¿El servidor de embeddings está corriendo? Probá: curl ${cfg.url}/health`
+          : `[embed] ¿Ollama está corriendo? Probá: curl ${cfg.url}/api/tags — y \`ollama pull ${cfg.model}\``,
       );
       process.exitCode = 1;
     }

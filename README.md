@@ -126,6 +126,22 @@ todo degrada silenciosamente a FTS5 puro. La semántica cubre deliberadamente
 solo `memories`; `episodes` y `traits` conservan búsqueda FTS5. Backfill y
 reindexado: `mismem-embed` (`--status`, `--force`).
 
+También habla con cualquier servidor compatible con OpenAI (`/v1/embeddings`,
+p. ej. `llama-server --embedding`). Para memorias en varios idiomas conviene
+EmbeddingGemma 2, con sus prefijos y un corte más alto:
+
+```bash
+MISMEM_EMBEDDING_PROVIDER=openai
+MISMEM_EMBEDDING_URL=http://127.0.0.1:8080
+MISMEM_EMBEDDING_MODEL=embeddinggemma-2
+MISMEM_EMBEDDING_QUERY_PREFIX="task: search result | query: "
+MISMEM_EMBEDDING_DOC_PREFIX="title: none | text: "
+MISMEM_EMBEDDING_MIN_SCORE=0.68
+```
+
+Al cambiar de modelo hay que reindexar (`mismem-embed --force`): la búsqueda
+sólo compara vectores del modelo configurado.
+
 ### Salience, decay y olvido
 
 Las memories pierden la mitad de su salience cada 90 días sin refuerzo
