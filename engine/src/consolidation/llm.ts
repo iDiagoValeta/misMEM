@@ -20,21 +20,46 @@ export interface LlmConfig {
   baseUrl?: string;
   appUrl?: string;
   appTitle?: string;
+  maxTokens?: number;
+}
+
+const DEFAULT_MAX_TOKENS = 4096;
+
+/** Credenciales o saldo: reintentar con otro ámbito daría el mismo error. */
+export class LlmFatalError extends Error {
+  override name = "LlmFatalError";
+}
+
+function loadMaxTokens(): number {
+  const value = Number(process.env.MISMEM_CONSOLIDATION_MAX_TOKENS);
+  return Number.isFinite(value) && value > 0 ? value : DEFAULT_MAX_TOKENS;
 }
 
 export function loadLlmConfig(): LlmConfig {
+  const configured = process.env.MISMEM_CONSOLIDATION_MODEL;
+  const deepseekKey = process.env.DEEPSEEK_API_KEY;
+  if (deepseekKey) {
+    return {
+      apiKey: deepseekKey,
+      // "deepseek/deepseek-chat" es el nombre en OpenRouter; DeepSeek no lo acepta.
+      model: configured && !configured.includes("/") ? configured : "deepseek-chat",
+      baseUrl: process.env.DEEPSEEK_BASE_URL ?? "https://api.deepseek.com/v1",
+      maxTokens: loadMaxTokens(),
+    };
+  }
   const apiKey = process.env.OPENROUTER_API_KEY;
   if (!apiKey) {
     throw new Error(
-      "OPENROUTER_API_KEY no seteada. Setear como env var antes de consolidar.",
+      "Falta DEEPSEEK_API_KEY u OPENROUTER_API_KEY. Setear una como env var antes de consolidar.",
     );
   }
   return {
     apiKey,
-    model: process.env.MISMEM_CONSOLIDATION_MODEL ?? "deepseek/deepseek-chat",
+    model: configured ?? "deepseek/deepseek-chat",
     baseUrl: process.env.OPENROUTER_BASE_URL ?? "https://openrouter.ai/api/v1",
     appUrl: process.env.OPENROUTER_APP_URL ?? "https://github.com/lucasmella-stack/misMEM",
     appTitle: process.env.OPENROUTER_APP_TITLE ?? "misMEM",
+    maxTokens: loadMaxTokens(),
   };
 }
 
@@ -48,8 +73,8 @@ export async function distill(
     headers: {
       "Content-Type": "application/json",
       Authorization: `Bearer ${cfg.apiKey}`,
-      "HTTP-Referer": cfg.appUrl ?? "",
-      "X-Title": cfg.appTitle ?? "",
+      ...(cfg.appUrl ? { "HTTP-Referer": cfg.appUrl } : {}),
+      ...(cfg.appTitle ? { "X-Title": cfg.appTitle } : {}),
     },
     body: JSON.stringify({
       model: cfg.model,
@@ -59,12 +84,17 @@ export async function distill(
       ],
       response_format: { type: "json_object" },
       temperature: 0.2,
+      max_tokens: cfg.maxTokens ?? DEFAULT_MAX_TOKENS,
     }),
   });
 
   if (!res.ok) {
     const text = await res.text();
-    throw new Error(`OpenRouter HTTP ${res.status}: ${text.slice(0, 500)}`);
+    const message = `LLM HTTP ${res.status}: ${text.slice(0, 500)}`;
+    if (res.status === 401 || res.status === 402 || res.status === 403) {
+      throw new LlmFatalError(message);
+    }
+    throw new Error(message);
   }
 
   const json = (await res.json()) as {
@@ -72,7 +102,7 @@ export async function distill(
   };
   const content = json.choices?.[0]?.message?.content;
   if (!content) {
-    throw new Error("OpenRouter respuesta sin choices[0].message.content");
+    throw new Error("Respuesta del LLM sin choices[0].message.content");
   }
 
   const cleaned = stripFences(content);

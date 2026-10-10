@@ -3,6 +3,7 @@ import type { Database as DB } from "better-sqlite3";
 import { openDb } from "../src/db.js";
 import { capture } from "../src/tools.js";
 import { runConsolidation } from "../src/consolidation/run.js";
+import { LlmFatalError } from "../src/consolidation/llm.js";
 
 let db: DB;
 
@@ -152,6 +153,96 @@ describe("runConsolidation", () => {
 
     expect(distillFn).not.toHaveBeenCalled();
     expect(summary.memories_created).toBe(0);
+  });
+
+  it("un error fatal del proveedor corta la corrida en vez de repetirse por cada ámbito", async () => {
+    for (const scope of ["a", "b", "c"]) {
+      for (const n of [1, 2, 3]) captureOld(scope, `decisión ${scope} ${n} sobre la arquitectura`, 48);
+    }
+    const distillFn = vi.fn().mockRejectedValue(new LlmFatalError("HTTP 402: sin saldo"));
+
+    const summary = await runConsolidation(db, {
+      minEpisodesPerScope: 1,
+      paretoPrefilter: false,
+      llm: llmCfg,
+      distillFn,
+      log: () => {},
+    });
+
+    expect(distillFn).toHaveBeenCalledTimes(1);
+    expect(summary.aborted).toBe(true);
+    expect(summary.errors).toHaveLength(1);
+  });
+
+  it("arma tandas que entran en el presupuesto y vacía el ámbito en la misma corrida", async () => {
+    const ids = [1, 2, 3, 4, 5].map((n) => captureOld("grande", `${n} ${"x".repeat(30_000)}`, 48));
+    const prompts: string[] = [];
+    const distillFn = vi.fn(async (_cfg: unknown, _sys: string, user: string) => {
+      prompts.push(user);
+      const batch = ids.filter((id) => user.includes(id));
+      return [{ gist: `tanda de ${batch.length}`, evidence_episode_ids: batch }];
+    });
+
+    const summary = await runConsolidation(db, {
+      minEpisodesPerScope: 1,
+      paretoPrefilter: false,
+      maxPromptChars: 70_000,
+      maxEpisodeChars: 40_000,
+      llm: llmCfg,
+      distillFn,
+      log: () => {},
+    });
+
+    expect(prompts.map((p) => ids.filter((id) => p.includes(id)).length)).toEqual([2, 2, 1]);
+    expect(prompts.every((p) => p.length < 70_000 + 2_000)).toBe(true);
+    expect(summary.episodes_consolidated).toBe(5);
+  });
+
+  it("recorta un episodio enorme en vez de mandarlo entero", async () => {
+    const ids = [captureOld("enorme", `inicio ${"y".repeat(100_000)} final`, 48)];
+    ids.push(captureOld("enorme", "otro episodio con contenido", 48));
+    let prompt = "";
+    const distillFn = vi.fn(async (_cfg: unknown, _sys: string, user: string) => {
+      prompt = user;
+      return [{ gist: "resumen", evidence_episode_ids: ids }];
+    });
+
+    await runConsolidation(db, {
+      minEpisodesPerScope: 1,
+      paretoPrefilter: false,
+      maxEpisodeChars: 10_000,
+      llm: llmCfg,
+      distillFn,
+      log: () => {},
+    });
+
+    expect(prompt.length).toBeLessThan(12_000);
+    expect(prompt).toContain("inicio");
+    expect(prompt).toContain("final");
+    expect(prompt).toContain("[recortado]");
+  });
+
+  it("respeta el tope de llamadas por corrida y deja el resto para la próxima", async () => {
+    for (const scope of ["a", "b", "c"]) {
+      for (const n of [1, 2, 3]) captureOld(scope, `nota ${scope} ${n} sobre el despliegue`, 48);
+    }
+    const distillFn = vi.fn().mockResolvedValue([]);
+
+    const summary = await runConsolidation(db, {
+      minEpisodesPerScope: 1,
+      paretoPrefilter: false,
+      maxCalls: 2,
+      llm: llmCfg,
+      distillFn,
+      log: () => {},
+    });
+
+    expect(distillFn).toHaveBeenCalledTimes(2);
+    expect(summary.llm_calls).toBe(2);
+    const pending = db
+      .prepare("SELECT COUNT(*) AS n FROM episodes WHERE consolidated_into IS NULL")
+      .get() as { n: number };
+    expect(pending.n).toBe(3);
   });
 
   it("Pareto pre-filter: episodios L0 cortos triviales se marcan como noise sin LLM", async () => {
