@@ -143,6 +143,70 @@ describe("runConsolidation", () => {
     expect(summary.episodes_consolidated).toBe(3);
   });
 
+  it("los episodios que el LLM leyó y no citó quedan como ruido y no se vuelven a mandar", async () => {
+    const ids = [
+      captureOld("mix", "decidimos usar pnpm en todo el monorepo", 48),
+      captureOld("mix", "porque npm duplicaba dependencias", 48),
+      captureOld("mix", "jaja dale", 48),
+    ];
+    const distillFn = vi.fn().mockResolvedValue([
+      { gist: "Decisión: pnpm en el monorepo", evidence_episode_ids: [ids[0], ids[1]] },
+    ]);
+
+    const summary = await runConsolidation(db, {
+      minEpisodesPerScope: 1,
+      paretoPrefilter: false,
+      llm: llmCfg,
+      distillFn,
+      log: () => {},
+    });
+
+    expect(summary.episodes_consolidated).toBe(3);
+    expect(distillFn).toHaveBeenCalledTimes(1);
+    const pending = db
+      .prepare("SELECT COUNT(*) AS n FROM episodes WHERE consolidated_into IS NULL")
+      .get() as { n: number };
+    expect(pending.n).toBe(0);
+    const stub = db
+      .prepare("SELECT m.gist, m.salience FROM episodes e JOIN memories m ON m.id = e.consolidated_into WHERE e.id = ?")
+      .get(ids[2]) as { gist: string; salience: number };
+    expect(stub.gist).toMatch(/^\[noise\] 1 episodio/);
+    expect(stub.salience).toBeLessThan(0.2);
+  });
+
+  it("una memoria sin evidencia válida no deja a todos los episodios como ruido por error", async () => {
+    const ids = [captureOld("x", "uno con algo", 48), captureOld("x", "dos con algo", 48)];
+    const distillFn = vi.fn().mockResolvedValue([
+      { gist: "inventada", evidence_episode_ids: ["01INVENTADO000000000000000"] },
+      { gist: "real", evidence_episode_ids: [ids[0]] },
+    ]);
+
+    await runConsolidation(db, { minEpisodesPerScope: 1, paretoPrefilter: false, llm: llmCfg, distillFn, log: () => {} });
+
+    const gists = db
+      .prepare("SELECT m.gist FROM episodes e JOIN memories m ON m.id = e.consolidated_into ORDER BY e.created_at, e.id")
+      .all() as { gist: string }[];
+    expect(gists.map((g) => g.gist).sort()).toEqual(["[noise] 1 episodio sin citar en esta tanda", "real"].sort());
+  });
+
+  it("si todo lo que devolvió el LLM es inventado, los episodios quedan pendientes", async () => {
+    captureOld("y", "uno con algo", 48);
+    captureOld("y", "dos con algo", 48);
+    const distillFn = vi.fn().mockResolvedValue([
+      { gist: "inventada", evidence_episode_ids: ["01INVENTADO000000000000000"] },
+    ]);
+
+    const summary = await runConsolidation(db, {
+      minEpisodesPerScope: 1, paretoPrefilter: false, llm: llmCfg, distillFn, log: () => {},
+    });
+
+    expect(summary.episodes_consolidated).toBe(0);
+    const pending = db
+      .prepare("SELECT COUNT(*) AS n FROM episodes WHERE consolidated_into IS NULL")
+      .get() as { n: number };
+    expect(pending.n).toBe(2);
+  });
+
   it("dryRun no llama al LLM ni crea memorias", async () => {
     captureOld("d", "uno", 48);
     captureOld("d", "dos", 48);

@@ -305,6 +305,7 @@ async function processScope(
   }
 
   const validIds = new Set(candidates.map((e) => e.id));
+  const cited = new Set<string>();
   let totalEpisodes = dropped_l0;
   let totalMemories = dropped_l0 > 0 ? 1 : 0;
 
@@ -322,8 +323,24 @@ async function processScope(
     });
     const initialSalience = m.confidence ?? 0.7;
     db.prepare("UPDATE memories SET salience = ? WHERE id = ?").run(initialSalience, result.memory_id);
+    for (const id of evidence) cited.add(id);
     totalMemories++;
     totalEpisodes += result.consolidated;
+  }
+
+  // Lo que el LLM leyó y no citó en ninguna memoria no tiene señal para él: si no,
+  // vuelve en la tanda siguiente y se paga de nuevo. Sólo si la tanda dio alguna
+  // memoria válida; una respuesta con todo inventado deja los episodios pendientes.
+  const uncited = cited.size > 0 ? candidates.filter((e) => !cited.has(e.id)) : [];
+  if (uncited.length > 0) {
+    const stub = consolidate(db, {
+      scope,
+      gist: `[noise] ${uncited.length} episodio${uncited.length === 1 ? "" : "s"} sin citar en esta tanda`,
+      source_episode_ids: uncited.map((e) => e.id),
+    });
+    db.prepare("UPDATE memories SET salience = 0.05 WHERE id = ?").run(stub.memory_id);
+    totalMemories++;
+    totalEpisodes += stub.consolidated;
   }
 
   return { memories: totalMemories, episodes: totalEpisodes, dropped_l0 };
