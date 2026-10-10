@@ -3,7 +3,7 @@ import type { Database as DB } from "better-sqlite3";
 import { openDb } from "../src/db.js";
 import { capture } from "../src/tools.js";
 import { runConsolidation } from "../src/consolidation/run.js";
-import { LlmFatalError } from "../src/consolidation/llm.js";
+import { LlmFatalError, LlmTruncatedError } from "../src/consolidation/llm.js";
 
 let db: DB;
 
@@ -220,6 +220,45 @@ describe("runConsolidation", () => {
     expect(prompt).toContain("inicio");
     expect(prompt).toContain("final");
     expect(prompt).toContain("[recortado]");
+  });
+
+  it("si la respuesta llega cortada, parte la tanda a la mitad y no pierde episodios", async () => {
+    const ids = [1, 2, 3, 4, 5, 6, 7, 8].map((n) => captureOld("charlas", `charla ${n} con decisiones`, 48));
+    const sizes: number[] = [];
+    const distillFn = vi.fn(async (_cfg: unknown, _sys: string, user: string) => {
+      const batch = ids.filter((id) => user.includes(id));
+      sizes.push(batch.length);
+      if (batch.length > 2) throw new LlmTruncatedError("cortada");
+      return [{ gist: `tanda de ${batch.length}`, evidence_episode_ids: batch }];
+    });
+
+    const summary = await runConsolidation(db, {
+      minEpisodesPerScope: 1,
+      paretoPrefilter: false,
+      llm: llmCfg,
+      distillFn,
+      log: () => {},
+    });
+
+    expect(sizes).toEqual([8, 4, 2, 2, 2, 2]);
+    expect(summary.episodes_consolidated).toBe(8);
+    expect(summary.scopes_failed).toBe(0);
+  });
+
+  it("una respuesta cortada con un solo episodio es un error del ámbito, no un bucle", async () => {
+    captureOld("uno", "episodio único larguísimo", 48);
+    const distillFn = vi.fn().mockRejectedValue(new LlmTruncatedError("cortada"));
+
+    const summary = await runConsolidation(db, {
+      minEpisodesPerScope: 1,
+      paretoPrefilter: false,
+      llm: llmCfg,
+      distillFn,
+      log: () => {},
+    });
+
+    expect(distillFn).toHaveBeenCalledTimes(1);
+    expect(summary.scopes_failed).toBe(1);
   });
 
   it("respeta el tope de llamadas por corrida y deja el resto para la próxima", async () => {

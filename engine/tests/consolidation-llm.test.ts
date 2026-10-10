@@ -1,5 +1,5 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { distill, loadLlmConfig, LlmFatalError } from "../src/consolidation/llm.js";
+import { distill, loadLlmConfig, LlmFatalError, LlmTruncatedError } from "../src/consolidation/llm.js";
 
 const ENV_KEYS = [
   "DEEPSEEK_API_KEY",
@@ -50,9 +50,9 @@ describe("loadLlmConfig", () => {
     expect(() => loadLlmConfig()).toThrow(/DEEPSEEK_API_KEY.*OPENROUTER_API_KEY/);
   });
 
-  it("pone un tope a la respuesta: 4096 tokens salvo que se configure otro", () => {
+  it("pone un tope a la respuesta: 8192 tokens salvo que se configure otro", () => {
     setEnv({ DEEPSEEK_API_KEY: "sk-ds" });
-    expect(loadLlmConfig().maxTokens).toBe(4096);
+    expect(loadLlmConfig().maxTokens).toBe(8192);
     setEnv({ DEEPSEEK_API_KEY: "sk-ds", MISMEM_CONSOLIDATION_MAX_TOKENS: "2000" });
     expect(loadLlmConfig().maxTokens).toBe(2000);
   });
@@ -74,6 +74,17 @@ describe("distill", () => {
   it.each([401, 402, 403])("un HTTP %i es fatal: no tiene sentido seguir con otros ámbitos", async (status) => {
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response("sin saldo", { status })));
     await expect(distill(cfg, "sys", "user")).rejects.toBeInstanceOf(LlmFatalError);
+  });
+
+  it("una respuesta cortada por el tope de tokens se distingue de un JSON roto", async () => {
+    const cut = '{"memories":[{"gist":"algo","details":"sin terminar';
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(
+        new Response(JSON.stringify({ choices: [{ finish_reason: "length", message: { content: cut } }] })),
+      ),
+    );
+    await expect(distill(cfg, "sys", "user")).rejects.toBeInstanceOf(LlmTruncatedError);
   });
 
   it("un 500 no es fatal", async () => {

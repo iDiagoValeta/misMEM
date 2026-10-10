@@ -2,7 +2,14 @@ import type { Database as DB } from "better-sqlite3";
 import { consolidate } from "../tools.js";
 import { embedPendingMemories } from "../embeddings/index.js";
 import { classify } from "../pareto/classifier.js";
-import { distill, loadLlmConfig, LlmFatalError, type LlmConfig, type DistilledMemory } from "./llm.js";
+import {
+  distill,
+  loadLlmConfig,
+  LlmFatalError,
+  LlmTruncatedError,
+  type LlmConfig,
+  type DistilledMemory,
+} from "./llm.js";
 import { SYSTEM_PROMPT, buildUserPrompt, type EpisodeForPrompt } from "./prompts.js";
 
 export type DistillFn = (
@@ -142,11 +149,17 @@ export async function runConsolidation(
       break;
     }
     try {
+      // Cuántos episodios entran en una respuesta; baja si una respuesta llega cortada.
+      const cap = { episodes: Number.POSITIVE_INFINITY };
+      const calls = {
+        canCall: () => summary.llm_calls < limits.maxCalls,
+        onCall: () => summary.llm_calls++,
+      };
       // Tandas hasta vaciar el ámbito o llegar al tope; una tanda sin avance corta.
       for (;;) {
         const created = await processScope(
           db, scope, cutoff, limits, llm, distillFn, opts.dryRun ?? false, paretoPrefilter, log,
-          () => summary.llm_calls++,
+          calls, cap,
         );
         summary.memories_created += created.memories;
         summary.episodes_consolidated += created.episodes;
@@ -199,7 +212,8 @@ async function processScope(
   dryRun: boolean,
   paretoPrefilter: boolean,
   log: (m: string) => void,
-  onCall: () => void,
+  calls: { canCall: () => boolean; onCall: () => void },
+  cap: { episodes: number },
 ): Promise<{ memories: number; episodes: number; dropped_l0: number }> {
   const episodes = db
     .prepare(
@@ -246,6 +260,7 @@ async function processScope(
   const forPrompt: EpisodeForPrompt[] = [];
   let used = 0;
   for (const e of candidates) {
+    if (forPrompt.length >= cap.episodes) break;
     const body = truncateEpisode(e.body, limits.maxEpisodeChars);
     const cost = body.length + PROMPT_OVERHEAD_PER_EPISODE;
     if (forPrompt.length > 0 && used + cost > limits.maxPromptChars) break;
@@ -261,8 +276,22 @@ async function processScope(
     return { memories: 0, episodes: 0, dropped_l0 };
   }
 
-  onCall();
-  const distilled = await distillFn(llm, SYSTEM_PROMPT, buildUserPrompt(scope, forPrompt));
+  if (!calls.canCall()) return { memories: dropped_l0 > 0 ? 1 : 0, episodes: dropped_l0, dropped_l0 };
+  let distilled: DistilledMemory[];
+  for (;;) {
+    calls.onCall();
+    try {
+      distilled = await distillFn(llm, SYSTEM_PROMPT, buildUserPrompt(scope, forPrompt));
+      break;
+    } catch (err) {
+      if (!(err instanceof LlmTruncatedError) || forPrompt.length === 1) throw err;
+      cap.episodes = Math.floor(forPrompt.length / 2);
+      forPrompt.length = cap.episodes;
+      candidates = candidates.slice(0, cap.episodes);
+      log(`[consolidation] scope="${scope}" -> respuesta cortada, reintento con ${cap.episodes} episodios`);
+      if (!calls.canCall()) return { memories: dropped_l0 > 0 ? 1 : 0, episodes: dropped_l0, dropped_l0 };
+    }
+  }
 
   if (distilled.length === 0) {
     log(`[consolidation] scope="${scope}" -> LLM dijo "sin se\u00f1al", marcando ${candidates.length} como noise-consolidated`);
