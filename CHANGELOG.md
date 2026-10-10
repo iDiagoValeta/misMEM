@@ -24,6 +24,9 @@
   tokens) y volvían con HTTP 400.
 - Un ámbito se vacía en la misma corrida, hasta un tope de 60 llamadas por noche.
 - Un 401/402/403 corta la corrida en el primer error en vez de repetirse por cada ámbito.
+- Los episodios que el LLM leyó y no citó en ninguna memoria quedan como ruido (`[noise] N episodios sin
+  citar`, saliencia 0,05) y no se vuelven a mandar ni a pagar. Si la tanda no dio ninguna memoria válida,
+  quedan pendientes como antes.
 
 ### La relevancia manda sobre la saliencia
 
