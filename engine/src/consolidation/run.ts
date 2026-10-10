@@ -2,7 +2,7 @@ import type { Database as DB } from "better-sqlite3";
 import { consolidate } from "../tools.js";
 import { embedPendingMemories } from "../embeddings/index.js";
 import { classify } from "../pareto/classifier.js";
-import { distill, loadLlmConfig, type LlmConfig, type DistilledMemory } from "./llm.js";
+import { distill, loadLlmConfig, LlmFatalError, type LlmConfig, type DistilledMemory } from "./llm.js";
 import { SYSTEM_PROMPT, buildUserPrompt, type EpisodeForPrompt } from "./prompts.js";
 
 export type DistillFn = (
@@ -19,6 +19,12 @@ export interface RunOptions {
   dryRun?: boolean;
   /** Si true, pre-filtra episodios L0 (Pareto) y los marca como noise sin llamar al LLM. Default true. */
   paretoPrefilter?: boolean;
+  /** Tope de caracteres de episodios por llamada; lo que no entra queda para la tanda siguiente. */
+  maxPromptChars?: number;
+  /** Un episodio más largo que esto viaja recortado (principio y final). */
+  maxEpisodeChars?: number;
+  /** Tope de llamadas al LLM por corrida; lo pendiente queda para la próxima. */
+  maxCalls?: number;
   llm?: LlmConfig;
   distillFn?: DistillFn;
   log?: (msg: string) => void;
@@ -32,8 +38,34 @@ export interface RunSummary {
   episodes_consolidated: number;
   episodes_dropped_pareto_l0: number;
   memories_created: number;
+  llm_calls: number;
+  /** El proveedor rechazó credenciales o saldo y la corrida se cortó. */
+  aborted: boolean;
   errors: { scope: string; error: string }[];
   duration_ms: number;
+}
+
+interface Limits {
+  maxBatch: number;
+  maxPromptChars: number;
+  maxEpisodeChars: number;
+  maxCalls: number;
+}
+
+// Lo que buildUserPrompt suma por episodio: id, fecha y separador.
+const PROMPT_OVERHEAD_PER_EPISODE = 60;
+const TRUNCATION_MARK = "\n[recortado]\n";
+
+function envNumber(name: string, fallback: number): number {
+  const value = Number(process.env[name]);
+  return Number.isFinite(value) && value > 0 ? value : fallback;
+}
+
+function truncateEpisode(body: string, max: number): string {
+  if (body.length <= max) return body;
+  const room = max - TRUNCATION_MARK.length;
+  const head = Math.ceil(room * 0.75);
+  return body.slice(0, head) + TRUNCATION_MARK + body.slice(body.length - (room - head));
 }
 
 interface ScopeRow {
@@ -54,7 +86,12 @@ export async function runConsolidation(
   const t0 = Date.now();
   const minAgeHours = opts.minAgeHours ?? Number(process.env.MISMEM_CONSOLIDATION_MIN_AGE_HOURS ?? 24);
   const minEpisodes = opts.minEpisodesPerScope ?? Number(process.env.MISMEM_CONSOLIDATION_MIN_EPISODES ?? 3);
-  const maxBatch = opts.maxEpisodesPerBatch ?? Number(process.env.MISMEM_CONSOLIDATION_MAX_BATCH ?? 60);
+  const limits: Limits = {
+    maxBatch: opts.maxEpisodesPerBatch ?? envNumber("MISMEM_CONSOLIDATION_MAX_BATCH", 60),
+    maxPromptChars: opts.maxPromptChars ?? envNumber("MISMEM_CONSOLIDATION_MAX_PROMPT_CHARS", 60_000),
+    maxEpisodeChars: opts.maxEpisodeChars ?? envNumber("MISMEM_CONSOLIDATION_MAX_EPISODE_CHARS", 12_000),
+    maxCalls: opts.maxCalls ?? envNumber("MISMEM_CONSOLIDATION_MAX_CALLS", 60),
+  };
   const log = opts.log ?? ((m) => console.log(m));
   const cutoff = Date.now() - minAgeHours * 3600 * 1000;
 
@@ -66,6 +103,8 @@ export async function runConsolidation(
     episodes_consolidated: 0,
     episodes_dropped_pareto_l0: 0,
     memories_created: 0,
+    llm_calls: 0,
+    aborted: false,
     errors: [],
     duration_ms: 0,
   };
@@ -87,23 +126,46 @@ export async function runConsolidation(
   const distillFn: DistillFn = opts.distillFn ?? distill;
   const paretoPrefilter = opts.paretoPrefilter ?? true;
 
-  for (const { scope, n } of scopes) {
+  const pendingIn = db.prepare(
+    `SELECT COUNT(*) AS n FROM episodes
+     WHERE scope = @scope AND consolidated_into IS NULL AND created_at < @cutoff`,
+  );
+
+  scopeLoop: for (const { scope, n } of scopes) {
     if (n < minEpisodes) {
       summary.scopes_skipped_too_few++;
       log(`[consolidation] skip scope="${scope}" (${n} < ${minEpisodes})`);
       continue;
     }
+    if (summary.llm_calls >= limits.maxCalls) {
+      log(`[consolidation] tope de ${limits.maxCalls} llamadas: el resto queda para la próxima corrida`);
+      break;
+    }
     try {
-      const created = await processScope(db, scope, cutoff, maxBatch, llm, distillFn, opts.dryRun ?? false, paretoPrefilter, log);
+      // Tandas hasta vaciar el ámbito o llegar al tope; una tanda sin avance corta.
+      for (;;) {
+        const created = await processScope(
+          db, scope, cutoff, limits, llm, distillFn, opts.dryRun ?? false, paretoPrefilter, log,
+          () => summary.llm_calls++,
+        );
+        summary.memories_created += created.memories;
+        summary.episodes_consolidated += created.episodes;
+        summary.episodes_dropped_pareto_l0 += created.dropped_l0;
+        if (created.episodes === 0) break;
+        if ((pendingIn.get({ scope, cutoff }) as { n: number }).n === 0) break;
+        if (summary.llm_calls >= limits.maxCalls) break;
+      }
       summary.scopes_processed++;
-      summary.memories_created += created.memories;
-      summary.episodes_consolidated += created.episodes;
-      summary.episodes_dropped_pareto_l0 += created.dropped_l0;
     } catch (err) {
       summary.scopes_failed++;
       const msg = err instanceof Error ? err.message : String(err);
       summary.errors.push({ scope, error: msg });
       log(`[consolidation] ERROR scope="${scope}": ${msg}`);
+      if (err instanceof LlmFatalError) {
+        summary.aborted = true;
+        log("[consolidation] el proveedor rechazó la clave o no hay saldo: corrida cortada");
+        break scopeLoop;
+      }
     }
   }
 
@@ -122,7 +184,7 @@ export async function runConsolidation(
 
   summary.duration_ms = Date.now() - t0;
   log(
-    `[consolidation] DONE en ${summary.duration_ms}ms. memorias=${summary.memories_created} episodios=${summary.episodes_consolidated} fallos=${summary.scopes_failed}`,
+    `[consolidation] DONE en ${summary.duration_ms}ms. memorias=${summary.memories_created} episodios=${summary.episodes_consolidated} llamadas=${summary.llm_calls} fallos=${summary.scopes_failed}`,
   );
   return summary;
 }
@@ -131,12 +193,13 @@ async function processScope(
   db: DB,
   scope: string,
   cutoff: number,
-  maxBatch: number,
+  limits: Limits,
   llm: LlmConfig | null,
   distillFn: DistillFn,
   dryRun: boolean,
   paretoPrefilter: boolean,
   log: (m: string) => void,
+  onCall: () => void,
 ): Promise<{ memories: number; episodes: number; dropped_l0: number }> {
   const episodes = db
     .prepare(
@@ -145,7 +208,7 @@ async function processScope(
        ORDER BY created_at ASC
        LIMIT @max`,
     )
-    .all({ scope, cutoff, max: maxBatch }) as EpisodeRow[];
+    .all({ scope, cutoff, max: limits.maxBatch }) as EpisodeRow[];
 
   if (episodes.length === 0) return { memories: 0, episodes: 0, dropped_l0: 0 };
 
@@ -179,6 +242,18 @@ async function processScope(
     return { memories: dropped_l0 > 0 ? 1 : 0, episodes: dropped_l0, dropped_l0 };
   }
 
+  // Sólo viaja lo que entra en el presupuesto; el resto queda pendiente para la tanda siguiente.
+  const forPrompt: EpisodeForPrompt[] = [];
+  let used = 0;
+  for (const e of candidates) {
+    const body = truncateEpisode(e.body, limits.maxEpisodeChars);
+    const cost = body.length + PROMPT_OVERHEAD_PER_EPISODE;
+    if (forPrompt.length > 0 && used + cost > limits.maxPromptChars) break;
+    forPrompt.push({ id: e.id, body, created_at: e.created_at });
+    used += cost;
+  }
+  candidates = candidates.slice(0, forPrompt.length);
+
   log(`[consolidation] scope="${scope}" -> destilando ${candidates.length} episodios (post-pareto)`);
 
   if (dryRun || !llm) {
@@ -186,11 +261,7 @@ async function processScope(
     return { memories: 0, episodes: 0, dropped_l0 };
   }
 
-  const forPrompt: EpisodeForPrompt[] = candidates.map((e) => ({
-    id: e.id,
-    body: e.body,
-    created_at: e.created_at,
-  }));
+  onCall();
   const distilled = await distillFn(llm, SYSTEM_PROMPT, buildUserPrompt(scope, forPrompt));
 
   if (distilled.length === 0) {

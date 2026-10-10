@@ -2,6 +2,17 @@
 
 ## Sin publicar
 
+### La consolidación vuelve a andar y tiene el costo acotado
+
+- `DEEPSEEK_API_KEY` consolida con DeepSeek directo; OpenRouter queda como alternativa.
+- Cada llamada pide como mucho 4096 tokens de respuesta. Antes no había tope, OpenRouter reservaba
+  unos 100.000 por llamada y respondía HTTP 402 por saldo.
+- Un ámbito se consolida en tandas que entran en un presupuesto de caracteres; un episodio enorme viaja
+  recortado (principio y final). Antes las tandas grandes pasaban el contexto del modelo (163.840
+  tokens) y volvían con HTTP 400.
+- Un ámbito se vacía en la misma corrida, hasta un tope de 60 llamadas por noche.
+- Un 401/402/403 corta la corrida en el primer error en vez de repetirse por cada ámbito.
+
 ### La relevancia manda sobre la saliencia
 
 - La saliencia sólo desempata entre recuerdos casi igual de relevantes
