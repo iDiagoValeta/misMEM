@@ -2,6 +2,16 @@
 
 ## Sin publicar
 
+### Embeddings desde cualquier servidor compatible con OpenAI
+
+- `MISMEM_EMBEDDING_PROVIDER=openai` + `MISMEM_EMBEDDING_URL` piden `/v1/embeddings` (p. ej. llama-server);
+  Ollama sigue siendo el default y no cambia.
+- Prefijos distintos para consulta y documento (`MISMEM_EMBEDDING_QUERY_PREFIX` / `_DOC_PREFIX`).
+- Corte de parecido configurable (`MISMEM_EMBEDDING_MIN_SCORE`, default 0,5).
+- Medido sobre una copia real (1.353 memorias, 80 preguntas con otras palabras): con EmbeddingGemma 2,
+  sus prefijos y corte 0,68, el recuerdo correcto sale entre los 5 primeros en 73 de 80 y ninguna de
+  10 preguntas ajenas trae recuerdos (con nomic y 0,5 traían las 10).
+
 ### La consolidación vuelve a andar y tiene el costo acotado
 
 - `DEEPSEEK_API_KEY` consolida con DeepSeek directo; OpenRouter queda como alternativa.
