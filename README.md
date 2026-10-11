@@ -123,7 +123,8 @@ significado: "problemas de plata" encuentra memorias que dicen "deudas". El
 default es Ollama (`ollama pull nomic-embed-text`). Los vectores se guardan
 como BLOB en la misma SQLite y la búsqueda es coseno en JS, sin extensiones
 nativas. Si el servidor no responde, todo degrada silenciosamente a FTS5 puro,
-que exige que estén **todas** las palabras de la consulta. La semántica cubre deliberadamente
+que exige que estén **todas** las palabras de la consulta (sin contar las vacías:
+"qué", "sobre", "the"…). La semántica cubre deliberadamente
 solo `memories`; `episodes` y `traits` conservan búsqueda FTS5. Backfill y
 reindexado: `mismem-embed` (`--status`, `--force`).
 

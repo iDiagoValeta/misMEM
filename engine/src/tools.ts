@@ -32,13 +32,39 @@ const RRF_K = 60;
 // candidatos) y una saliencia alta puede adelantar dos o tres lugares.
 const SALIENCE_RRF_WEIGHT = 0.0002;
 
+// Palabras que una pregunta trae y un recuerdo no: como FTS5 exige todas las de la consulta,
+// con ellas adentro una pregunta entera ("¿qué decidimos sobre el deploy?") no encontraba nada.
+const STOPWORDS = new Set(
+  (
+    "a al como con cual cuales cuando cuanta cuanto de del donde el en es estar fue la las le lo los me mi " +
+    "mas o para por porque que quien se ser sin sobre son su te tu u un una unas unos y ya " +
+    "acordate acorda conta contame cuenta deci decime dime recorda recordas sabe sabes " +
+    "the of and to is in for with that was on are by an be this from it as not what which who how why when where do does did"
+  ).split(" "),
+);
+const MIN_TERM_LENGTH = 3;
+
+const plain = (word: string): string =>
+  word
+    .toLowerCase()
+    .normalize("NFD")
+    .replace(/[\u0300-\u036f]/g, "");
+
+/** Las palabras de la consulta que sirven para buscar por coincidencia. */
+function searchTerms(query: string): string[] {
+  const words = query.split(/[^\p{L}\p{N}_]+/u).filter(Boolean);
+  // Un número corto (un puerto, una versión) distingue; una palabra de dos letras casi nunca.
+  const terms = words.filter(
+    (word) => (word.length >= MIN_TERM_LENGTH || /\p{N}/u.test(word)) && !STOPWORDS.has(plain(word)),
+  );
+  // Si no quedó ninguna, la consulta va como vino: mejor una búsqueda estricta que una vacía.
+  return terms.length > 0 ? terms : words;
+}
+
 function escapeFts(query: string): string {
-  // Escape FTS5 special chars by quoting tokens. Conservative: split on spaces.
-  // If query is empty/whitespace, fall back to a token that matches nothing
-  // safely (avoids invalid FTS5 MATCH expression).
-  const escaped = query
-    .split(/\s+/)
-    .filter(Boolean)
+  // Cada palabra entre comillas: FTS5 las une con AND y los caracteres especiales no rompen el MATCH.
+  // Sin palabras, un término vacío no matchea nada y evita una expresión inválida.
+  const escaped = searchTerms(query)
     .map((t) => `"${t.replace(/"/g, '""')}"`)
     .join(" ");
   return escaped || '""';

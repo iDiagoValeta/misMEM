@@ -2,6 +2,18 @@
 
 ## Sin publicar
 
+### La búsqueda por palabras ya no tropieza con las palabras vacías
+
+- FTS5 exige todas las palabras de la consulta, así que una pregunta entera ("¿qué decidimos sobre el
+  deploy?") no encontraba nada por palabras: sólo las memorias, por significado. Ahora las palabras vacías
+  (castellano e inglés) y las de una o dos letras no cuentan; los números cortos sí. Si la consulta es toda
+  de palabras vacías, se busca tal cual vino.
+- El modelo de embeddings sigue recibiendo la pregunta entera. Los clientes ya no necesitan limpiar la
+  consulta antes de mandarla.
+- Medido con `mismem-bench` (80 preguntas, 2.527 memorias): las memorias dan lo mismo que antes (70 % con
+  otras palabras, 98 % con términos exactos, 0 de 10 ajenas). Lo que cambia es que rasgos y episodios, que
+  sólo se buscan por palabras, ahora responden a una pregunta entera.
+
 ### Los ámbitos chicos ya no quedan pendientes para siempre
 
 - Un ámbito con menos de `MISMEM_CONSOLIDATION_MIN_EPISODES` episodios se consolida igual cuando lleva
