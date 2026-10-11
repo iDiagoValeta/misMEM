@@ -2,6 +2,14 @@
 
 ## Sin publicar
 
+### Un episodio que el LLM no logra procesar queda pendiente
+
+- Si con un solo episodio la respuesta llega cortada o con JSON inválido, el episodio queda pendiente
+  y la corrida sigue con el resto del ámbito. Antes, con JSON inválido se marcaba como ruido (y `forget`
+  lo borraba a los 30 días) y con respuesta cortada el ámbito entero fallaba todas las noches contra el
+  mismo episodio.
+- El resumen de la corrida informa `episodes_skipped`.
+
 ### Documentación: una sola referencia de configuración
 
 - `DEPLOY.md` tiene la única tabla completa de variables de entorno; el README, `engine/README.md`,

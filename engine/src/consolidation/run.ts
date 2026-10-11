@@ -45,6 +45,8 @@ export interface RunSummary {
   scopes_failed: number;
   episodes_consolidated: number;
   episodes_dropped_pareto_l0: number;
+  /** Episodios que el LLM no logró procesar ni solos: siguen pendientes para la próxima corrida. */
+  episodes_skipped: number;
   memories_created: number;
   llm_calls: number;
   /** El proveedor rechazó credenciales o saldo y la corrida se cortó. */
@@ -112,6 +114,7 @@ export async function runConsolidation(
     scopes_failed: 0,
     episodes_consolidated: 0,
     episodes_dropped_pareto_l0: 0,
+    episodes_skipped: 0,
     memories_created: 0,
     llm_calls: 0,
     aborted: false,
@@ -158,19 +161,22 @@ export async function runConsolidation(
         canCall: () => summary.llm_calls < limits.maxCalls,
         onCall: () => summary.llm_calls++,
       };
+      // Lo que no entró ni solo en esta corrida: no se reintenta hasta la próxima.
+      const skipped = new Set<string>();
       // Tandas hasta vaciar el ámbito o llegar al tope; una tanda sin avance corta.
       for (;;) {
         const created = await processScope(
           db, scope, cutoff, limits, llm, distillFn, opts.dryRun ?? false, paretoPrefilter, log,
-          calls, cap,
+          calls, cap, skipped,
         );
         summary.memories_created += created.memories;
         summary.episodes_consolidated += created.episodes;
         summary.episodes_dropped_pareto_l0 += created.dropped_l0;
-        if (created.episodes === 0) break;
+        if (created.episodes === 0 && !created.skipped) break;
         if ((pendingIn.get({ scope, cutoff }) as { n: number }).n === 0) break;
         if (summary.llm_calls >= limits.maxCalls) break;
       }
+      summary.episodes_skipped += skipped.size;
       summary.scopes_processed++;
     } catch (err) {
       summary.scopes_failed++;
@@ -217,15 +223,20 @@ async function processScope(
   log: (m: string) => void,
   calls: { canCall: () => boolean; onCall: () => void },
   cap: { episodes: number },
-): Promise<{ memories: number; episodes: number; dropped_l0: number }> {
-  const episodes = db
-    .prepare(
-      `SELECT id, body, created_at FROM episodes
-       WHERE scope = @scope AND consolidated_into IS NULL AND created_at < @cutoff
-       ORDER BY created_at ASC
-       LIMIT @max`,
-    )
-    .all({ scope, cutoff, max: limits.maxBatch }) as EpisodeRow[];
+  skipped: Set<string>,
+): Promise<{ memories: number; episodes: number; dropped_l0: number; skipped?: boolean }> {
+  const episodes = (
+    db
+      .prepare(
+        `SELECT id, body, created_at FROM episodes
+         WHERE scope = @scope AND consolidated_into IS NULL AND created_at < @cutoff
+         ORDER BY created_at ASC
+         LIMIT @max`,
+      )
+      .all({ scope, cutoff, max: limits.maxBatch + skipped.size }) as EpisodeRow[]
+  )
+    .filter((e) => !skipped.has(e.id))
+    .slice(0, limits.maxBatch);
 
   if (episodes.length === 0) return { memories: 0, episodes: 0, dropped_l0: 0 };
 
@@ -288,19 +299,18 @@ async function processScope(
       break;
     } catch (err) {
       const splittable = err instanceof LlmTruncatedError || err instanceof LlmInvalidJsonError;
-      if (err instanceof LlmInvalidJsonError && forPrompt.length === 1) {
-        log(`[consolidation] scope="${scope}" -> JSON inválido en 1 episodio, queda como ruido`);
-        const stub = consolidate(db, {
-          scope,
-          gist: `[noise] 1 episodio con JSON inválido del LLM`,
-          source_episode_ids: candidates.map((e) => e.id),
-        });
-        db.prepare("UPDATE memories SET salience = 0.05 WHERE id = ?").run(stub.memory_id);
-        // El veneno era el episodio, no el tamaño: la tanda siguiente vuelve a llenarse.
-        cap.episodes = Number.POSITIVE_INFINITY;
-        return { memories: 1 + (dropped_l0 > 0 ? 1 : 0), episodes: stub.consolidated + dropped_l0, dropped_l0 };
+      if (splittable && forPrompt.length === 1) {
+        // Marcarlo ruido lo borraba con el próximo forget; fallar trababa el ámbito cada noche
+        // contra el mismo episodio. Queda pendiente y la corrida sigue con el resto.
+        const why = err instanceof LlmTruncatedError ? "respuesta cortada" : "JSON inválido";
+        log(`[consolidation] scope="${scope}" -> ${why} con 1 episodio: queda pendiente para la próxima corrida`);
+        for (const e of candidates) skipped.add(e.id);
+        // Con JSON inválido el veneno era el episodio, no el tamaño: la tanda vuelve a llenarse.
+        // Con respuesta cortada el tope chico se mantiene: el modelo no entra más.
+        if (err instanceof LlmInvalidJsonError) cap.episodes = Number.POSITIVE_INFINITY;
+        return { memories: dropped_l0 > 0 ? 1 : 0, episodes: dropped_l0, dropped_l0, skipped: true };
       }
-      if (!splittable || forPrompt.length === 1) throw err;
+      if (!splittable) throw err;
       cap.episodes = Math.floor(forPrompt.length / 2);
       forPrompt.length = cap.episodes;
       candidates = candidates.slice(0, cap.episodes);
