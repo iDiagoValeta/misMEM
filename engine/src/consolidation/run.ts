@@ -294,6 +294,8 @@ async function processScope(
           source_episode_ids: candidates.map((e) => e.id),
         });
         db.prepare("UPDATE memories SET salience = 0.05 WHERE id = ?").run(stub.memory_id);
+        // El veneno era el episodio, no el tamaño: la tanda siguiente vuelve a llenarse.
+        cap.episodes = Number.POSITIVE_INFINITY;
         return { memories: 1 + (dropped_l0 > 0 ? 1 : 0), episodes: stub.consolidated + dropped_l0, dropped_l0 };
       }
       if (!splittable || forPrompt.length === 1) throw err;

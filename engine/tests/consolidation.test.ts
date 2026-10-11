@@ -374,6 +374,30 @@ describe("runConsolidation", () => {
     expect(noise.gist).toMatch(/1 episodio/);
   });
 
+  it("después de un JSON inválido de un episodio, la tanda siguiente vuelve a llenarse", async () => {
+    const poison = captureOld("cola", "veneno con barras que rompen el JSON", 48);
+    const rest = [2, 3, 4, 5, 6].map((n) => captureOld("cola", `decisión ${n} sobre el stack elegido`, 48));
+    const sizes: number[] = [];
+    const distillFn = vi.fn(async (_cfg: unknown, _sys: string, user: string) => {
+      const batch = [poison, ...rest].filter((id) => user.includes(id));
+      sizes.push(batch.length);
+      if (batch.includes(poison)) throw new LlmInvalidJsonError("JSON inválido");
+      return [{ gist: `tanda de ${batch.length}`, evidence_episode_ids: batch }];
+    });
+
+    const summary = await runConsolidation(db, {
+      minEpisodesPerScope: 1,
+      paretoPrefilter: false,
+      llm: llmCfg,
+      distillFn,
+      log: () => {},
+    });
+
+    expect(sizes).toEqual([6, 3, 1, 5]);
+    expect(summary.episodes_consolidated).toBe(6);
+    expect(summary.scopes_failed).toBe(0);
+  });
+
   it("respeta el tope de llamadas por corrida y deja el resto para la próxima", async () => {
     for (const scope of ["a", "b", "c"]) {
       for (const n of [1, 2, 3]) captureOld(scope, `nota ${scope} ${n} sobre el despliegue`, 48);

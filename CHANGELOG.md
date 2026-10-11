@@ -7,6 +7,9 @@
 - Si el LLM devuelve JSON inválido con un único episodio, ese episodio queda como ruido
   y la corrida sigue con el resto. Antes el ámbito entero fallaba y la próxima noche
   chocaba contra el mismo episodio.
+- Si ese episodio venenoso sale, la tanda siguiente vuelve a llenarse. En
+  `engram-compat` el tope se quedaba en 1 y procesaba de a uno. Si la respuesta
+  se corta, el tope chico se mantiene (el modelo no entra más).
 
 ### Vectores y consolidación más robustos
 
