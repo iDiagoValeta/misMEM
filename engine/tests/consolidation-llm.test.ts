@@ -104,6 +104,54 @@ describe("distill", () => {
     await expect(distill(cfg, "sys", "user")).rejects.toBeInstanceOf(LlmInvalidJsonError);
   });
 
+  const answer = (content: string): Response =>
+    new Response(JSON.stringify({ choices: [{ finish_reason: "stop", message: { content } }] }));
+
+  it("devuelve las memorias que destiló el LLM", async () => {
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(
+        answer('```json\n{"memories":[{"gist":"Prefiere Postgres","evidence_episode_ids":["e1"]}]}\n```'),
+      ),
+    );
+    expect(await distill(cfg, "sys", "user")).toEqual([{ gist: "Prefiere Postgres", evidence_episode_ids: ["e1"] }]);
+  });
+
+  it("un resumen largo no se descarta: lo que no entra en el gist pasa a los detalles", async () => {
+    const long = "Decisión sobre el despliegue. ".repeat(30);
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(
+        answer(JSON.stringify({ memories: [{ gist: long, details: "contexto", evidence_episode_ids: ["e1"] }] })),
+      ),
+    );
+    const [memory] = await distill(cfg, "sys", "user");
+    expect(memory?.gist.length).toBeLessThanOrEqual(500);
+    expect(memory?.details).toContain(long.trim());
+    expect(memory?.details).toContain("contexto");
+  });
+
+  it("una memoria mal formada no se pierde en silencio: la respuesta entera cuenta como inválida", async () => {
+    const mixed = JSON.stringify({
+      memories: [{ gist: "buena", evidence_episode_ids: ["e1"] }, { gist: "sin evidencia" }],
+    });
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(answer(mixed)));
+    await expect(distill(cfg, "sys", "user")).rejects.toBeInstanceOf(LlmInvalidJsonError);
+  });
+
+  it("un JSON válido sin la lista de memorias también se puede reintentar partiendo la tanda", async () => {
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(answer('{"resultado":"ok"}')));
+    await expect(distill(cfg, "sys", "user")).rejects.toBeInstanceOf(LlmInvalidJsonError);
+  });
+
+  it("el error de un JSON roto no arrastra el contenido de la respuesta", async () => {
+    const secret = "el usuario contó algo privado";
+    vi.stubGlobal("fetch", vi.fn().mockResolvedValue(answer(`{"memories":[{"gist":"${secret}" "roto"}]}`)));
+    const err = (await distill(cfg, "sys", "user").catch((e: unknown) => e)) as Error;
+    expect(err).toBeInstanceOf(LlmInvalidJsonError);
+    expect(err.message).not.toContain(secret);
+  });
+
   it("un 500 no es fatal", async () => {
     vi.stubGlobal("fetch", vi.fn().mockResolvedValue(new Response("boom", { status: 500 })));
     const err = await distill(cfg, "sys", "user").catch((e: unknown) => e);

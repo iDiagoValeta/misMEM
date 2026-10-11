@@ -1,7 +1,9 @@
 import { z } from "zod";
 
+const MAX_GIST_CHARS = 500;
+
 const MemorySchema = z.object({
-  gist: z.string().min(1).max(500),
+  gist: z.string().min(1),
   details: z.string().optional().nullable(),
   evidence_episode_ids: z.array(z.string()).min(1),
   type: z.string().min(1).max(40).optional(),
@@ -125,19 +127,31 @@ export async function distill(
   try {
     parsed = JSON.parse(cleaned);
   } catch (err) {
+    // Sin el texto de la respuesta: son recuerdos de la persona y este error termina en un log.
     throw new LlmInvalidJsonError(
-      `LLM devolvi\u00f3 JSON inv\u00e1lido: ${(err as Error).message}\nRaw: ${cleaned.slice(0, 500)}`,
+      `LLM devolvi\u00f3 JSON inv\u00e1lido (${cleaned.length} caracteres): ${(err as Error).name}`,
     );
   }
-  const root = z
-    .object({ memories: z.array(z.unknown()) })
-    .parse(parsed);
-  const out: DistilledMemory[] = [];
-  for (const raw of root.memories) {
-    const r = MemorySchema.safeParse(raw);
-    if (r.success) out.push(r.data);
+  const root = z.object({ memories: z.array(z.unknown()) }).safeParse(parsed);
+  if (!root.success) {
+    throw new LlmInvalidJsonError("la respuesta del LLM no trae la lista de memorias");
   }
-  return out;
+  const memories = root.data.memories.map((raw) => MemorySchema.safeParse(raw));
+  const invalid = memories.filter((m) => !m.success).length;
+  if (invalid > 0) {
+    // Quedarse con las válidas dejaría sin citar, y por lo tanto como ruido, a los episodios de las otras.
+    throw new LlmInvalidJsonError(`${invalid} de ${memories.length} memorias del LLM mal formadas`);
+  }
+  return memories.flatMap((m) => (m.success ? [fitGist(m.data)] : []));
+}
+
+function fitGist(memory: DistilledMemory): DistilledMemory {
+  if (memory.gist.length <= MAX_GIST_CHARS) return memory;
+  return {
+    ...memory,
+    gist: memory.gist.slice(0, MAX_GIST_CHARS),
+    details: [memory.gist.trim(), memory.details].filter(Boolean).join("\n"),
+  };
 }
 
 function stripFences(s: string): string {
