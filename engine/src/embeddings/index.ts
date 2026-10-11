@@ -26,14 +26,19 @@ export interface EmbeddingConfig {
   docPrefix: string;
   /** Coseno mínimo para que un recuerdo cuente como parecido; depende del modelo. */
   minScore: number;
+  /** Tope del texto de cada documento; el resumen va adelante y nunca se pierde. */
+  maxChars: number;
 }
 
 const DEFAULT_MIN_SCORE = 0.5;
+const DEFAULT_MAX_CHARS = 4000;
+const MAX_CONSECUTIVE_FAILURES = 2;
 
 export function loadEmbeddingConfig(): EmbeddingConfig {
   const provider: EmbeddingProvider =
     process.env.MISMEM_EMBEDDING_PROVIDER === "openai" ? "openai" : "ollama";
   const minScore = Number(process.env.MISMEM_EMBEDDING_MIN_SCORE);
+  const maxChars = Number(process.env.MISMEM_EMBEDDING_MAX_CHARS);
   return {
     enabled: (process.env.MISMEM_EMBEDDINGS ?? "auto") !== "off",
     provider,
@@ -46,6 +51,7 @@ export function loadEmbeddingConfig(): EmbeddingConfig {
     queryPrefix: process.env.MISMEM_EMBEDDING_QUERY_PREFIX ?? "",
     docPrefix: process.env.MISMEM_EMBEDDING_DOC_PREFIX ?? "",
     minScore: Number.isFinite(minScore) && minScore > 0 ? minScore : DEFAULT_MIN_SCORE,
+    maxChars: Number.isFinite(maxChars) && maxChars > 0 ? maxChars : DEFAULT_MAX_CHARS,
   };
 }
 
@@ -220,6 +226,7 @@ export async function embedPendingMemories(
     ((texts: string[]) => embedTexts(texts, { ...cfg, timeoutMs: opts.timeoutMs ?? cfg.timeoutMs }));
   const model = opts.model ?? cfg.model;
   const batchSize = opts.batchSize ?? 32;
+  const maxChars = cfg.maxChars;
   const needsEmbedding = [
     "e.memory_id IS NULL",
     "e.model <> @model",
@@ -254,15 +261,24 @@ export async function embedPendingMemories(
     failed: 0,
   };
 
+  let consecutiveFailures = 0;
   for (let i = 0; i < pendingRows.length; i += batchSize) {
     const batch = pendingRows.slice(i, i + batchSize);
-    const texts = batch.map((m) => (m.details ? `${m.gist}\n${m.details}` : m.gist));
+    const texts = batch.map((m) =>
+      (m.details ? `${m.gist}\n${m.details}` : m.gist).slice(0, maxChars),
+    );
     const vecs = await embedFn(texts);
     if (!vecs) {
-      // Embedder caído: cortar acá — el resto fallaría igual y solo sumaría timeouts.
-      stats.failed += pendingRows.length - i;
-      break;
+      // Una tanda lenta o rara no condena al resto; dos seguidas, sí: el embedder está caído.
+      consecutiveFailures++;
+      if (consecutiveFailures >= MAX_CONSECUTIVE_FAILURES) {
+        stats.failed += pendingRows.length - i;
+        break;
+      }
+      stats.failed += batch.length;
+      continue;
     }
+    consecutiveFailures = 0;
     for (let j = 0; j < batch.length; j++) {
       const vec = vecs[j];
       const mem = batch[j];

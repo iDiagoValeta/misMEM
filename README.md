@@ -137,6 +137,7 @@ MISMEM_EMBEDDING_MODEL=embeddinggemma-2
 MISMEM_EMBEDDING_QUERY_PREFIX="task: search result | query: "
 MISMEM_EMBEDDING_DOC_PREFIX="title: none | text: "
 MISMEM_EMBEDDING_MIN_SCORE=0.68
+# MISMEM_EMBEDDING_MAX_CHARS=4000   # tope del texto de cada memoria al indexar
 ```
 
 Al cambiar de modelo hay que reindexar (`mismem-embed --force`): la búsqueda

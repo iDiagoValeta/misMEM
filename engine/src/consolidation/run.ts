@@ -6,6 +6,7 @@ import {
   distill,
   loadLlmConfig,
   LlmFatalError,
+  LlmInvalidJsonError,
   LlmTruncatedError,
   type LlmConfig,
   type DistilledMemory,
@@ -186,7 +187,7 @@ export async function runConsolidation(
   // Opcional: si no hay Ollama, degrada sin afectar la consolidación.
   if (!opts.dryRun) {
     try {
-      const emb = await embedPendingMemories(db, { timeoutMs: 120_000 });
+      const emb = await embedPendingMemories(db, { timeoutMs: 120_000, batchSize: 8 });
       if (emb.pending > 0) {
         log(`[consolidation] embeddings: pendientes=${emb.pending} embebidas=${emb.embedded} fallidas=${emb.failed}`);
       }
@@ -284,11 +285,13 @@ async function processScope(
       distilled = await distillFn(llm, SYSTEM_PROMPT, buildUserPrompt(scope, forPrompt));
       break;
     } catch (err) {
-      if (!(err instanceof LlmTruncatedError) || forPrompt.length === 1) throw err;
+      const splittable = err instanceof LlmTruncatedError || err instanceof LlmInvalidJsonError;
+      if (!splittable || forPrompt.length === 1) throw err;
       cap.episodes = Math.floor(forPrompt.length / 2);
       forPrompt.length = cap.episodes;
       candidates = candidates.slice(0, cap.episodes);
-      log(`[consolidation] scope="${scope}" -> respuesta cortada, reintento con ${cap.episodes} episodios`);
+      const why = err instanceof LlmTruncatedError ? "respuesta cortada" : "JSON inválido";
+      log(`[consolidation] scope="${scope}" -> ${why}, reintento con ${cap.episodes} episodios`);
       if (!calls.canCall()) return { memories: dropped_l0 > 0 ? 1 : 0, episodes: dropped_l0, dropped_l0 };
     }
   }

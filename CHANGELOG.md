@@ -2,6 +2,16 @@
 
 ## Sin publicar
 
+### Vectores y consolidación más robustos
+
+- Una tanda de vectores que falla ya no deja sin vector a todas las siguientes; recién dos fallas seguidas
+  cortan (el servidor está caído). En la primera corrida grande, 660 de 756 memorias nuevas quedaron sin
+  vector por una sola tanda lenta.
+- Al modelo de embeddings le llegan como mucho 4000 caracteres por memoria (`MISMEM_EMBEDDING_MAX_CHARS`):
+  el resumen va adelante y no se pierde, y en CPU ARM rinde mucho más.
+- La consolidación rellena vectores de a 8.
+- Un JSON mal armado del LLM parte la tanda y reintenta, como una respuesta cortada.
+
 ### Embeddings desde cualquier servidor compatible con OpenAI
 
 - `MISMEM_EMBEDDING_PROVIDER=openai` + `MISMEM_EMBEDDING_URL` piden `/v1/embeddings` (p. ej. llama-server);

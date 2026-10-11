@@ -36,6 +36,11 @@ export class LlmTruncatedError extends Error {
   override name = "LlmTruncatedError";
 }
 
+/** La respuesta no es JSON válido: con una tanda más chica suele salir bien. */
+export class LlmInvalidJsonError extends Error {
+  override name = "LlmInvalidJsonError";
+}
+
 function loadMaxTokens(): number {
   const value = Number(process.env.MISMEM_CONSOLIDATION_MAX_TOKENS);
   return Number.isFinite(value) && value > 0 ? value : DEFAULT_MAX_TOKENS;
@@ -120,7 +125,9 @@ export async function distill(
   try {
     parsed = JSON.parse(cleaned);
   } catch (err) {
-    throw new Error(`LLM devolvi\u00f3 JSON inv\u00e1lido: ${(err as Error).message}\nRaw: ${cleaned.slice(0, 500)}`);
+    throw new LlmInvalidJsonError(
+      `LLM devolvi\u00f3 JSON inv\u00e1lido: ${(err as Error).message}\nRaw: ${cleaned.slice(0, 500)}`,
+    );
   }
   const root = z
     .object({ memories: z.array(z.unknown()) })

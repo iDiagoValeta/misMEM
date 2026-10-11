@@ -3,7 +3,7 @@ import type { Database as DB } from "better-sqlite3";
 import { openDb } from "../src/db.js";
 import { capture } from "../src/tools.js";
 import { runConsolidation } from "../src/consolidation/run.js";
-import { LlmFatalError, LlmTruncatedError } from "../src/consolidation/llm.js";
+import { LlmFatalError, LlmInvalidJsonError, LlmTruncatedError } from "../src/consolidation/llm.js";
 
 let db: DB;
 
@@ -307,6 +307,24 @@ describe("runConsolidation", () => {
     expect(sizes).toEqual([8, 4, 2, 2, 2, 2]);
     expect(summary.episodes_consolidated).toBe(8);
     expect(summary.scopes_failed).toBe(0);
+  });
+
+  it("un JSON mal armado también parte la tanda en vez de perderla", async () => {
+    const ids = [1, 2, 3, 4].map((n) => captureOld("json", `nota ${n} con decisiones`, 48));
+    const sizes: number[] = [];
+    const distillFn = vi.fn(async (_cfg: unknown, _sys: string, user: string) => {
+      const batch = ids.filter((id) => user.includes(id));
+      sizes.push(batch.length);
+      if (batch.length > 2) throw new LlmInvalidJsonError("JSON inválido");
+      return [{ gist: `tanda de ${batch.length}`, evidence_episode_ids: batch }];
+    });
+
+    const summary = await runConsolidation(db, {
+      minEpisodesPerScope: 1, paretoPrefilter: false, llm: llmCfg, distillFn, log: () => {},
+    });
+
+    expect(sizes).toEqual([4, 2, 2]);
+    expect(summary.episodes_consolidated).toBe(4);
   });
 
   it("una respuesta cortada con un solo episodio es un error del ámbito, no un bucle", async () => {

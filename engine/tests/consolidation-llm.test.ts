@@ -1,5 +1,11 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
-import { distill, loadLlmConfig, LlmFatalError, LlmTruncatedError } from "../src/consolidation/llm.js";
+import {
+  distill,
+  loadLlmConfig,
+  LlmFatalError,
+  LlmInvalidJsonError,
+  LlmTruncatedError,
+} from "../src/consolidation/llm.js";
 
 const ENV_KEYS = [
   "DEEPSEEK_API_KEY",
@@ -85,6 +91,17 @@ describe("distill", () => {
       ),
     );
     await expect(distill(cfg, "sys", "user")).rejects.toBeInstanceOf(LlmTruncatedError);
+  });
+
+  it("un JSON mal armado (sin estar cortado) se distingue para poder partir la tanda", async () => {
+    const broken = '{"memories":[{"gist":"a","evidence_episode_ids":["x"]} {"gist":"b"}]}';
+    vi.stubGlobal(
+      "fetch",
+      vi.fn().mockResolvedValue(
+        new Response(JSON.stringify({ choices: [{ finish_reason: "stop", message: { content: broken } }] })),
+      ),
+    );
+    await expect(distill(cfg, "sys", "user")).rejects.toBeInstanceOf(LlmInvalidJsonError);
   });
 
   it("un 500 no es fatal", async () => {
