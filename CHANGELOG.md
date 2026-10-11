@@ -2,6 +2,12 @@
 
 ## Sin publicar
 
+### Medir el recall sin tocarlo
+
+- `mismem-bench --bank <banco.jsonl>` cuenta cuántas veces la memoria esperada sale entre las devueltas,
+  por variante de pregunta y por grupo, y cuántas preguntas ajenas traen algo. Usa el mismo recall y el
+  mismo servidor de embeddings que producción y no refuerza. El banco es privado y no va al repo.
+
 ### Bordes de configuración
 
 - `MISMEM_EMBEDDING_MIN_SCORE=0` se respeta (traer todo); antes volvía a 0,5 sin avisar.
