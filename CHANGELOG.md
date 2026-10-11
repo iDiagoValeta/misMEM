@@ -2,6 +2,15 @@
 
 ## Sin publicar
 
+### La consolidación ya no descarta contenido válido como ruido
+
+- Un resumen de más de 500 caracteres ya no invalida la memoria: el `gist` se recorta y el texto completo
+  pasa a `details`. Antes la memoria se descartaba en silencio y, si era la única de la tanda, todos sus
+  episodios quedaban marcados como "sin señal" y se borraban con el siguiente `forget`.
+- Si el LLM devuelve alguna memoria mal formada, o un JSON sin la lista de memorias, la respuesta entera
+  cuenta como inválida: la tanda se parte y se reintenta, igual que con un JSON roto.
+- El error de un JSON roto ya no incluye el texto de la respuesta (terminaba en el log del cron).
+
 ### Un JSON roto de un solo episodio ya no traba el ámbito
 
 - Si el LLM devuelve JSON inválido con un único episodio, ese episodio queda como ruido
