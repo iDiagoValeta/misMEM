@@ -2,6 +2,12 @@
 
 ## Sin publicar
 
+### Un JSON roto de un solo episodio ya no traba el ámbito
+
+- Si el LLM devuelve JSON inválido con un único episodio, ese episodio queda como ruido
+  y la corrida sigue con el resto. Antes el ámbito entero fallaba y la próxima noche
+  chocaba contra el mismo episodio.
+
 ### Vectores y consolidación más robustos
 
 - Una tanda de vectores que falla ya no deja sin vector a todas las siguientes; recién dos fallas seguidas
