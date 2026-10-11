@@ -2,6 +2,13 @@
 
 ## Sin publicar
 
+### Los ámbitos chicos ya no quedan pendientes para siempre
+
+- Un ámbito con menos de `MISMEM_CONSOLIDATION_MIN_EPISODES` episodios se consolida igual cuando lleva
+  `MISMEM_CONSOLIDATION_QUIET_DAYS` (14) sin episodios nuevos (`--quiet-days`). Antes una charla importada
+  o un proyecto abandonado con uno o dos episodios no se consolidaba nunca y sólo se encontraba por palabras
+  exactas. Con muchos ámbitos así, el tope de llamadas por corrida los reparte en varias noches.
+
 ### Un episodio que el LLM no logra procesar queda pendiente
 
 - Si con un solo episodio la respuesta llega cortada o con JSON inválido, el episodio queda pendiente
