@@ -16,7 +16,7 @@ traits (patrones cristalizados)
 ## Comando
 
 ```bash
-mismem-consolidate [--dry-run] [--scope <name>] [--min-age-hours 24] [--min-episodes 3] [--max-batch 60]
+mismem-consolidate [--dry-run] [--scope <name>] [--min-age-hours 24] [--min-episodes 3] [--quiet-days 14] [--max-batch 60]
 ```
 
 ## Configuración

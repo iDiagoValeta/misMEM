@@ -324,7 +324,8 @@ Los defaults son los del código (`engine/src`).
 | `MISMEM_CONSOLIDATION_MAX_CALLS` | `60` | Llamadas por corrida; lo pendiente queda para la siguiente |
 | `MISMEM_CONSOLIDATION_MAX_BATCH` | `60` | Episodios que se leen por tanda |
 | `MISMEM_CONSOLIDATION_MIN_AGE_HOURS` | `24` | Edad mínima de un episodio para consolidarlo |
-| `MISMEM_CONSOLIDATION_MIN_EPISODES` | `3` | Un ámbito con menos episodios pendientes se saltea (y queda así hasta juntar ese mínimo) |
+| `MISMEM_CONSOLIDATION_MIN_EPISODES` | `3` | Un ámbito con menos episodios pendientes espera a juntar ese mínimo |
+| `MISMEM_CONSOLIDATION_QUIET_DAYS` | `14` | Si el ámbito lleva estos días sin episodios nuevos, se consolida aunque no llegue al mínimo |
 
 ---
 

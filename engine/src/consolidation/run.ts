@@ -22,6 +22,8 @@ export type DistillFn = (
 export interface RunOptions {
   minAgeHours?: number;
   minEpisodesPerScope?: number;
+  /** Días sin episodios nuevos tras los que un ámbito chico se consolida igual. */
+  quietDays?: number;
   maxEpisodesPerBatch?: number;
   scopeFilter?: string;
   dryRun?: boolean;
@@ -65,6 +67,9 @@ interface Limits {
 // Lo que buildUserPrompt suma por episodio: id, fecha y separador.
 const PROMPT_OVERHEAD_PER_EPISODE = 60;
 const TRUNCATION_MARK = "\n[recortado]\n";
+// Dos semanas sin episodios nuevos: ese ámbito ya no va a juntar el mínimo (una charla vieja
+// importada, un proyecto que se dejó) y sin esto quedaba pendiente para siempre.
+const DEFAULT_QUIET_DAYS = 14;
 
 function envNumber(name: string, fallback: number): number {
   const value = Number(process.env[name]);
@@ -83,6 +88,7 @@ export function truncateEpisode(body: string, max: number): string {
 interface ScopeRow {
   scope: string;
   n: number;
+  newest: number;
 }
 
 interface EpisodeRow {
@@ -98,6 +104,8 @@ export async function runConsolidation(
   const t0 = Date.now();
   const minAgeHours = opts.minAgeHours ?? Number(process.env.MISMEM_CONSOLIDATION_MIN_AGE_HOURS ?? 24);
   const minEpisodes = opts.minEpisodesPerScope ?? Number(process.env.MISMEM_CONSOLIDATION_MIN_EPISODES ?? 3);
+  const quietDays = opts.quietDays ?? envNumber("MISMEM_CONSOLIDATION_QUIET_DAYS", DEFAULT_QUIET_DAYS);
+  const quietBefore = Date.now() - quietDays * 86_400_000;
   const limits: Limits = {
     maxBatch: opts.maxEpisodesPerBatch ?? envNumber("MISMEM_CONSOLIDATION_MAX_BATCH", 60),
     maxPromptChars: opts.maxPromptChars ?? envNumber("MISMEM_CONSOLIDATION_MAX_PROMPT_CHARS", 60_000),
@@ -125,7 +133,7 @@ export async function runConsolidation(
   const scopeWhere = opts.scopeFilter ? "AND scope = @scope" : "";
   const scopes = db
     .prepare(
-      `SELECT scope, COUNT(*) AS n FROM episodes
+      `SELECT scope, COUNT(*) AS n, MAX(created_at) AS newest FROM episodes
        WHERE consolidated_into IS NULL AND created_at < @cutoff ${scopeWhere}
        GROUP BY scope
        ORDER BY n DESC`,
@@ -144,8 +152,8 @@ export async function runConsolidation(
      WHERE scope = @scope AND consolidated_into IS NULL AND created_at < @cutoff`,
   );
 
-  scopeLoop: for (const { scope, n } of scopes) {
-    if (n < minEpisodes) {
+  scopeLoop: for (const { scope, n, newest } of scopes) {
+    if (n < minEpisodes && newest >= quietBefore) {
       summary.scopes_skipped_too_few++;
       log(`[consolidation] skip scope="${scope}" (${n} < ${minEpisodes})`);
       continue;

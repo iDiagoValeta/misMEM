@@ -21,6 +21,11 @@ function captureOld(scope: string, body: string, ageHours: number): string {
 }
 
 describe("runConsolidation", () => {
+  const pendingScopes = (): string[] =>
+    (db.prepare("SELECT DISTINCT scope FROM episodes WHERE consolidated_into IS NULL ORDER BY scope").all() as { scope: string }[]).map(
+      (r) => r.scope,
+    );
+
   it("skipea scopes con menos episodios que minEpisodes", async () => {
     captureOld("solo", "uno", 48);
     captureOld("solo", "dos", 48);
@@ -36,6 +41,45 @@ describe("runConsolidation", () => {
     expect(distillFn).not.toHaveBeenCalled();
     expect(summary.scopes_skipped_too_few).toBe(1);
     expect(summary.memories_created).toBe(0);
+  });
+
+  it("un ámbito chico que lleva tiempo quieto se consolida igual: si no, queda pendiente para siempre", async () => {
+    const lone = captureOld("charla-vieja", "decidimos migrar el hosting a Hetzner por costo", 24 * 20);
+    captureOld("activo", "idea suelta de esta semana", 48);
+    const distillFn = vi.fn(async (_cfg: unknown, _sys: string, user: string) =>
+      user.includes(lone) ? [{ gist: "Hosting en Hetzner", evidence_episode_ids: [lone] }] : [],
+    );
+
+    const summary = await runConsolidation(db, {
+      minEpisodesPerScope: 3,
+      quietDays: 14,
+      paretoPrefilter: false,
+      llm: llmCfg,
+      distillFn,
+      log: () => {},
+    });
+
+    expect(distillFn).toHaveBeenCalledTimes(1);
+    expect(summary.memories_created).toBe(1);
+    expect(summary.scopes_skipped_too_few).toBe(1);
+    expect(pendingScopes()).toEqual(["activo"]);
+  });
+
+  it("un ámbito chico con un episodio reciente espera a juntar el mínimo, aunque tenga otro viejo", async () => {
+    captureOld("mixto", "algo de hace un mes", 24 * 30);
+    captureOld("mixto", "algo de anteayer", 48);
+    const distillFn = vi.fn();
+
+    const summary = await runConsolidation(db, {
+      minEpisodesPerScope: 3,
+      quietDays: 14,
+      llm: llmCfg,
+      distillFn,
+      log: () => {},
+    });
+
+    expect(distillFn).not.toHaveBeenCalled();
+    expect(summary.scopes_skipped_too_few).toBe(1);
   });
 
   it("ignora episodios m\u00e1s nuevos que minAgeHours", async () => {

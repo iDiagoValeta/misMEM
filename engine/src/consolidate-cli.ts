@@ -7,6 +7,7 @@ function parseArgs(argv: string[]): {
   dryRun: boolean;
   minAgeHours?: number;
   minEpisodes?: number;
+  quietDays?: number;
   maxBatch?: number;
   help: boolean;
 } {
@@ -15,6 +16,7 @@ function parseArgs(argv: string[]): {
     dryRun: boolean;
     minAgeHours?: number;
     minEpisodes?: number;
+    quietDays?: number;
     maxBatch?: number;
     help: boolean;
   } = { dryRun: false, help: false };
@@ -25,6 +27,7 @@ function parseArgs(argv: string[]): {
     else if (a === "--scope") out.scope = argv[++i];
     else if (a === "--min-age-hours") out.minAgeHours = Number(argv[++i]);
     else if (a === "--min-episodes") out.minEpisodes = Number(argv[++i]);
+    else if (a === "--quiet-days") out.quietDays = Number(argv[++i]);
     else if (a === "--max-batch") out.maxBatch = Number(argv[++i]);
   }
   return out;
@@ -43,6 +46,7 @@ Opciones:
   --scope <name>           Procesar s\u00f3lo un scope espec\u00edfico
   --min-age-hours <n>      Edad m\u00ednima de episodios a consolidar (default 24)
   --min-episodes <n>       Episodios m\u00ednimos por scope (default 3)
+  --quiet-days <n>         Un scope con menos del m\u00ednimo se consolida igual tras n d\u00edas sin episodios nuevos (default 14)
   --max-batch <n>          M\u00e1x episodios por llamada LLM (default 60)
   --help                   Esta ayuda
 
@@ -56,6 +60,7 @@ Env:
   MISMEM_CONSOLIDATION_MAX_CALLS        default 60
   MISMEM_CONSOLIDATION_MIN_AGE_HOURS    default 24
   MISMEM_CONSOLIDATION_MIN_EPISODES     default 3
+  MISMEM_CONSOLIDATION_QUIET_DAYS       default 14
   MISMEM_CONSOLIDATION_MAX_BATCH        default 60
   MISMEM_DB                             default ${defaultDbPath()}
 `);
@@ -72,6 +77,7 @@ async function main(): Promise<void> {
       dryRun: opts.dryRun,
       minAgeHours: opts.minAgeHours,
       minEpisodesPerScope: opts.minEpisodes,
+      quietDays: opts.quietDays,
       maxEpisodesPerBatch: opts.maxBatch,
     });
     console.log(JSON.stringify(summary, null, 2));
