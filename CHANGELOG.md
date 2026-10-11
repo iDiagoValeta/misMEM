@@ -1,6 +1,6 @@
 # Changelog
 
-## Sin publicar
+## 0.4.0 — 2026-10-12
 
 ### La búsqueda por palabras ya no tropieza con las palabras vacías
 
