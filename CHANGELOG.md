@@ -2,6 +2,16 @@
 
 ## Sin publicar
 
+### Documentación: una sola referencia de configuración
+
+- `DEPLOY.md` tiene la única tabla completa de variables de entorno; el README, `engine/README.md`,
+  la guía de consolidación y `.github/copilot-instructions.md` enlazan ahí en vez de repetir defaults.
+- `DEPLOY.md` documenta lo que faltaba para un despliegue real: el servidor de embeddings, cuándo hay
+  que reindexar, las tres tareas programadas (respaldo, consolidación, olvido) y qué texto sale a terceros.
+- Corregido lo que ya no era cierto: la consolidación "vía OpenRouter", el TTL de los episodios (no
+  existe: los borra `forget`), la firma de `forget`, el esquema y que la memoria "nunca sale de tu máquina"
+  (con la consolidación activada, los episodios viajan al proveedor del LLM).
+
 ### Medir el recall sin tocarlo
 
 - `mismem-bench --bank <banco.jsonl>` cuenta cuántas veces la memoria esperada sale entre las devueltas,

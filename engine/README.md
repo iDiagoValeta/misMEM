@@ -8,7 +8,7 @@ Memoria persistente con consolidación biológica (3 capas) sobre SQLite + FTS5,
 
 La pérdida es **intencional y asimétrica**, como la memoria humana:
 
-- **episodes** — verbatim, efímero. Lo crudo. TTL ~14-30d post-consolidación.
+- **episodes** — verbatim, efímero. Lo crudo. No vencen solos: `forget` los borra una vez consolidados (30 días por defecto en la tool MCP, 90 en `mismem-forget`).
 - **memories** — destilación con `salience` que decae si no se accede. Núcleo operativo.
 - **traits** — patrones cristalizados. El **Soul Mirror** de Bardon. Permanente salvo borrado explícito.
 
@@ -59,15 +59,16 @@ pnpm build
 }
 ```
 
-Default DB: `~/.mismem/mem.db` (configurable con `MISMEM_DB`).
+Default DB: `~/.mismem/mem.db` (configurable con `MISMEM_DB`). Todas las variables de entorno están en [DEPLOY.md](../DEPLOY.md#variables-de-entorno-referencia-única).
 
 ## Roadmap
 
 - [x] Fase 0: schema + 5 invocaciones + tests + MCP stdio
 - [x] Fase 1: ingesta de exports (ChatGPT, transcripts VS Code) como semilla
 - [x] Fase 2: servidor Streamable HTTP + capa engram-compat + deploy en VPS
-- [x] Fase 3: consolidación LLM (episodes → memories vía OpenRouter) + pre-filtro Pareto
+- [x] Fase 3: consolidación LLM (episodes → memories, DeepSeek directo u OpenRouter) + pre-filtro Pareto
 - [x] Fase 4: viewer read-only (`/viewer`) + CLIs (`mismem-stats`, `mismem-forget`, `mismem-migrate-engram`)
-- [x] Fase 5: dedup por content-hash + embeddings opcionales (Ollama nomic-embed-text, coseno en JS, `mismem-embed`)
+- [x] Fase 5: dedup por content-hash + embeddings opcionales (Ollama o servidor compatible con OpenAI, coseno en JS, `mismem-embed`)
 - [x] Fase 6: decay idempotente + ranking híbrido consistente + reindexado seguro
-- [ ] Fase 7: binario empaquetado (bun --compile) + onboarding
+- [x] Fase 7: relevancia antes que saliencia, EmbeddingGemma 2 con prefijos y corte, `mismem-bench`
+- [ ] Fase 8: binario empaquetado (bun --compile) + onboarding

@@ -13,7 +13,7 @@ misMEM resuelve esto con un solo gesto: **una base de datos SQLite + un protocol
 ## Arquitectura: 3 capas, como la memoria biológica
 
 ```
-episodes  (verbatim, efímero, TTL post-consolidación)
+episodes  (verbatim; se borran con `forget` una vez consolidados)
     ↓  consolidación (manual o LLM nocturno)
 memories  (gist + details, salience con decay + refuerzo Hebbiano)
     ↓  crystallize
@@ -61,7 +61,7 @@ La forma más rápida — sin clonar nada, vía [npm](https://www.npmjs.com/pack
 }
 ```
 
-La DB se crea sola en el primer uso (default: `~/.mismem/mem.db`, configurable con `MISMEM_DB`). Tu memoria vive en tu disco — nunca sale de tu máquina.
+La DB se crea sola en el primer uso (default: `~/.mismem/mem.db`, configurable con `MISMEM_DB`). Así, sin nada más configurado, tu memoria vive en tu disco y no sale de tu máquina; las dos funciones opcionales que sí mandan texto afuera están en [Privacidad](#privacidad).
 
 ### Instancia remota (multi-cliente)
 
@@ -93,7 +93,7 @@ Y en `mcp.json`: `"command": "node", "args": ["<ruta-al-repo>/misMEM/engine/dist
 - **`engine/src/server.ts`** — MCP server stdio (uso local).
 - **`engine/src/server-http.ts`** — Streamable HTTP para deploy remoto (BasicAuth opcional, `/healthz`). Ver [DEPLOY.md](./DEPLOY.md).
 - **`engine/src/viewer.ts`** — panel read-only en `/viewer` + `/api/{stats,recent,search}`.
-- **Consolidación LLM** — cron nocturno que destila episodios en memorias vía OpenRouter, con pre-filtro Pareto para descartar ruido. Ver [engine/src/consolidation/README.md](engine/src/consolidation/README.md).
+- **Consolidación LLM** — cron nocturno que destila episodios en memorias con DeepSeek directo u OpenRouter, con pre-filtro Pareto para descartar ruido. Ver [engine/src/consolidation/README.md](engine/src/consolidation/README.md).
 - **CLIs** — `mismem-ingest` (exports de ChatGPT / transcripts de VS Code), `mismem-consolidate`, `mismem-forget`, `mismem-stats`, `mismem-embed`, `mismem-migrate-engram` y `mismem-bench` (mide el recall con un banco de preguntas propio, sin reforzar).
 
 ## Stack
@@ -113,16 +113,17 @@ Y en `mcp.json`: `"command": "node", "args": ["<ruta-al-repo>/misMEM/engine/dist
 - ✅ Consolidación LLM nocturna (episodes → memories).
 - ✅ Viewer read-only + CLIs de introspección.
 - ✅ Dedup en captura/ingesta (re-ingestar es idempotente).
-- ✅ Recall híbrido: FTS5 + búsqueda semántica opcional vía [Ollama](https://ollama.com) local.
+- ✅ Recall híbrido: FTS5 + búsqueda semántica opcional vía [Ollama](https://ollama.com) o cualquier servidor compatible con OpenAI.
 - 🚧 Binario distribuible (Bun --compile).
 
 ### Búsqueda semántica (opcional)
 
-Con Ollama corriendo (`ollama pull nomic-embed-text`), `recall` suma búsqueda
-por significado: "problemas de plata" encuentra memorias que dicen "deudas".
-Los vectores se guardan como BLOB en la misma SQLite y la búsqueda es coseno
-en JS — sin extensiones nativas ni servicios externos. Si Ollama no está,
-todo degrada silenciosamente a FTS5 puro. La semántica cubre deliberadamente
+Con un servidor de embeddings corriendo, `recall` suma búsqueda por
+significado: "problemas de plata" encuentra memorias que dicen "deudas". El
+default es Ollama (`ollama pull nomic-embed-text`). Los vectores se guardan
+como BLOB en la misma SQLite y la búsqueda es coseno en JS, sin extensiones
+nativas. Si el servidor no responde, todo degrada silenciosamente a FTS5 puro,
+que exige que estén **todas** las palabras de la consulta. La semántica cubre deliberadamente
 solo `memories`; `episodes` y `traits` conservan búsqueda FTS5. Backfill y
 reindexado: `mismem-embed` (`--status`, `--force`).
 
@@ -137,11 +138,12 @@ MISMEM_EMBEDDING_MODEL=embeddinggemma-2
 MISMEM_EMBEDDING_QUERY_PREFIX="task: search result | query: "
 MISMEM_EMBEDDING_DOC_PREFIX="title: none | text: "
 MISMEM_EMBEDDING_MIN_SCORE=0.68
-# MISMEM_EMBEDDING_MAX_CHARS=4000   # tope del texto de cada memoria al indexar
 ```
 
-Al cambiar de modelo hay que reindexar (`mismem-embed --force`): la búsqueda
-sólo compara vectores del modelo configurado.
+La búsqueda sólo compara vectores del modelo configurado. Cambiar de modelo
+reindexa solo en el siguiente backfill (`mismem-embed`); cambiar un prefijo no
+se detecta y exige `mismem-embed --force`. Todas las variables, con sus
+defaults, están en [DEPLOY.md](./DEPLOY.md#variables-de-entorno-referencia-única).
 
 ### Salience, decay y olvido
 
@@ -154,6 +156,11 @@ resultado sin modificar la DB.
 ## Privacidad
 
 Tu memoria es tuya. La DB (`*.db`), los dumps y los exports personales están en `.gitignore` — **nunca** los commitees. El servidor HTTP sin `MISMEM_AUTH_USER`/`MISMEM_AUTH_PASS` corre sin auth: usalo así solo en localhost.
+
+Dos funciones opcionales mandan texto fuera del proceso, y sólo si las configurás:
+
+- **Búsqueda por significado**: el servidor de embeddings recibe el texto de cada memoria y de cada consulta. Corrélo en tu máquina o en tu red interna.
+- **Consolidación LLM**: los episodios viajan textuales a DeepSeek (o a OpenRouter y al proveedor que haya detrás). Sin su clave no corre.
 
 ## Filosofía
 
