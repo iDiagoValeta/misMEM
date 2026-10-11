@@ -1,4 +1,4 @@
-# misMEM — Consolidaci\u00f3n LLM (ciclo de sue\u00f1o)
+# misMEM — Consolidación LLM (ciclo de sueño)
 
 Destila episodios verbatim en memorias estructuradas usando un LLM: DeepSeek directo si hay
 `DEEPSEEK_API_KEY`, si no OpenRouter.
@@ -6,7 +6,7 @@ Destila episodios verbatim en memorias estructuradas usando un LLM: DeepSeek dir
 ## Arquitectura
 
 ```
-episodes (verbatim, TTL ~14d)
+episodes (verbatim; `forget` los borra una vez consolidados)
    ↓ runConsolidation() — diario 4 AM
 memories (gist + details, salience decay/Hebbian)
    ↓ crystallize()
@@ -19,21 +19,10 @@ traits (patrones cristalizados)
 mismem-consolidate [--dry-run] [--scope <name>] [--min-age-hours 24] [--min-episodes 3] [--max-batch 60]
 ```
 
-## Env vars
+## Configuración
 
-| Var | Default | Descripci\u00f3n |
-|-----|---------|-------------|
-| `DEEPSEEK_API_KEY` | — | Si está, consolida con DeepSeek directo (gana sobre OpenRouter) |
-| `OPENROUTER_API_KEY` | — | Alternativa; hace falta una de las dos (salvo `--dry-run`) |
-| `MISMEM_CONSOLIDATION_MODEL` | `deepseek-chat` / `deepseek/deepseek-chat` | En DeepSeek un nombre con `/` (de OpenRouter) se ignora |
-| `MISMEM_CONSOLIDATION_MAX_TOKENS` | `8192` | Tope de la respuesta; si se corta, la tanda se parte a la mitad |
-| `MISMEM_CONSOLIDATION_MAX_PROMPT_CHARS` | `60000` | Caracteres de episodios por llamada; lo que no entra va en la tanda siguiente |
-| `MISMEM_CONSOLIDATION_MAX_EPISODE_CHARS` | `12000` | Un episodio más largo viaja recortado (principio y final) |
-| `MISMEM_CONSOLIDATION_MAX_CALLS` | `60` | Llamadas por corrida; lo pendiente queda para la noche siguiente |
-| `MISMEM_CONSOLIDATION_MIN_AGE_HOURS` | `24` | Edad m\u00ednima de episodios |
-| `MISMEM_CONSOLIDATION_MIN_EPISODES` | `3` | Episodios m\u00ednimos por scope |
-| `MISMEM_CONSOLIDATION_MAX_BATCH` | `60` | M\u00e1x episodios que se leen por tanda |
-| `MISMEM_DB` | `~/.mismem/mem.db` | Ruta a SQLite |
+Las variables (`DEEPSEEK_API_KEY`, `OPENROUTER_API_KEY`, `MISMEM_CONSOLIDATION_*`) y sus defaults están
+en la [referencia única de DEPLOY.md](../../../DEPLOY.md#variables-de-entorno-referencia-única).
 
 ## Calidad
 
@@ -42,10 +31,19 @@ mismem-consolidate [--dry-run] [--scope <name>] [--min-age-hours 24] [--min-epis
   respuesta, y cada corrida como mucho `MAX_CALLS` llamadas. Un atraso grande se vacía en varias noches.
 - **Proveedor sin saldo o clave inválida** (HTTP 401/402/403): la corrida se corta en el primer error
   en vez de repetirlo por cada ámbito.
-- **Anti-alucinaci\u00f3n**: filtra `evidence_episode_ids` que no est\u00e9n en el batch
-- **Sin se\u00f1al**: si LLM devuelve `memories: []`, crea memoria stub con `salience=0.05` para que decay + `forget` limpien
+- **Anti-alucinación**: filtra `evidence_episode_ids` que no estén en el batch
+- **Ruido**: lo que no llega a memoria queda atado a una memoria marcadora (`[noise] …` o `[pareto:l0] …`)
+  con `salience=0.05`, y `forget` lo borra a los 30 días **junto con sus episodios**. Pasa en cuatro casos:
+  el pre-filtro Pareto lo descartó, el LLM devolvió `memories: []`, el LLM leyó el episodio y no lo citó
+  en ninguna memoria, o un episodio solo devolvió JSON inválido. Los tres últimos dependen del LLM:
+  conviene mirar el log de las primeras corridas y tener respaldos que duren más que esos 30 días.
+- **Respuesta mal formada**: un JSON roto, sin la lista de memorias o con alguna memoria inválida parte la
+  tanda a la mitad y reintenta. Un `gist` de más de 500 caracteres se recorta y el texto completo pasa a
+  `details`.
+- **Lo que manda afuera**: el cuerpo de cada episodio (hasta `MAX_EPISODE_CHARS`), su id, su fecha y el
+  nombre del ámbito viajan al proveedor del LLM.
 
-## Deployment en producci\u00f3n (mismem-brain)
+## Deployment en producción (mismem-brain)
 
 ### 1. Build + push imagen con la CLI nueva
 
@@ -75,11 +73,11 @@ Recrear el container:
 docker compose up -d mismem-brain
 ```
 
-### 3. Cron en el servidor (4 AM diario, 1h despu\u00e9s del backup)
+### 3. Cron en el servidor (4 AM diario, una hora después del respaldo)
 
 ```bash
 crontab -e
-# A\u00f1adir:
+# Añadir:
 0 4 * * * docker exec mismem-brain node /app/dist/consolidate-cli.js >> /var/log/mismem-consolidation.log 2>&1
 ```
 
@@ -89,7 +87,7 @@ crontab -e
 ssh <tu-servidor> "docker exec mismem-brain node /app/dist/consolidate-cli.js --dry-run"
 ```
 
-Despu\u00e9s una corrida real con un solo scope:
+Después una corrida real con un solo scope:
 ```bash
 ssh <tu-servidor> "docker exec mismem-brain node /app/dist/consolidate-cli.js --scope engram-compat --max-batch 10"
 ```
@@ -100,6 +98,6 @@ ssh <tu-servidor> "docker exec mismem-brain node /app/dist/consolidate-cli.js --
 pnpm test consolidation
 ```
 
-Cubren: skip por threshold, skip por edad, destilaci\u00f3n exitosa, stub para noise, anti-alucinaci\u00f3n,
+Cubren: skip por threshold, skip por edad, destilación exitosa, stub para noise, anti-alucinación,
 dry-run, corte ante error fatal, tandas dentro del presupuesto, recorte de episodios enormes, tope de
 llamadas, y elección de proveedor y tope de tokens (`consolidation-llm.test.ts`).
