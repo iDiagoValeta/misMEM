@@ -343,6 +343,37 @@ describe("runConsolidation", () => {
     expect(summary.scopes_failed).toBe(1);
   });
 
+  it("un JSON inválido de un solo episodio queda como ruido y no traba el resto", async () => {
+    const poison = captureOld("cola", "episodio con barras que rompen el JSON", 48);
+    const ok = [
+      captureOld("cola", "decidimos usar Zustand para el estado", 48),
+      captureOld("cola", "porque Redux era overkill en este repo", 48),
+    ];
+    const distillFn = vi.fn(async (_cfg: unknown, _sys: string, user: string) => {
+      if (user.includes(poison)) throw new LlmInvalidJsonError("JSON inválido");
+      const evidence = ok.filter((id) => user.includes(id));
+      return [{ gist: "Zustand sobre Redux", evidence_episode_ids: evidence }];
+    });
+
+    const summary = await runConsolidation(db, {
+      minEpisodesPerScope: 1,
+      paretoPrefilter: false,
+      llm: llmCfg,
+      distillFn,
+      log: () => {},
+    });
+
+    expect(summary.scopes_failed).toBe(0);
+    const pending = db
+      .prepare("SELECT id FROM episodes WHERE consolidated_into IS NULL")
+      .all() as { id: string }[];
+    expect(pending.map((r) => r.id)).toEqual([]);
+    const noise = db
+      .prepare("SELECT gist FROM memories WHERE gist LIKE '[noise]%'")
+      .get() as { gist: string };
+    expect(noise.gist).toMatch(/1 episodio/);
+  });
+
   it("respeta el tope de llamadas por corrida y deja el resto para la próxima", async () => {
     for (const scope of ["a", "b", "c"]) {
       for (const n of [1, 2, 3]) captureOld(scope, `nota ${scope} ${n} sobre el despliegue`, 48);

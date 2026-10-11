@@ -286,6 +286,16 @@ async function processScope(
       break;
     } catch (err) {
       const splittable = err instanceof LlmTruncatedError || err instanceof LlmInvalidJsonError;
+      if (err instanceof LlmInvalidJsonError && forPrompt.length === 1) {
+        log(`[consolidation] scope="${scope}" -> JSON inválido en 1 episodio, queda como ruido`);
+        const stub = consolidate(db, {
+          scope,
+          gist: `[noise] 1 episodio con JSON inválido del LLM`,
+          source_episode_ids: candidates.map((e) => e.id),
+        });
+        db.prepare("UPDATE memories SET salience = 0.05 WHERE id = ?").run(stub.memory_id);
+        return { memories: 1 + (dropped_l0 > 0 ? 1 : 0), episodes: stub.consolidated + dropped_l0, dropped_l0 };
+      }
       if (!splittable || forPrompt.length === 1) throw err;
       cap.episodes = Math.floor(forPrompt.length / 2);
       forPrompt.length = cap.episodes;
