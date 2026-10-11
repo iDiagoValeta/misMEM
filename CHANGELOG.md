@@ -2,6 +2,16 @@
 
 ## Sin publicar
 
+### Bordes de configuración
+
+- `MISMEM_EMBEDDING_MIN_SCORE=0` se respeta (traer todo); antes volvía a 0,5 sin avisar.
+- Con `MISMEM_EMBEDDING_PROVIDER=openai` y sin `MISMEM_EMBEDDING_URL`, el default es
+  `http://127.0.0.1:8080` (llama-server). Antes heredaba la URL de Ollama y la búsqueda por
+  significado quedaba apagada en silencio.
+- `MISMEM_CONSOLIDATION_MAX_EPISODE_CHARS` más chico que la marca de recorte ya no produce
+  episodios más largos que el tope.
+- La ayuda de `mismem-embed` lista `MAX_CHARS` y `TIMEOUT_MS`, y aclara cuándo hace falta `--force`.
+
 ### La consolidación ya no descarta contenido válido como ruido
 
 - Un resumen de más de 500 caracteres ya no invalida la memoria: el `gist` se recorta y el texto completo

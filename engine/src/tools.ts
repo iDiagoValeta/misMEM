@@ -27,8 +27,9 @@ const now = (): number => Date.now();
 const CANDIDATE_POOL_LIMIT = 50;
 const MEMORY_FTS_SCAN_LIMIT = 200;
 const RRF_K = 60;
-// Menor que un puesto de RRF en la cima (1/61 - 1/62 ≈ 0.00026): la saliencia
-// desempata entre recuerdos casi igual de relevantes, nunca tapa la relevancia.
+// Menor que un puesto de RRF en la cima (1/61 - 1/62 ≈ 0.00026): ahí la saliencia
+// sólo desempata. Más abajo los puestos se achican (≈ 0.00008 al final de los 50
+// candidatos) y una saliencia alta puede adelantar dos o tres lugares.
 const SALIENCE_RRF_WEIGHT = 0.0002;
 
 function escapeFts(query: string): string {
