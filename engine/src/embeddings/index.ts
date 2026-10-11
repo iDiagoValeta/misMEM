@@ -31,26 +31,29 @@ export interface EmbeddingConfig {
 }
 
 const DEFAULT_MIN_SCORE = 0.5;
+const OLLAMA_DEFAULT_URL = "http://127.0.0.1:11434";
+// El puerto por defecto de llama-server: con el proveedor openai, el de Ollama respondería 404 en silencio.
+const OPENAI_DEFAULT_URL = "http://127.0.0.1:8080";
 const DEFAULT_MAX_CHARS = 4000;
 const MAX_CONSECUTIVE_FAILURES = 2;
 
 export function loadEmbeddingConfig(): EmbeddingConfig {
   const provider: EmbeddingProvider =
     process.env.MISMEM_EMBEDDING_PROVIDER === "openai" ? "openai" : "ollama";
-  const minScore = Number(process.env.MISMEM_EMBEDDING_MIN_SCORE);
+  // Number("") es 0: sin la variable no hay corte elegido, y 0 sí es una elección válida (traer todo).
+  const minScore = Number(process.env.MISMEM_EMBEDDING_MIN_SCORE || Number.NaN);
   const maxChars = Number(process.env.MISMEM_EMBEDDING_MAX_CHARS);
   return {
     enabled: (process.env.MISMEM_EMBEDDINGS ?? "auto") !== "off",
     provider,
     url:
       process.env.MISMEM_EMBEDDING_URL ??
-      process.env.MISMEM_OLLAMA_URL ??
-      "http://127.0.0.1:11434",
+      (provider === "openai" ? OPENAI_DEFAULT_URL : (process.env.MISMEM_OLLAMA_URL ?? OLLAMA_DEFAULT_URL)),
     model: process.env.MISMEM_EMBEDDING_MODEL ?? "nomic-embed-text",
     timeoutMs: Number(process.env.MISMEM_EMBEDDING_TIMEOUT_MS) || 3000,
     queryPrefix: process.env.MISMEM_EMBEDDING_QUERY_PREFIX ?? "",
     docPrefix: process.env.MISMEM_EMBEDDING_DOC_PREFIX ?? "",
-    minScore: Number.isFinite(minScore) && minScore > 0 ? minScore : DEFAULT_MIN_SCORE,
+    minScore: Number.isFinite(minScore) && minScore >= 0 ? minScore : DEFAULT_MIN_SCORE,
     maxChars: Number.isFinite(maxChars) && maxChars > 0 ? maxChars : DEFAULT_MAX_CHARS,
   };
 }

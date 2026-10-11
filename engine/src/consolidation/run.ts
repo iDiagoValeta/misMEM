@@ -69,9 +69,11 @@ function envNumber(name: string, fallback: number): number {
   return Number.isFinite(value) && value > 0 ? value : fallback;
 }
 
-function truncateEpisode(body: string, max: number): string {
+export function truncateEpisode(body: string, max: number): string {
   if (body.length <= max) return body;
   const room = max - TRUNCATION_MARK.length;
+  // Un tope más chico que la marca daría cortes negativos y un texto más largo que el tope.
+  if (room <= 0) return body.slice(0, Math.max(0, max));
   const head = Math.ceil(room * 0.75);
   return body.slice(0, head) + TRUNCATION_MARK + body.slice(body.length - (room - head));
 }

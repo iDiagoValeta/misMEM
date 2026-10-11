@@ -47,7 +47,9 @@ function parseArgs(argv: string[]): Args {
             `DB: ${defaultDbPath()} (override con MISMEM_DB)\n` +
             "Env: MISMEM_EMBEDDING_PROVIDER (ollama|openai), MISMEM_EMBEDDING_URL o MISMEM_OLLAMA_URL,\n" +
             "     MISMEM_EMBEDDING_MODEL, MISMEM_EMBEDDING_QUERY_PREFIX, MISMEM_EMBEDDING_DOC_PREFIX,\n" +
-            "     MISMEM_EMBEDDING_MIN_SCORE, MISMEM_EMBEDDINGS=off",
+            "     MISMEM_EMBEDDING_MIN_SCORE, MISMEM_EMBEDDING_MAX_CHARS, MISMEM_EMBEDDING_TIMEOUT_MS,\n" +
+            "     MISMEM_EMBEDDINGS=off\n" +
+            "Cambiar de modelo se detecta solo; cambiar un prefijo o MAX_CHARS no: reindexar con --force.",
         );
         process.exit(0);
     }

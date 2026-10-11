@@ -2,7 +2,7 @@ import { describe, it, expect, beforeEach, vi } from "vitest";
 import type { Database as DB } from "better-sqlite3";
 import { openDb } from "../src/db.js";
 import { capture } from "../src/tools.js";
-import { runConsolidation } from "../src/consolidation/run.js";
+import { runConsolidation, truncateEpisode } from "../src/consolidation/run.js";
 import { LlmFatalError, LlmInvalidJsonError, LlmTruncatedError } from "../src/consolidation/llm.js";
 
 let db: DB;
@@ -439,5 +439,21 @@ describe("runConsolidation", () => {
     expect(distillFn).not.toHaveBeenCalled();
     expect(summary.episodes_dropped_pareto_l0).toBe(3);
     expect(summary.memories_created).toBe(1);
+  });
+});
+
+describe("truncateEpisode", () => {
+  const body = "a".repeat(50) + "z".repeat(50);
+
+  it("conserva el principio y el final dentro del tope", () => {
+    const cut = truncateEpisode(body, 40);
+    expect(cut.length).toBeLessThanOrEqual(40);
+    expect(cut.startsWith("a")).toBe(true);
+    expect(cut.endsWith("z")).toBe(true);
+  });
+
+  it("con un tope más chico que la marca de recorte igual respeta el tope", () => {
+    const cut = truncateEpisode(body, 5);
+    expect(cut).toBe("aaaaa");
   });
 });

@@ -59,6 +59,21 @@ describe("loadEmbeddingConfig", () => {
     expect(loadEmbeddingConfig().url).toBe("http://ollama:11434");
   });
 
+  it("un corte 0 es una elección (traer todo), no un valor ausente", () => {
+    setEnv({ MISMEM_EMBEDDING_MIN_SCORE: "0" });
+    expect(loadEmbeddingConfig().minScore).toBe(0);
+  });
+
+  it.each(["alto", ""])("un corte que no es un número (%j) vuelve al default", (value) => {
+    setEnv({ MISMEM_EMBEDDING_MIN_SCORE: value });
+    expect(loadEmbeddingConfig().minScore).toBe(0.5);
+  });
+
+  it("el proveedor openai sin URL no le habla al puerto de Ollama", () => {
+    setEnv({ MISMEM_EMBEDDING_PROVIDER: "openai", MISMEM_OLLAMA_URL: "http://ollama:11434" });
+    expect(loadEmbeddingConfig().url).toBe("http://127.0.0.1:8080");
+  });
+
   it("lee proveedor, URL, prefijos y corte", () => {
     setEnv({ ...GEMMA_ENV, MISMEM_EMBEDDING_MIN_SCORE: "0.68" });
     const cfg = loadEmbeddingConfig();
