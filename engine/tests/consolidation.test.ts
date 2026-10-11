@@ -327,30 +327,24 @@ describe("runConsolidation", () => {
     expect(summary.episodes_consolidated).toBe(4);
   });
 
-  it("una respuesta cortada con un solo episodio es un error del ámbito, no un bucle", async () => {
-    captureOld("uno", "episodio único larguísimo", 48);
-    const distillFn = vi.fn().mockRejectedValue(new LlmTruncatedError("cortada"));
+  const pendingIds = (): string[] =>
+    (db.prepare("SELECT id FROM episodes WHERE consolidated_into IS NULL ORDER BY created_at").all() as { id: string }[]).map(
+      (r) => r.id,
+    );
+  const noiseCount = (): number =>
+    (db.prepare("SELECT COUNT(*) AS n FROM memories WHERE gist LIKE '[noise]%'").get() as { n: number }).n;
 
-    const summary = await runConsolidation(db, {
-      minEpisodesPerScope: 1,
-      paretoPrefilter: false,
-      llm: llmCfg,
-      distillFn,
-      log: () => {},
-    });
-
-    expect(distillFn).toHaveBeenCalledTimes(1);
-    expect(summary.scopes_failed).toBe(1);
-  });
-
-  it("un JSON inválido de un solo episodio queda como ruido y no traba el resto", async () => {
-    const poison = captureOld("cola", "episodio con barras que rompen el JSON", 48);
+  it.each([
+    ["una respuesta cortada", () => new LlmTruncatedError("cortada")],
+    ["un JSON inválido", () => new LlmInvalidJsonError("JSON inválido")],
+  ])("%s con un solo episodio lo deja pendiente, sin marcarlo ruido, y sigue con el resto", async (_name, fail) => {
+    const poison = captureOld("cola", "episodio que el LLM no logra procesar", 48);
     const ok = [
-      captureOld("cola", "decidimos usar Zustand para el estado", 48),
-      captureOld("cola", "porque Redux era overkill en este repo", 48),
+      captureOld("cola", "decidimos usar Zustand para el estado", 47),
+      captureOld("cola", "porque Redux era overkill en este repo", 46),
     ];
     const distillFn = vi.fn(async (_cfg: unknown, _sys: string, user: string) => {
-      if (user.includes(poison)) throw new LlmInvalidJsonError("JSON inválido");
+      if (user.includes(poison)) throw fail();
       const evidence = ok.filter((id) => user.includes(id));
       return [{ gist: "Zustand sobre Redux", evidence_episode_ids: evidence }];
     });
@@ -364,14 +358,27 @@ describe("runConsolidation", () => {
     });
 
     expect(summary.scopes_failed).toBe(0);
-    const pending = db
-      .prepare("SELECT id FROM episodes WHERE consolidated_into IS NULL")
-      .all() as { id: string }[];
-    expect(pending.map((r) => r.id)).toEqual([]);
-    const noise = db
-      .prepare("SELECT gist FROM memories WHERE gist LIKE '[noise]%'")
-      .get() as { gist: string };
-    expect(noise.gist).toMatch(/1 episodio/);
+    expect(pendingIds()).toEqual([poison]);
+    expect(noiseCount()).toBe(0);
+    expect(summary.episodes_consolidated).toBe(2);
+    expect(summary.episodes_skipped).toBe(1);
+  });
+
+  it("un episodio salteado no se reintenta dentro de la misma corrida", async () => {
+    const poison = captureOld("uno", "episodio único que no entra", 48);
+    const distillFn = vi.fn().mockRejectedValue(new LlmTruncatedError("cortada"));
+
+    const summary = await runConsolidation(db, {
+      minEpisodesPerScope: 1,
+      paretoPrefilter: false,
+      llm: llmCfg,
+      distillFn,
+      log: () => {},
+    });
+
+    expect(distillFn).toHaveBeenCalledTimes(1);
+    expect(pendingIds()).toEqual([poison]);
+    expect(summary.episodes_skipped).toBe(1);
   });
 
   it("después de un JSON inválido de un episodio, la tanda siguiente vuelve a llenarse", async () => {
@@ -394,7 +401,8 @@ describe("runConsolidation", () => {
     });
 
     expect(sizes).toEqual([6, 3, 1, 5]);
-    expect(summary.episodes_consolidated).toBe(6);
+    expect(summary.episodes_consolidated).toBe(5);
+    expect(summary.episodes_skipped).toBe(1);
     expect(summary.scopes_failed).toBe(0);
   });
 

@@ -33,10 +33,13 @@ en la [referencia única de DEPLOY.md](../../../DEPLOY.md#variables-de-entorno-r
   en vez de repetirlo por cada ámbito.
 - **Anti-alucinación**: filtra `evidence_episode_ids` que no estén en el batch
 - **Ruido**: lo que no llega a memoria queda atado a una memoria marcadora (`[noise] …` o `[pareto:l0] …`)
-  con `salience=0.05`, y `forget` lo borra a los 30 días **junto con sus episodios**. Pasa en cuatro casos:
-  el pre-filtro Pareto lo descartó, el LLM devolvió `memories: []`, el LLM leyó el episodio y no lo citó
-  en ninguna memoria, o un episodio solo devolvió JSON inválido. Los tres últimos dependen del LLM:
+  con `salience=0.05`, y `forget` lo borra a los 30 días **junto con sus episodios**. Pasa en tres casos:
+  el pre-filtro Pareto lo descartó, el LLM devolvió `memories: []`, o el LLM leyó el episodio y no lo citó
+  en ninguna memoria. Los dos últimos dependen del LLM:
   conviene mirar el log de las primeras corridas y tener respaldos que duren más que esos 30 días.
+- **Episodio que no entra**: si con un solo episodio la respuesta igual llega cortada o inválida, ese
+  episodio queda pendiente (no se marca ruido ni falla el ámbito) y la corrida sigue con el resto. Se
+  reintenta la noche siguiente y aparece en el resumen como `episodes_skipped`.
 - **Respuesta mal formada**: un JSON roto, sin la lista de memorias o con alguna memoria inválida parte la
   tanda a la mitad y reintenta. Un `gist` de más de 500 caracteres se recorta y el texto completo pasa a
   `details`.
