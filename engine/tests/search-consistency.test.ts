@@ -129,6 +129,60 @@ describe("ranking híbrido", () => {
     expect(memories.map((hit) => hit.id)).toEqual([close, loose]);
   });
 
+  it("una pregunta entera encuentra por palabras: las vacías no cuentan", () => {
+    const deploy = makeMemory("Decidimos hacer el deploy con docker compose");
+    makeMemory("La reunión sobre el presupuesto quedó para marzo");
+
+    const hits = recall(db, { query: "¿Qué decidimos sobre el deploy?", limit: 10 }, { reinforce: false }).hits;
+
+    expect(hits.filter((hit) => hit.layer === "memory").map((hit) => hit.id)).toEqual([deploy]);
+  });
+
+  it("las palabras que sí importan siguen siendo todas obligatorias", () => {
+    makeMemory("Decidimos hacer el deploy con docker compose");
+
+    const hits = recall(db, { query: "¿Qué decidimos sobre kubernetes?", limit: 10 }, { reinforce: false }).hits;
+
+    expect(hits.filter((hit) => hit.layer === "memory")).toEqual([]);
+  });
+
+  it("una pregunta hecha sólo de palabras vacías no rompe ni inventa resultados", () => {
+    makeMemory("Decidimos hacer el deploy con docker compose");
+
+    expect(recall(db, { query: "¿y qué más?", limit: 10 }, { reinforce: false }).hits).toEqual([]);
+  });
+
+  it("si la consulta es toda de palabras vacías, se busca tal cual vino", () => {
+    const quote = makeMemory("ser o no ser, esa es la cuestión");
+
+    const hits = recall(db, { query: "ser o no ser", limit: 10 }, { reinforce: false }).hits;
+
+    expect(hits.filter((hit) => hit.layer === "memory").map((hit) => hit.id)).toEqual([quote]);
+  });
+
+  it("un número corto es una palabra que importa", () => {
+    makeMemory("El proxy escucha en el puerto 80");
+    const other = makeMemory("El proxy escucha en el puerto 8443");
+
+    const hits = recall(db, { query: "¿en qué puerto escucha el proxy, el 8443?", limit: 10 }, { reinforce: false }).hits;
+    const short = recall(db, { query: "proxy puerto 80", limit: 10 }, { reinforce: false }).hits;
+
+    expect(hits.filter((hit) => hit.layer === "memory").map((hit) => hit.id)).toEqual([other]);
+    expect(short.filter((hit) => hit.layer === "memory")).toHaveLength(1);
+  });
+
+  it("al modelo de embeddings le llega la pregunta entera, no sólo las palabras que quedaron", async () => {
+    const seen: string[] = [];
+    const embed: EmbedFn = async (texts) => {
+      seen.push(...texts);
+      return texts.map(fakeVec);
+    };
+
+    await recallHybrid(db, { query: "¿Qué decidimos sobre el deploy?", limit: 5 }, embed, { reinforce: false });
+
+    expect(seen).toEqual(["¿Qué decidimos sobre el deploy?"]);
+  });
+
   it("mantiene la propiedad de prefijo entre límites", async () => {
     for (const gist of [
       "deudas uno",
