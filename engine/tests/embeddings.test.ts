@@ -84,6 +84,50 @@ describe("embedPendingMemories", () => {
     expect(r.failed).toBe(2);
   });
 
+  it("una tanda que falla no deja sin vector a las siguientes", async () => {
+    for (const g of ["cashflow uno", "cashflow dos", "cashflow tres"]) makeMemory("vida", g);
+    let calls = 0;
+    const flaky: EmbedFn = async (texts) => (++calls === 1 ? null : fakeEmbed(texts));
+
+    const r = await embedPendingMemories(db, { embedFn: flaky, model: "fake", batchSize: 1 });
+
+    expect(r).toMatchObject({ pending: 3, embedded: 2, failed: 1 });
+  });
+
+  it("con dos tandas seguidas fallidas se rinde: el servidor está caído", async () => {
+    for (const g of ["a", "b", "c", "d", "e"]) makeMemory("vida", g);
+    let calls = 0;
+    const dead: EmbedFn = async () => {
+      calls++;
+      return null;
+    };
+
+    const r = await embedPendingMemories(db, { embedFn: dead, model: "fake", batchSize: 1 });
+
+    expect(calls).toBe(2);
+    expect(r).toMatchObject({ embedded: 0, failed: 5 });
+  });
+
+  it("al modelo le llega el resumen y los detalles recortados, no un texto sin fin", async () => {
+    const ep = capture(db, { scope: "vida", body: "fuente" });
+    consolidate(db, {
+      scope: "vida",
+      gist: "Decisión sobre el cashflow",
+      details: "x".repeat(20_000),
+      source_episode_ids: [ep.id],
+    });
+    const seen: string[] = [];
+    const spy: EmbedFn = async (texts) => {
+      seen.push(...texts);
+      return fakeEmbed(texts);
+    };
+
+    await embedPendingMemories(db, { embedFn: spy, model: "fake" });
+
+    expect(seen[0]!.startsWith("Decisión sobre el cashflow\n")).toBe(true);
+    expect(seen[0]!.length).toBe(4000);
+  });
+
   it("reindexa cuando cambia el modelo aunque las dimensiones coincidan", async () => {
     const memoryId = makeMemory("vida", "cashflow del mes");
     await embedPendingMemories(db, {
