@@ -33,7 +33,8 @@ en la [referencia única de DEPLOY.md](../../../DEPLOY.md#variables-de-entorno-r
   en vez de repetirlo por cada ámbito.
 - **Anti-alucinación**: filtra `evidence_episode_ids` que no estén en el batch
 - **Ruido**: lo que no llega a memoria queda atado a una memoria marcadora (`[noise] …` o `[pareto:l0] …`)
-  con `salience=0.05`, y `forget` lo borra a los 30 días **junto con sus episodios**. Pasa en tres casos:
+  con `salience=0.05`, y `forget` lo borra a los 30 días **junto con sus episodios**. El marcador no vuelve
+  en el recall ni gasta un embedding (`engine/src/noise.ts`). Pasa en tres casos:
   el pre-filtro Pareto lo descartó, el LLM devolvió `memories: []`, o el LLM leyó el episodio y no lo citó
   en `MISMEM_CONSOLIDATION_UNCITED_STRIKES` tandas seguidas. Los dos últimos dependen del LLM:
   conviene mirar el log de las primeras corridas y tener respaldos que duren más que esos 30 días.

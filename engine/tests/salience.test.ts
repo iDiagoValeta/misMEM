@@ -161,6 +161,27 @@ describe("forget con decay", () => {
     expect(after).toEqual(before);
   });
 
+  it("sigue viendo los marcadores de ruido: el recall los esconde, forget los tiene que purgar", () => {
+    const { episodeId, memoryId } = makeMemory("[noise] 3 episodios sin señal consolidable");
+    const old = Date.now() - 365 * DAY;
+    db.prepare(
+      `UPDATE memories
+       SET salience = 0.05, created_at = ?, salience_updated_at = ?
+       WHERE id = ?`,
+    ).run(old, old, memoryId);
+    db.prepare("UPDATE episodes SET created_at = ? WHERE id = ?").run(old, episodeId);
+
+    const result = forget(db, { memory_grace_days: 30, salience_below: 0.1, dry_run: false });
+
+    expect(result.memories_to_delete).toBe(1);
+    expect(
+      (db.prepare("SELECT COUNT(*) AS n FROM memories WHERE id = ?").get(memoryId) as { n: number }).n,
+    ).toBe(0);
+    expect(
+      (db.prepare("SELECT COUNT(*) AS n FROM episodes WHERE id = ?").get(episodeId) as { n: number }).n,
+    ).toBe(0);
+  });
+
   it("protege memorias recientes aunque tengan salience baja", () => {
     const { memoryId } = makeMemory("fresh");
     db.prepare("UPDATE memories SET salience = 0.01 WHERE id = ?").run(

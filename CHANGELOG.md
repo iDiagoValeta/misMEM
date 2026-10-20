@@ -2,6 +2,18 @@
 
 ## Sin publicar
 
+### Los marcadores de ruido ya no compiten en el recall
+
+- Las memorias `[noise] …` y `[pareto:l0] …` existen sólo para que `forget` sepa qué episodios
+  borrar, pero entraban en FTS5 y en el índice semántico como cualquier otra. Desde que la relevancia
+  manda sobre la saliencia, `salience=0.05` ya no alcanzaba para hundirlas: sobre la copia de
+  producción, "señal" devolvía 4 marcadores de 5 memorias y "episodios" los 5 de 5.
+- Ahora quedan afuera del recall por palabras y por significado, y tampoco gastan un embedding
+  (`noise.ts` tiene la única definición de qué es un marcador). `forget` y el viewer los siguen viendo.
+- Medido con `mismem-bench` sobre la copia de producción: las 80 preguntas dan exactamente lo mismo
+  que antes y las 10 ajenas siguen en 0. Lo que cambia es que los lugares que ocupaban los marcadores
+  ahora los ocupan memorias reales.
+
 ### Que el LLM ignore un episodio ya no lo condena a la primera
 
 - Un episodio que el LLM leía y no citaba en ninguna memoria quedaba atado a un marcador

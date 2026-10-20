@@ -9,6 +9,7 @@ import {
   type RecallHit,
 } from "./schema.js";
 import { contentHash } from "./db.js";
+import { excludeNoiseSql } from "./noise.js";
 import {
   embedTexts,
   loadEmbeddingConfig,
@@ -148,6 +149,7 @@ function lexicalCandidates(
               m.last_accessed_at, m.salience_updated_at, rank AS fts_rank
        FROM memories_fts f JOIN memories m ON m.rowid = f.rowid
        WHERE memories_fts MATCH @q ${input.scope ? "AND m.scope = @scope" : ""}
+         AND ${excludeNoiseSql("m")}
        ORDER BY rank, m.salience DESC, m.id LIMIT @limit`,
     )
     .all({
