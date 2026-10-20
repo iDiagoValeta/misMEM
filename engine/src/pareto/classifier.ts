@@ -50,8 +50,15 @@ const PAT_DECISION = [
   /\b(why|porque|because|evitar|avoid|never|nunca|always|siempre)\b/gi,
 ];
 
+// Una preferencia cabe en pocas palabras y no trae patrones técnicos: sin esto
+// "prefiero Rust para el backend" quedaba en L0 y se descartaba antes del LLM.
+const PAT_PREFERENCE = [
+  /\b(prefiero|prefer[ií]|prefer|me gusta|odio|detesto|dej[eé] de|en vez de|instead of)\b/gi,
+  /\b(uso|usamos|us[eé]|using|me quedo con|elijo|voy con|mejor que|worse than|better than)\b/gi,
+];
+
 /**
- * Densidad de patrones técnicos por línea.
+ * Densidad por línea de patrones de código, decisión y preferencia.
  * Más patrones avanzados → más conceptos → más valioso.
  */
 function computeDensity(text: string): number {
@@ -64,6 +71,10 @@ function computeDensity(text: string): number {
     if (m) hits += m.length;
   }
   for (const p of PAT_DECISION) {
+    const m = text.match(p);
+    if (m) hits += m.length;
+  }
+  for (const p of PAT_PREFERENCE) {
     const m = text.match(p);
     if (m) hits += m.length;
   }

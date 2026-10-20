@@ -9,6 +9,7 @@ function parseArgs(argv: string[]): {
   minEpisodes?: number;
   quietDays?: number;
   maxBatch?: number;
+  uncitedStrikes?: number;
   help: boolean;
 } {
   const out: {
@@ -18,6 +19,7 @@ function parseArgs(argv: string[]): {
     minEpisodes?: number;
     quietDays?: number;
     maxBatch?: number;
+    uncitedStrikes?: number;
     help: boolean;
   } = { dryRun: false, help: false };
   for (let i = 0; i < argv.length; i++) {
@@ -29,6 +31,7 @@ function parseArgs(argv: string[]): {
     else if (a === "--min-episodes") out.minEpisodes = Number(argv[++i]);
     else if (a === "--quiet-days") out.quietDays = Number(argv[++i]);
     else if (a === "--max-batch") out.maxBatch = Number(argv[++i]);
+    else if (a === "--uncited-strikes") out.uncitedStrikes = Number(argv[++i]);
   }
   return out;
 }
@@ -48,6 +51,7 @@ Opciones:
   --min-episodes <n>       Episodios m\u00ednimos por scope (default 3)
   --quiet-days <n>         Un scope con menos del m\u00ednimo se consolida igual tras n d\u00edas sin episodios nuevos (default 14)
   --max-batch <n>          M\u00e1x episodios por llamada LLM (default 60)
+  --uncited-strikes <n>    Tandas en que el LLM puede ignorar un episodio antes de darlo por ruido (default 3)
   --help                   Esta ayuda
 
 Env:
@@ -62,6 +66,7 @@ Env:
   MISMEM_CONSOLIDATION_MIN_EPISODES     default 3
   MISMEM_CONSOLIDATION_QUIET_DAYS       default 14
   MISMEM_CONSOLIDATION_MAX_BATCH        default 60
+  MISMEM_CONSOLIDATION_UNCITED_STRIKES  default 3
   MISMEM_DB                             default ${defaultDbPath()}
 `);
 }
@@ -79,6 +84,7 @@ async function main(): Promise<void> {
       minEpisodesPerScope: opts.minEpisodes,
       quietDays: opts.quietDays,
       maxEpisodesPerBatch: opts.maxBatch,
+      uncitedStrikes: opts.uncitedStrikes,
     });
     console.log(JSON.stringify(summary, null, 2));
     if (summary.scopes_failed > 0) process.exit(2);

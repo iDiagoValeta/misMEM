@@ -1,5 +1,27 @@
 # Changelog
 
+## Sin publicar
+
+### Que el LLM ignore un episodio ya no lo condena a la primera
+
+- Un episodio que el LLM leía y no citaba en ninguna memoria quedaba atado a un marcador
+  `[noise]` con `salience=0.05`, y `forget` lo borraba junto con el episodio. Una sola omisión del
+  modelo bastaba para perder el contenido.
+- Ahora cada tanda sin citar suma un strike (`uncited_count`). Recién al llegar a
+  `MISMEM_CONSOLIDATION_UNCITED_STRIKES` (3, `--uncited-strikes`) el episodio pasa a ruido; mientras
+  le queden, vuelve en la corrida siguiente. Reintentarlo cuesta los tokens de una tanda que ya se
+  paga, no una llamada extra, y dentro de la misma corrida no se repaga.
+- El resumen informa `episodes_uncited_pending`.
+- Migración aditiva: `episodes.uncited_count` arranca en 0 para todo lo que ya existe.
+
+### Una preferencia corta ya no se descarta antes del LLM
+
+- El pre-filtro Pareto mandaba a L0 (ruido, sin pasar por el LLM) cualquier texto de menos de 40
+  caracteres sin densidad: "prefiero Rust para el backend" entraba ahí, porque los patrones de
+  densidad sólo reconocían código y decisiones.
+- Se agregaron patrones de preferencia (`prefiero`, `uso`, `me gusta`, `dejé de`, `en vez de`,
+  `elijo`, `mejor que`…), así que una preferencia breve suma densidad y llega al LLM.
+
 ## 0.4.0 — 2026-10-12
 
 ### La búsqueda por palabras ya no tropieza con las palabras vacías

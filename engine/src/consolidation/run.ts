@@ -35,6 +35,8 @@ export interface RunOptions {
   maxEpisodeChars?: number;
   /** Tope de llamadas al LLM por corrida; lo pendiente queda para la próxima. */
   maxCalls?: number;
+  /** Tandas en que el LLM puede ignorar un episodio antes de darlo por ruido. */
+  uncitedStrikes?: number;
   llm?: LlmConfig;
   distillFn?: DistillFn;
   log?: (msg: string) => void;
@@ -49,6 +51,8 @@ export interface RunSummary {
   episodes_dropped_pareto_l0: number;
   /** Episodios que el LLM no logró procesar ni solos: siguen pendientes para la próxima corrida. */
   episodes_skipped: number;
+  /** Episodios que el LLM leyó y no citó, con strike pendiente: vuelven en la próxima corrida. */
+  episodes_uncited_pending: number;
   memories_created: number;
   llm_calls: number;
   /** El proveedor rechazó credenciales o saldo y la corrida se cortó. */
@@ -70,6 +74,10 @@ const TRUNCATION_MARK = "\n[recortado]\n";
 // Dos semanas sin episodios nuevos: ese ámbito ya no va a juntar el mínimo (una charla vieja
 // importada, un proyecto que se dejó) y sin esto quedaba pendiente para siempre.
 const DEFAULT_QUIET_DAYS = 14;
+// Que el LLM no cite un episodio puede ser ruido real o un olvido suyo. Darlo por ruido
+// a la primera lo ponía en la fila de borrado de forget; reintentarlo cuesta los tokens
+// de una tanda que ya se paga, no una llamada extra.
+const DEFAULT_UNCITED_STRIKES = 3;
 
 function envNumber(name: string, fallback: number): number {
   const value = Number(process.env[name]);
@@ -106,6 +114,7 @@ export async function runConsolidation(
   const minEpisodes = opts.minEpisodesPerScope ?? Number(process.env.MISMEM_CONSOLIDATION_MIN_EPISODES ?? 3);
   const quietDays = opts.quietDays ?? envNumber("MISMEM_CONSOLIDATION_QUIET_DAYS", DEFAULT_QUIET_DAYS);
   const quietBefore = Date.now() - quietDays * 86_400_000;
+  const uncitedStrikes = opts.uncitedStrikes ?? envNumber("MISMEM_CONSOLIDATION_UNCITED_STRIKES", DEFAULT_UNCITED_STRIKES);
   const limits: Limits = {
     maxBatch: opts.maxEpisodesPerBatch ?? envNumber("MISMEM_CONSOLIDATION_MAX_BATCH", 60),
     maxPromptChars: opts.maxPromptChars ?? envNumber("MISMEM_CONSOLIDATION_MAX_PROMPT_CHARS", 60_000),
@@ -123,6 +132,7 @@ export async function runConsolidation(
     episodes_consolidated: 0,
     episodes_dropped_pareto_l0: 0,
     episodes_skipped: 0,
+    episodes_uncited_pending: 0,
     memories_created: 0,
     llm_calls: 0,
     aborted: false,
@@ -171,11 +181,13 @@ export async function runConsolidation(
       };
       // Lo que no entró ni solo en esta corrida: no se reintenta hasta la próxima.
       const skipped = new Set<string>();
+      // Lo que el LLM leyó y no citó: tampoco se repaga en esta corrida.
+      const deferred = new Set<string>();
       // Tandas hasta vaciar el ámbito o llegar al tope; una tanda sin avance corta.
       for (;;) {
         const created = await processScope(
           db, scope, cutoff, limits, llm, distillFn, opts.dryRun ?? false, paretoPrefilter, log,
-          calls, cap, skipped,
+          calls, cap, skipped, deferred, uncitedStrikes,
         );
         summary.memories_created += created.memories;
         summary.episodes_consolidated += created.episodes;
@@ -185,6 +197,7 @@ export async function runConsolidation(
         if (summary.llm_calls >= limits.maxCalls) break;
       }
       summary.episodes_skipped += skipped.size;
+      summary.episodes_uncited_pending += deferred.size;
       summary.scopes_processed++;
     } catch (err) {
       summary.scopes_failed++;
@@ -232,6 +245,8 @@ async function processScope(
   calls: { canCall: () => boolean; onCall: () => void },
   cap: { episodes: number },
   skipped: Set<string>,
+  deferred: Set<string>,
+  uncitedStrikes: number,
 ): Promise<{ memories: number; episodes: number; dropped_l0: number; skipped?: boolean }> {
   const episodes = (
     db
@@ -241,9 +256,9 @@ async function processScope(
          ORDER BY created_at ASC
          LIMIT @max`,
       )
-      .all({ scope, cutoff, max: limits.maxBatch + skipped.size }) as EpisodeRow[]
+      .all({ scope, cutoff, max: limits.maxBatch + skipped.size + deferred.size }) as EpisodeRow[]
   )
-    .filter((e) => !skipped.has(e.id))
+    .filter((e) => !skipped.has(e.id) && !deferred.has(e.id))
     .slice(0, limits.maxBatch);
 
   if (episodes.length === 0) return { memories: 0, episodes: 0, dropped_l0: 0 };
@@ -363,19 +378,40 @@ async function processScope(
     totalEpisodes += result.consolidated;
   }
 
-  // Lo que el LLM leyó y no citó en ninguna memoria no tiene señal para él: si no,
-  // vuelve en la tanda siguiente y se paga de nuevo. Sólo si la tanda dio alguna
-  // memoria válida; una respuesta con todo inventado deja los episodios pendientes.
+  // Lo que el LLM leyó y no citó puede no tener señal, o puede habérsele pasado. Cada
+  // tanda sin citar suma un strike y recién al agotarlos pasa a ruido; mientras le queden,
+  // vuelve en la próxima corrida. Sólo si la tanda dio alguna memoria válida; una respuesta
+  // con todo inventado deja los episodios pendientes y sin strike.
   const uncited = cited.size > 0 ? candidates.filter((e) => !cited.has(e.id)) : [];
   if (uncited.length > 0) {
-    const stub = consolidate(db, {
-      scope,
-      gist: `[noise] ${uncited.length} episodio${uncited.length === 1 ? "" : "s"} sin citar en esta tanda`,
-      source_episode_ids: uncited.map((e) => e.id),
-    });
-    db.prepare("UPDATE memories SET salience = 0.05 WHERE id = ?").run(stub.memory_id);
-    totalMemories++;
-    totalEpisodes += stub.consolidated;
+    const bump = db.prepare("UPDATE episodes SET uncited_count = uncited_count + 1 WHERE id = ?");
+    const strikesOf = db.prepare("SELECT uncited_count FROM episodes WHERE id = ?");
+    const exhausted: EpisodeRow[] = [];
+    const retry: EpisodeRow[] = [];
+    db.transaction(() => {
+      for (const e of uncited) {
+        bump.run(e.id);
+        const row = strikesOf.get(e.id) as { uncited_count: number };
+        if (row.uncited_count >= uncitedStrikes) exhausted.push(e);
+        else retry.push(e);
+      }
+    })();
+
+    for (const e of retry) deferred.add(e.id);
+    if (retry.length > 0) {
+      log(`[consolidation] scope="${scope}" -> ${retry.length} sin citar con strike, vuelven en la próxima corrida`);
+    }
+
+    if (exhausted.length > 0) {
+      const stub = consolidate(db, {
+        scope,
+        gist: `[noise] ${exhausted.length} episodio${exhausted.length === 1 ? "" : "s"} sin citar en ${uncitedStrikes} tandas`,
+        source_episode_ids: exhausted.map((e) => e.id),
+      });
+      db.prepare("UPDATE memories SET salience = 0.05 WHERE id = ?").run(stub.memory_id);
+      totalMemories++;
+      totalEpisodes += stub.consolidated;
+    }
   }
 
   return { memories: totalMemories, episodes: totalEpisodes, dropped_l0 };

@@ -28,7 +28,8 @@ CREATE TABLE IF NOT EXISTS episodes (
   scope             TEXT NOT NULL,
   body              TEXT NOT NULL,
   created_at        INTEGER NOT NULL,
-  consolidated_into TEXT REFERENCES memories(id) ON DELETE SET NULL
+  consolidated_into TEXT REFERENCES memories(id) ON DELETE SET NULL,
+  uncited_count     INTEGER NOT NULL DEFAULT 0
 );
 CREATE INDEX IF NOT EXISTS idx_episodes_scope ON episodes(scope, created_at);
 CREATE INDEX IF NOT EXISTS idx_episodes_consolidated ON episodes(consolidated_into);
@@ -135,6 +136,10 @@ function migrate(db: DB): void {
 
   // Non-unique on purpose: legacy DBs may already hold duplicates.
   db.exec("CREATE INDEX IF NOT EXISTS idx_episodes_hash ON episodes(scope, content_hash)");
+
+  if (!cols.some((c) => c.name === "uncited_count")) {
+    db.exec("ALTER TABLE episodes ADD COLUMN uncited_count INTEGER NOT NULL DEFAULT 0");
+  }
 
   const memoryCols = db.prepare("PRAGMA table_info(memories)").all() as Array<{
     name: string;

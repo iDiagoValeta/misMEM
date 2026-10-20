@@ -20,7 +20,7 @@ Sistema de memoria persistente con MCP (3 capas: episodes → memories → trait
 - Nombres y código en inglés; mensajes de log/UI en español
 
 ## Esquema (resumen)
-- `episodes(id, scope, body, created_at, consolidated_into, content_hash)` — verbatim, body NO `text`
+- `episodes(id, scope, body, created_at, consolidated_into, content_hash, uncited_count)` — verbatim, body NO `text`
 - `memories(id, scope, gist, details, source_episode_ids JSON, salience, created_at, last_accessed_at, salience_updated_at)`
 - `memory_embeddings(memory_id, model, dims, vec BLOB, created_at)` — un vector por memoria
 - `traits(id, scope, name, evidence_memory_ids JSON, strength, polarity, created_at, updated_at)`
