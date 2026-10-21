@@ -56,7 +56,7 @@ Sistema de memoria persistente con MCP (3 capas: episodes → memories → trait
 
 ## Configuración
 - La única lista completa de variables de entorno es la tabla de `DEPLOY.md` ("referencia única"). Si agregás o cambiás una variable, se actualiza ahí y sólo ahí; el resto de los documentos enlaza
-- `mismem-bench` mide el recall con un banco privado; correlo antes y después de tocar `tools.ts` o `embeddings/`
+- `mismem-bench` mide el recall con un banco privado; correlo antes y después de tocar `tools.ts` o `embeddings/`. Informa posición del acierto (MRR, 1ª, entre las 3), recuerdos devueltos por pregunta y `noiseHits` (marcadores que se escaparon: tiene que ser 0)
 
 ## Anti-patterns
 - `any` en TypeScript

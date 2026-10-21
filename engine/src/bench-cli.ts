@@ -8,7 +8,7 @@
  */
 import { readFileSync } from "node:fs";
 import { defaultDbPath, openDb } from "./db.js";
-import { parseBank, runBench, type Score } from "./bench.js";
+import { meanRank, mrr, parseBank, recallAt, runBench, type Score } from "./bench.js";
 
 interface Args {
   db?: string;
@@ -46,12 +46,27 @@ Banco: una línea JSON por pregunta. "id" es la memoria esperada; las claves de
   {"id":"01ABC...","lang":"en","parafrasis":"...","literal":"..."}
 Ajenas: una pregunta por línea que NO debería traer nada.
 
+Informa, por variante: aciertos en el tope, MRR, posición media del acierto,
+aciertos en la 1ª y entre las 3 primeras, y el reparto por posición. Al final,
+cuántos recuerdos devuelve por pregunta (el modelo los lee todos) y un aviso si
+algún marcador de ruido llegó al tope.
+
 DB: ${defaultDbPath()} (override con --db o MISMEM_DB). No refuerza ni escribe memorias.
 Env: las mismas MISMEM_EMBEDDING_* que el servidor.`);
 }
 
 const percent = (score: Score): string =>
   score.total === 0 ? "sin preguntas" : `${score.found}/${score.total} (${Math.round((100 * score.found) / score.total)} %)`;
+
+const dec = (value: number, places = 2): string =>
+  Number.isNaN(value) ? "—" : value.toFixed(places).replace(".", ",");
+
+/** Sólo las posiciones que tuvieron algún acierto: con un tope grande el resto es ruido visual. */
+const positions = (score: Score): string =>
+  score.ranks
+    .map((n, i) => (n > 0 ? `${i + 1}:${n}` : null))
+    .filter((part): part is string => part !== null)
+    .join(" ") || "ninguna";
 
 async function main(): Promise<void> {
   const args = parseArgs(process.argv.slice(2));
@@ -72,13 +87,25 @@ async function main(): Promise<void> {
     }
     console.log(`memoria esperada entre las ${report.limit} devueltas:`);
     for (const [variant, result] of Object.entries(report.variants)) {
-      console.log(`  ${variant}: ${percent(result.all)}`);
+      const { all } = result;
+      console.log(`  ${variant}: ${percent(all)} · MRR ${dec(mrr(all))} · posición media ${dec(meanRank(all), 1)}`);
+      console.log(`    en la 1ª: ${recallAt(all, 1)} · entre las 3 primeras: ${recallAt(all, 3)} · posiciones ${positions(all)}`);
       for (const [label, score] of Object.entries(result.groups)) {
-        console.log(`    ${label}: ${percent(score)}`);
+        console.log(`    ${label}: ${percent(score)} · MRR ${dec(mrr(score))}`);
       }
     }
     if (report.offTopic.total > 0) {
-      console.log(`preguntas ajenas que trajeron algo: ${report.offTopic.withHits}/${report.offTopic.total}`);
+      console.log(
+        `preguntas ajenas que trajeron algo: ${report.offTopic.withHits}/${report.offTopic.total}` +
+          ` (${report.offTopic.hitsSum} recuerdos en total)`,
+      );
+    }
+    if (report.noiseHits > 0) {
+      console.log(`AVISO: ${report.noiseHits} marcadores de ruido llegaron al tope (deberían ser 0)`);
+    }
+    if (report.returned.questions > 0) {
+      const perQuestion = report.returned.hitsSum / report.returned.questions;
+      console.log(`recuerdos devueltos por pregunta: ${dec(perQuestion, 1)} de ${report.limit}`);
     }
   } finally {
     db.close();
