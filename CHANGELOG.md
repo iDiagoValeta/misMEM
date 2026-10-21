@@ -2,6 +2,30 @@
 
 ## Sin publicar
 
+### El bench dice dónde cayó el acierto, no sólo si cayó
+
+- `mismem-bench` medía una sola cosa: si la memoria esperada estaba en el tope. Con eso, un cambio
+  que mueve el acierto de la 5ª a la 1ª posición no se ve, y un cliente que muestra 3 recuerdos no
+  encuentra lo que el recall@5 prometía.
+- Ahora informa MRR, posición media del acierto, aciertos en la 1ª y entre las 3 primeras, y el
+  reparto completo por posición.
+- Del lado de la precisión: cuántos recuerdos devuelve por pregunta (el modelo los lee todos) y
+  cuántos recuerdos trajeron las preguntas ajenas, no sólo cuántas trajeron algo.
+- `noiseHits` cuenta los marcadores de ruido que llegaron a algún tope y tiene que ser 0. Es el
+  guardia del filtro de `noise.ts`, y hay un test que falla si el filtro se cae.
+- Medido sobre la copia de producción (80 preguntas, 2.527 memorias, EmbeddingGemma 2 local que
+  reproduce los vectores guardados con coseno 0,9999):
+
+  | variante | entre las 5 | en la 1ª | entre las 3 | MRR |
+  |---|---|---|---|---|
+  | `literal` | 78/80 (98 %) | 66 | 77 | 0,89 |
+  | `literal_limpia` | 76/80 (95 %) | 66 | 76 | 0,88 |
+  | `parafrasis` | 58/80 (73 %) | 41 | 52 | 0,59 |
+  | `parafrasis_limpia` | 55/80 (69 %) | 36 | 49 | 0,54 |
+
+  Ajenas 0/10 y 4,8 recuerdos devueltos de 5. Lo que el recall@5 no mostraba: con paráfrasis, un
+  cliente que muestra 3 recuerdos encuentra 52 de 80 (65 %), no 73 %.
+
 ### Los marcadores de ruido ya no compiten en el recall
 
 - Las memorias `[noise] …` y `[pareto:l0] …` existen sólo para que `forget` sepa qué episodios
@@ -10,9 +34,9 @@
   producción, "señal" devolvía 4 marcadores de 5 memorias y "episodios" los 5 de 5.
 - Ahora quedan afuera del recall por palabras y por significado, y tampoco gastan un embedding
   (`noise.ts` tiene la única definición de qué es un marcador). `forget` y el viewer los siguen viendo.
-- Medido con `mismem-bench` sobre la copia de producción: las 80 preguntas dan exactamente lo mismo
-  que antes y las 10 ajenas siguen en 0. Lo que cambia es que los lugares que ocupaban los marcadores
-  ahora los ocupan memorias reales.
+- Medido con `mismem-bench` sobre la copia de producción, con el servidor de embeddings arriba:
+  `parafrasis` sube de 56/80 (70 %) a 58/80 (73 %), `literal` queda en 78/80 y las ajenas en 0/10.
+  Los marcadores que llegaban al tope pasan de 43 a 0: ocupaban lugares que ahora son memorias reales.
 
 ### Que el LLM ignore un episodio ya no lo condena a la primera
 

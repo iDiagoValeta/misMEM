@@ -17,3 +17,8 @@ export function excludeNoiseSql(alias: string): string {
     " AND ",
   );
 }
+
+/** Para medir desde afuera que ningún marcador se escapó al recall. */
+export function isNoiseGist(gist: string): boolean {
+  return NOISE_GIST_PREFIXES.some((prefix) => gist.startsWith(prefix));
+}
