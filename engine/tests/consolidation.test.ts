@@ -187,7 +187,7 @@ describe("runConsolidation", () => {
     expect(summary.episodes_consolidated).toBe(3);
   });
 
-  it("los episodios que el LLM leyó y no citó quedan como ruido y no se vuelven a mandar", async () => {
+  it("un episodio sin citar queda pendiente con strike, no como ruido, y no se repaga en la corrida", async () => {
     const ids = [
       captureOld("mix", "decidimos usar pnpm en todo el monorepo", 48),
       captureOld("mix", "porque npm duplicaba dependencias", 48),
@@ -205,16 +205,49 @@ describe("runConsolidation", () => {
       log: () => {},
     });
 
-    expect(summary.episodes_consolidated).toBe(3);
+    expect(summary.episodes_consolidated).toBe(2);
+    expect(summary.episodes_uncited_pending).toBe(1);
+    // Volver a mandarlo en la misma corrida sería pagar dos veces por el mismo episodio.
     expect(distillFn).toHaveBeenCalledTimes(1);
-    const pending = db
-      .prepare("SELECT COUNT(*) AS n FROM episodes WHERE consolidated_into IS NULL")
-      .get() as { n: number };
-    expect(pending.n).toBe(0);
+
+    const left = db
+      .prepare("SELECT consolidated_into, uncited_count FROM episodes WHERE id = ?")
+      .get(ids[2]) as { consolidated_into: string | null; uncited_count: number };
+    expect(left.consolidated_into).toBeNull();
+    expect(left.uncited_count).toBe(1);
+  });
+
+  it("agotados los strikes el episodio sin citar pasa a ruido", async () => {
+    const ids = [
+      captureOld("mix", "decidimos usar pnpm en todo el monorepo", 48),
+      captureOld("mix", "porque npm duplicaba dependencias", 48),
+      captureOld("mix", "jaja dale nos vemos", 48),
+    ];
+    // Cita siempre el primero que le llega: el último queda sin citar en cada tanda.
+    const distillFn = vi.fn(async (_cfg: unknown, _sys: string, user: string) => {
+      const first = ids.find((id) => user.includes(id));
+      return first ? [{ gist: `memoria de ${first}`, evidence_episode_ids: [first] }] : [];
+    });
+    const opts = {
+      minEpisodesPerScope: 1,
+      paretoPrefilter: false,
+      uncitedStrikes: 2,
+      llm: llmCfg,
+      distillFn,
+      log: () => {},
+    };
+
+    await runConsolidation(db, opts);
+    expect(
+      (db.prepare("SELECT uncited_count AS n FROM episodes WHERE id = ?").get(ids[2]) as { n: number }).n,
+    ).toBe(1);
+
+    await runConsolidation(db, opts);
+
     const stub = db
       .prepare("SELECT m.gist, m.salience FROM episodes e JOIN memories m ON m.id = e.consolidated_into WHERE e.id = ?")
       .get(ids[2]) as { gist: string; salience: number };
-    expect(stub.gist).toMatch(/^\[noise\] 1 episodio/);
+    expect(stub.gist).toBe("[noise] 1 episodio sin citar en 2 tandas");
     expect(stub.salience).toBeLessThan(0.2);
   });
 
@@ -230,7 +263,12 @@ describe("runConsolidation", () => {
     const gists = db
       .prepare("SELECT m.gist FROM episodes e JOIN memories m ON m.id = e.consolidated_into ORDER BY e.created_at, e.id")
       .all() as { gist: string }[];
-    expect(gists.map((g) => g.gist).sort()).toEqual(["[noise] 1 episodio sin citar en esta tanda", "real"].sort());
+    expect(gists.map((g) => g.gist)).toEqual(["real"]);
+    const left = db
+      .prepare("SELECT consolidated_into, uncited_count FROM episodes WHERE id = ?")
+      .get(ids[1]) as { consolidated_into: string | null; uncited_count: number };
+    expect(left.consolidated_into).toBeNull();
+    expect(left.uncited_count).toBe(1);
   });
 
   it("si todo lo que devolvió el LLM es inventado, los episodios quedan pendientes", async () => {

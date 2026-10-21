@@ -20,7 +20,7 @@ Sistema de memoria persistente con MCP (3 capas: episodes → memories → trait
 - Nombres y código en inglés; mensajes de log/UI en español
 
 ## Esquema (resumen)
-- `episodes(id, scope, body, created_at, consolidated_into, content_hash)` — verbatim, body NO `text`
+- `episodes(id, scope, body, created_at, consolidated_into, content_hash, uncited_count)` — verbatim, body NO `text`
 - `memories(id, scope, gist, details, source_episode_ids JSON, salience, created_at, last_accessed_at, salience_updated_at)`
 - `memory_embeddings(memory_id, model, dims, vec BLOB, created_at)` — un vector por memoria
 - `traits(id, scope, name, evidence_memory_ids JSON, strength, polarity, created_at, updated_at)`
@@ -28,7 +28,7 @@ Sistema de memoria persistente con MCP (3 capas: episodes → memories → trait
 
 ## MCP tools (en `engine/src/tools.ts`)
 - `capture(scope, body)` → inserta episode
-- `recall(query, scope?, limit?)` → traits>memories>episodes; en memories fusiona palabras (FTS5, todas las de la consulta menos las vacías) y significado (embeddings) con la relevancia antes que la saliencia; refuerza lo devuelto
+- `recall(query, scope?, limit?)` → traits>memories>episodes; en memories fusiona palabras (FTS5, todas las de la consulta menos las vacías) y significado (embeddings) con la relevancia antes que la saliencia; refuerza lo devuelto. Los marcadores de ruido (`[noise] …`, `[pareto:l0] …`) quedan afuera: ver `noise.ts`
 - `consolidate(scope, gist, details?, source_episode_ids[])` → crea memory + marca episodes
 - `crystallize(scope, name, evidence_memory_ids[], polarity?)` → crea trait
 - `forget(scope?, before_days?, memory_grace_days?, salience_below?, dry_run?)` → purga episodes consolidados + memories de baja salience (simula por defecto; `mismem-forget` borra por defecto)

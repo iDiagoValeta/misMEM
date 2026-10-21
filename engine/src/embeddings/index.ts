@@ -11,6 +11,7 @@
  * no responde, todo degrada silenciosamente a FTS5 puro.
  */
 import type { Database as DB } from "better-sqlite3";
+import { excludeNoiseSql } from "../noise.js";
 
 export type EmbeddingProvider = "ollama" | "openai";
 export type EmbedKind = "query" | "document";
@@ -153,6 +154,7 @@ export function semanticSearchMemories(
     opts.scope ? "m.scope = @scope" : null,
     opts.model ? "e.model = @model" : null,
     "e.dims = @dims",
+    excludeNoiseSql("m"),
   ].filter((value): value is string => value !== null);
   const rows = db
     .prepare(
@@ -244,6 +246,7 @@ export async function embedPendingMemories(
        FROM memories m
        LEFT JOIN memory_embeddings e ON e.memory_id = m.id
        WHERE (${opts.force ? "1 = 1" : needsEmbedding})
+         AND ${excludeNoiseSql("m")}
          ${opts.scope ? "AND m.scope = @scope" : ""}`,
     )
     .all({

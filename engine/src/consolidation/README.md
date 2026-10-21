@@ -16,7 +16,7 @@ traits (patrones cristalizados)
 ## Comando
 
 ```bash
-mismem-consolidate [--dry-run] [--scope <name>] [--min-age-hours 24] [--min-episodes 3] [--quiet-days 14] [--max-batch 60]
+mismem-consolidate [--dry-run] [--scope <name>] [--min-age-hours 24] [--min-episodes 3] [--quiet-days 14] [--max-batch 60] [--uncited-strikes 3]
 ```
 
 ## Configuración
@@ -33,10 +33,14 @@ en la [referencia única de DEPLOY.md](../../../DEPLOY.md#variables-de-entorno-r
   en vez de repetirlo por cada ámbito.
 - **Anti-alucinación**: filtra `evidence_episode_ids` que no estén en el batch
 - **Ruido**: lo que no llega a memoria queda atado a una memoria marcadora (`[noise] …` o `[pareto:l0] …`)
-  con `salience=0.05`, y `forget` lo borra a los 30 días **junto con sus episodios**. Pasa en tres casos:
+  con `salience=0.05`, y `forget` lo borra a los 30 días **junto con sus episodios**. El marcador no vuelve
+  en el recall ni gasta un embedding (`engine/src/noise.ts`). Pasa en tres casos:
   el pre-filtro Pareto lo descartó, el LLM devolvió `memories: []`, o el LLM leyó el episodio y no lo citó
-  en ninguna memoria. Los dos últimos dependen del LLM:
+  en `MISMEM_CONSOLIDATION_UNCITED_STRIKES` tandas seguidas. Los dos últimos dependen del LLM:
   conviene mirar el log de las primeras corridas y tener respaldos que duren más que esos 30 días.
+- **Episodio que el LLM no cita**: suma un strike (`episodes.uncited_count`) y vuelve en la corrida
+  siguiente, no en la misma. Recién al agotar los strikes pasa a ruido. El resumen lo cuenta en
+  `episodes_uncited_pending`.
 - **Episodio que no entra**: si con un solo episodio la respuesta igual llega cortada o inválida, ese
   episodio queda pendiente (no se marca ruido ni falla el ámbito) y la corrida sigue con el resto. Se
   reintenta la noche siguiente y aparece en el resumen como `episodes_skipped`.
@@ -103,4 +107,5 @@ pnpm test consolidation
 
 Cubren: skip por threshold, skip por edad, destilación exitosa, stub para noise, anti-alucinación,
 dry-run, corte ante error fatal, tandas dentro del presupuesto, recorte de episodios enormes, tope de
-llamadas, y elección de proveedor y tope de tokens (`consolidation-llm.test.ts`).
+llamadas, strikes del episodio sin citar (pendiente a la primera, ruido al agotarlos), y elección de
+proveedor y tope de tokens (`consolidation-llm.test.ts`).

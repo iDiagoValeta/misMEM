@@ -27,6 +27,12 @@ class UserStore {
     expect(r.level).toBe(0);
   });
 
+  it("una preferencia corta no se descarta como ruido", () => {
+    for (const text of ["prefiero Rust para el backend", "dejé de usar npm", "me gusta Vitest"]) {
+      expect(classify(text).level).toBeGreaterThan(0);
+    }
+  });
+
   it("repetir contenido vecino baja novedad", () => {
     const text = "fix bug in login flow when token expires after refresh";
     const fresh = classify(text);

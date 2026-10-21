@@ -30,6 +30,17 @@ function makeMemory(gist: string): string {
   }).memory_id;
 }
 
+function makeNoiseMarker(gist: string): string {
+  const episode = capture(db, { scope: "test", body: `source ${gist}` });
+  const { memory_id } = consolidate(db, {
+    scope: "test",
+    gist,
+    source_episode_ids: [episode.id],
+  });
+  db.prepare("UPDATE memories SET salience = 0.05 WHERE id = ?").run(memory_id);
+  return memory_id;
+}
+
 function mockResponse(): {
   response: ServerResponse;
   value: { statusCode: number; body: string };
@@ -181,6 +192,44 @@ describe("ranking híbrido", () => {
     await recallHybrid(db, { query: "¿Qué decidimos sobre el deploy?", limit: 5 }, embed, { reinforce: false });
 
     expect(seen).toEqual(["¿Qué decidimos sobre el deploy?"]);
+  });
+
+  it("un marcador de ruido no vuelve por palabras, y lo real sigue volviendo", () => {
+    makeNoiseMarker("[noise] 3 episodios sin señal consolidable (2026-10-09)");
+    makeNoiseMarker("[pareto:l0] 23 episodios filtrados por baja importancia");
+    makeMemory("los episodios sin señal de este deploy fueron tres");
+
+    const ruido = recall(db, { query: "episodios sin señal" }, { reinforce: false }).hits;
+    expect(ruido.filter((h) => h.layer === "memory").map((h) => h.text)).toEqual([
+      "los episodios sin señal de este deploy fueron tres",
+    ]);
+
+    const filtrados = recall(db, { query: "filtrados por baja importancia" }, { reinforce: false }).hits;
+    expect(filtrados.filter((h) => h.layer === "memory")).toEqual([]);
+  });
+
+  it("un marcador de ruido que ya tenía embedding tampoco vuelve por significado", async () => {
+    const noise = makeNoiseMarker("[noise] 4 episodios sin señal consolidable de finanzas");
+    makeMemory("la deuda del cashflow quedó saldada");
+    await embedPendingMemories(db, { embedFn: fakeEmbed, model: "fake" });
+    // Una base de antes del filtro ya tiene vectores de marcadores: hay que atajarlos igual.
+    db.prepare(
+      "INSERT INTO memory_embeddings (memory_id, model, dims, vec, created_at) VALUES (?, ?, ?, ?, ?)",
+    ).run(noise, "fake", 2, Buffer.from(fakeVec("finanzas").buffer), Date.now());
+
+    const result = await recallHybrid(db, { query: "deuda" }, fakeEmbed, { reinforce: false });
+    expect(result.hits.map((h) => h.id)).not.toContain(noise);
+    expect(result.hits.some((h) => h.text === "la deuda del cashflow quedó saldada")).toBe(true);
+  });
+
+  it("un marcador de ruido no gasta un embedding", async () => {
+    makeNoiseMarker("[noise] 5 episodios sin señal consolidable");
+    makeMemory("la deuda del cashflow quedó saldada");
+
+    const stats = await embedPendingMemories(db, { embedFn: fakeEmbed, model: "fake" });
+
+    expect(stats.pending).toBe(1);
+    expect(stats.embedded).toBe(1);
   });
 
   it("mantiene la propiedad de prefijo entre límites", async () => {
