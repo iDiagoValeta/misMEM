@@ -305,6 +305,19 @@ Los defaults son los del código (`engine/src`).
 | `MISMEM_HOOK_MIN_OVERLAP` | `0.2` | Fracción de las palabras distintivas del recuerdo que la respuesta tiene que repetir |
 | `MISMEM_HOOK_MIN_SHARED` | `3` | Piso de palabras compartidas: con pocas, un solapamiento alto es casualidad |
 
+**Recuperación proactiva (hook del cliente, opcional)**
+
+| Var | Default | Descripción |
+|-----|---------|-------------|
+| `MISMEM_HOOK_EXCLUDE_SCOPES` | — | Prefijos de ámbito que **no** se inyectan (`lucas,chatgpt`). `lucas` tapa `lucas/profile`, no `lucas-publico` |
+| `MISMEM_HOOK_SCOPE` | — | Restringe la búsqueda a un solo ámbito |
+| `MISMEM_HOOK_MAX_MEMORIES` | `3` | Cuántos recuerdos se adelantan como mucho |
+| `MISMEM_HOOK_MAX_CHARS` | `1200` | Presupuesto de texto inyectado |
+| `MISMEM_HOOK_MIN_PROMPT_TERMS` | `2` | Palabras con sustancia que necesita el prompt para que valga buscar |
+| `MISMEM_HOOK_TIMEOUT_MS` | `2500` | Espera por la búsqueda; si vence, no inyecta nada |
+
+`MISMEM_HOOK_URL` y `MISMEM_HOOK_AUTH` las comparten los dos hooks.
+
 **Búsqueda por significado**
 
 | Var | Default | Descripción |
@@ -395,3 +408,41 @@ manda y `forget` empieza a borrar memorias que antes se salvaban por aparecer. C
 dejar `MISMEM_REINFORCE_ON_RECALL=on` unos días, mirar los `--dry-run`, y recién después
 apagarlo — ajustando `MISMEM_SALIENCE_HALF_LIFE_DAYS` o el `salience_below` de `forget`
 si hace falta.
+
+## Recuperación proactiva (hook del cliente)
+
+El modelo sólo recuerda lo que pide: si no llama a `recall`, no recuerda. Con el hook
+`UserPromptSubmit`, misMEM adelanta lo relevante antes de que responda.
+
+```json
+{
+  "hooks": {
+    "UserPromptSubmit": [
+      { "hooks": [{ "type": "command", "command": "mismem-inject" }] }
+    ]
+  }
+}
+```
+
+`mismem-inject` busca con el prompt, descarta episodios, ámbitos privados y lo que el
+contexto ya tiene, y devuelve unos pocos recuerdos por `additionalContext`. La búsqueda
+va con `reinforce: false`: algo que el usuario no pidió no es uso y no puede subir la
+saliencia. Ante timeout, servidor caído o prompt trivial no inyecta nada y sale bien.
+
+### Antes de activarlo: qué sale de tu máquina
+
+Lo inyectado viaja en **cada prompt** al proveedor del modelo. Un recuerdo personal
+entra en una conversación de trabajo salvo que lo excluyas:
+
+```bash
+MISMEM_HOOK_EXCLUDE_SCOPES=personal,chatgpt,lucas,bardon
+```
+
+Mirá primero qué inyectaría, sin mandar nada:
+
+```bash
+echo '{"prompt":"tu pregunta"}' | mismem-inject --dry-run
+```
+
+El `--dry-run` imprime los ids y los **ámbitos** de lo que elegiría, no el texto: sirve
+para revisar el filtro sin volcar recuerdos en una terminal compartida.

@@ -28,7 +28,7 @@ Sistema de memoria persistente con MCP (3 capas: episodes → memories → trait
 
 ## MCP tools (en `engine/src/tools.ts`)
 - `capture(scope, body)` → inserta episode
-- `recall(query, scope?, limit?)` → traits>memories>episodes; en memories fusiona palabras (FTS5, todas las de la consulta menos las vacías) y significado (embeddings) con la relevancia antes que la saliencia; refuerza lo devuelto. Los marcadores de ruido (`[noise] …`, `[pareto:l0] …`) quedan afuera: ver `noise.ts`
+- `recall(query, scope?, limit?, reinforce?)` → traits>memories>episodes; en memories fusiona palabras (FTS5, todas las de la consulta menos las vacías) y significado (embeddings) con la relevancia antes que la saliencia; refuerza lo devuelto. Los marcadores de ruido (`[noise] …`, `[pareto:l0] …`) quedan afuera: ver `noise.ts`
 - `consolidate(scope, gist, details?, source_episode_ids[])` → crea memory + marca episodes
 - `reinforce(memory_ids[], boost?)` → sube la saliencia de los recuerdos que una respuesta usó de verdad; pensado con `MISMEM_REINFORCE_ON_RECALL=off` y el hook `mismem-used`
 - `crystallize(scope, name, evidence_memory_ids[], polarity?)` → crea trait

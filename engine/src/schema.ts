@@ -12,6 +12,8 @@ export const RecallInput = z.object({
   query: z.string().min(1),
   scope: Scope.optional(),
   limit: z.number().int().positive().max(50).default(10),
+  /** Una búsqueda que el usuario no pidió (un hook que inyecta) no es uso: no refuerza. */
+  reinforce: z.boolean().optional(),
 });
 export type RecallInput = z.infer<typeof RecallInput>;
 
