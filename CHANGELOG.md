@@ -1,19 +1,41 @@
 # Changelog
 
-## Sin publicar
+## 0.5.0 — 2026-10-23
 
-### misMEM puede adelantar recuerdos antes de que el modelo los pida
+### Que el LLM ignore un episodio ya no lo condena a la primera
 
-- El modelo sólo recuerda lo que pide: si no llama a `recall`, no recuerda. `mismem-inject` es un
-  hook `UserPromptSubmit` de Claude Code que busca con el prompt y devuelve unos pocos recuerdos
-  por `additionalContext`.
-- La búsqueda va con `reinforce: false` (campo nuevo en la entrada de `recall`): algo que el
-  usuario no pidió no es uso y no puede subir la saliencia.
-- Lo que inyecta queda acotado a propósito: sin episodios (son verbatim y `forget` los borra),
-  3 recuerdos como mucho, 1.200 caracteres, nada que ya esté en el contexto, y nada de los ámbitos
-  de `MISMEM_HOOK_EXCLUDE_SCOPES`. Un prompt sin dos palabras con sustancia ni gasta la llamada.
-- **Lo inyectado viaja en cada prompt al proveedor del modelo.** `DEPLOY.md` explica cómo excluir
-  los ámbitos personales y cómo revisar con `--dry-run`, que imprime ids y ámbitos pero no el texto.
+- Un episodio que el LLM leía y no citaba en ninguna memoria quedaba atado a un marcador
+  `[noise]` con `salience=0.05`, y `forget` lo borraba junto con el episodio. Una sola omisión del
+  modelo bastaba para perder el contenido.
+- Ahora cada tanda sin citar suma un strike (`uncited_count`). Recién al llegar a
+  `MISMEM_CONSOLIDATION_UNCITED_STRIKES` (3, `--uncited-strikes`) el episodio pasa a ruido; mientras
+  le queden, vuelve en la corrida siguiente. Reintentarlo cuesta los tokens de una tanda que ya se
+  paga, no una llamada extra, y dentro de la misma corrida no se repaga.
+- El resumen informa `episodes_uncited_pending`.
+- Migración aditiva: `episodes.uncited_count` arranca en 0 para todo lo que ya existe.
+
+
+### Una preferencia corta ya no se descarta antes del LLM
+
+- El pre-filtro Pareto mandaba a L0 (ruido, sin pasar por el LLM) cualquier texto de menos de 40
+  caracteres sin densidad: "prefiero Rust para el backend" entraba ahí, porque los patrones de
+  densidad sólo reconocían código y decisiones.
+- Se agregaron patrones de preferencia (`prefiero`, `uso`, `me gusta`, `dejé de`, `en vez de`,
+  `elijo`, `mejor que`…), así que una preferencia breve suma densidad y llega al LLM.
+
+
+### Los marcadores de ruido ya no compiten en el recall
+
+- Las memorias `[noise] …` y `[pareto:l0] …` existen sólo para que `forget` sepa qué episodios
+  borrar, pero entraban en FTS5 y en el índice semántico como cualquier otra. Desde que la relevancia
+  manda sobre la saliencia, `salience=0.05` ya no alcanzaba para hundirlas: sobre la copia de
+  producción, "señal" devolvía 4 marcadores de 5 memorias y "episodios" los 5 de 5.
+- Ahora quedan afuera del recall por palabras y por significado, y tampoco gastan un embedding
+  (`noise.ts` tiene la única definición de qué es un marcador). `forget` y el viewer los siguen viendo.
+- Medido con `mismem-bench` sobre la copia de producción, con el servidor de embeddings arriba:
+  `parafrasis` sube de 56/80 (70 %) a 58/80 (73 %), `literal` queda en 78/80 y las ajenas en 0/10.
+  Los marcadores que llegaban al tope pasan de 43 a 0: ocupaban lugares que ahora son memorias reales.
+
 
 ### La saliencia puede seguir el uso en vez de la aparición
 
@@ -34,6 +56,21 @@
 - La tokenización de la búsqueda por palabras se movió a `terms.ts` y la comparte el hook: si las
   dos partieran el texto distinto, un recuerdo se encontraría con unas palabras y se daría por
   usado con otras.
+
+
+### misMEM puede adelantar recuerdos antes de que el modelo los pida
+
+- El modelo sólo recuerda lo que pide: si no llama a `recall`, no recuerda. `mismem-inject` es un
+  hook `UserPromptSubmit` de Claude Code que busca con el prompt y devuelve unos pocos recuerdos
+  por `additionalContext`.
+- La búsqueda va con `reinforce: false` (campo nuevo en la entrada de `recall`): algo que el
+  usuario no pidió no es uso y no puede subir la saliencia.
+- Lo que inyecta queda acotado a propósito: sin episodios (son verbatim y `forget` los borra),
+  3 recuerdos como mucho, 1.200 caracteres, nada que ya esté en el contexto, y nada de los ámbitos
+  de `MISMEM_HOOK_EXCLUDE_SCOPES`. Un prompt sin dos palabras con sustancia ni gasta la llamada.
+- **Lo inyectado viaja en cada prompt al proveedor del modelo.** `DEPLOY.md` explica cómo excluir
+  los ámbitos personales y cómo revisar con `--dry-run`, que imprime ids y ámbitos pero no el texto.
+
 
 ### El bench dice dónde cayó el acierto, no sólo si cayó
 
@@ -59,37 +96,6 @@
   Ajenas 0/10 y 4,8 recuerdos devueltos de 5. Lo que el recall@5 no mostraba: con paráfrasis, un
   cliente que muestra 3 recuerdos encuentra 52 de 80 (65 %), no 73 %.
 
-### Los marcadores de ruido ya no compiten en el recall
-
-- Las memorias `[noise] …` y `[pareto:l0] …` existen sólo para que `forget` sepa qué episodios
-  borrar, pero entraban en FTS5 y en el índice semántico como cualquier otra. Desde que la relevancia
-  manda sobre la saliencia, `salience=0.05` ya no alcanzaba para hundirlas: sobre la copia de
-  producción, "señal" devolvía 4 marcadores de 5 memorias y "episodios" los 5 de 5.
-- Ahora quedan afuera del recall por palabras y por significado, y tampoco gastan un embedding
-  (`noise.ts` tiene la única definición de qué es un marcador). `forget` y el viewer los siguen viendo.
-- Medido con `mismem-bench` sobre la copia de producción, con el servidor de embeddings arriba:
-  `parafrasis` sube de 56/80 (70 %) a 58/80 (73 %), `literal` queda en 78/80 y las ajenas en 0/10.
-  Los marcadores que llegaban al tope pasan de 43 a 0: ocupaban lugares que ahora son memorias reales.
-
-### Que el LLM ignore un episodio ya no lo condena a la primera
-
-- Un episodio que el LLM leía y no citaba en ninguna memoria quedaba atado a un marcador
-  `[noise]` con `salience=0.05`, y `forget` lo borraba junto con el episodio. Una sola omisión del
-  modelo bastaba para perder el contenido.
-- Ahora cada tanda sin citar suma un strike (`uncited_count`). Recién al llegar a
-  `MISMEM_CONSOLIDATION_UNCITED_STRIKES` (3, `--uncited-strikes`) el episodio pasa a ruido; mientras
-  le queden, vuelve en la corrida siguiente. Reintentarlo cuesta los tokens de una tanda que ya se
-  paga, no una llamada extra, y dentro de la misma corrida no se repaga.
-- El resumen informa `episodes_uncited_pending`.
-- Migración aditiva: `episodes.uncited_count` arranca en 0 para todo lo que ya existe.
-
-### Una preferencia corta ya no se descarta antes del LLM
-
-- El pre-filtro Pareto mandaba a L0 (ruido, sin pasar por el LLM) cualquier texto de menos de 40
-  caracteres sin densidad: "prefiero Rust para el backend" entraba ahí, porque los patrones de
-  densidad sólo reconocían código y decisiones.
-- Se agregaron patrones de preferencia (`prefiero`, `uso`, `me gusta`, `dejé de`, `en vez de`,
-  `elijo`, `mejor que`…), así que una preferencia breve suma densidad y llega al LLM.
 
 ## 0.4.0 — 2026-10-12
 
