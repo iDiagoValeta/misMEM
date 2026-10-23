@@ -461,6 +461,9 @@ tiempo de desplegar. Así se puede dejar configurado antes del deploy sin riesgo
 
 ### El envoltorio: credenciales donde ya viven
 
+Se invoca con `bash` a propósito: así da igual si el bit de ejecución se perdió en el
+clone o en un checkout, y el hook no falla por eso en cada prompt.
+
 `scripts/mismem-hook.sh` saca la URL y el header `Authorization` de la config MCP del cliente
 (`~/.claude.json` por defecto) en vez de pedir que se copien a `settings.json` o a otro
 archivo. Nunca los imprime.
@@ -469,10 +472,10 @@ archivo. Nunca los imprime.
 {
   "hooks": {
     "UserPromptSubmit": [
-      { "hooks": [{ "type": "command", "command": "/ruta/a/misMEM/scripts/mismem-hook.sh inject" }] }
+      { "hooks": [{ "type": "command", "command": "bash /ruta/a/misMEM/scripts/mismem-hook.sh inject" }] }
     ],
     "Stop": [
-      { "hooks": [{ "type": "command", "command": "/ruta/a/misMEM/scripts/mismem-hook.sh used" }] }
+      { "hooks": [{ "type": "command", "command": "bash /ruta/a/misMEM/scripts/mismem-hook.sh used" }] }
     ]
   }
 }
