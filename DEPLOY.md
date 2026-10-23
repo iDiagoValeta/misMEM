@@ -55,6 +55,25 @@ cd mismem/engine
 docker build -t mismem-brain:latest -f Dockerfile.mismem-brain .
 ```
 
+### Cómo se publica la imagen
+
+El workflow `docker.yml` corre al pushear un tag `v*` y publica
+`ghcr.io/lucasmella-stack/mismem-brain` con la versión exacta, `major.minor` y,
+sólo desde el tag estable más alto, `latest`. Una pre-release (`v1.0.0-rc1`) nunca
+se lleva `latest`, y un tag puesto en retrospectiva tampoco: así un `v0.4.0` tardío
+no publica el árbol viejo encima del último release. Para republicar sin mover el
+tag, `workflow_dispatch` sobre el tag que corresponda.
+
+**Si el push a GHCR falla con `denied: permission_denied: read_package`**, el paquete
+existe pero no le da escritura a este repositorio. El workflow ya declara
+`permissions: packages: write`; lo que falta es del lado del paquete, y se arregla una
+sola vez desde la UI: en el paquete `mismem-brain` → *Package settings* → *Manage
+Actions access* → agregar el repositorio `misMEM` con rol **Write**. Después,
+relanzar el workflow con `workflow_dispatch` sobre el tag; no hace falta re-taggear.
+
+El paquete npm `@lucasmella/mismem` se publica a mano (`pnpm publish` desde `engine/`):
+no hay workflow que lo haga.
+
 ---
 
 ## Fase 2 — Servicio en `docker-compose.yml`
