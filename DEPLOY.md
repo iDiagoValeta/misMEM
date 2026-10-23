@@ -321,6 +321,7 @@ Los defaults son los del código (`engine/src`).
 |-----|---------|-------------|
 | `MISMEM_HOOK_URL` | — | Base del misMEM remoto (`https://…`). Sin ella, `mismem-used` escribe en la base local |
 | `MISMEM_HOOK_AUTH` | — | `usuario:clave` del BasicAuth del servidor. Nunca se imprime |
+| `MISMEM_HOOK_AUTH_HEADER` | — | El header `Authorization` entero, ya armado. Gana sobre `MISMEM_HOOK_AUTH` y evita copiar la credencial a una variable nueva |
 | `MISMEM_HOOK_MIN_OVERLAP` | `0.2` | Fracción de las palabras distintivas del recuerdo que la respuesta tiene que repetir |
 | `MISMEM_HOOK_MIN_SHARED` | `3` | Piso de palabras compartidas: con pocas, un solapamiento alto es casualidad |
 
@@ -447,6 +448,35 @@ El modelo sólo recuerda lo que pide: si no llama a `recall`, no recuerda. Con e
 contexto ya tiene, y devuelve unos pocos recuerdos por `additionalContext`. La búsqueda
 va con `reinforce: false`: algo que el usuario no pidió no es uso y no puede subir la
 saliencia. Ante timeout, servidor caído o prompt trivial no inyecta nada y sale bien.
+
+### Se enciende solo cuando el servidor está listo
+
+`recall` acepta `reinforce` desde 0.5.0. Contra un servidor anterior, Zod **descarta ese
+campo en silencio**: el hook inyectaría y reforzaría, justo lo contrario de lo buscado. Para
+que eso no pase, antes de inyectar se confirma que el servidor expone la tool `reinforce`.
+
+El resultado se cachea en `hook-readiness.json`, al lado de la base: el "sí" dura 6 horas
+para no preguntar en cada turno, y el "no" 10 minutos para que el hook arranque solo al poco
+tiempo de desplegar. Así se puede dejar configurado antes del deploy sin riesgo.
+
+### El envoltorio: credenciales donde ya viven
+
+`scripts/mismem-hook.sh` saca la URL y el header `Authorization` de la config MCP del cliente
+(`~/.claude.json` por defecto) en vez de pedir que se copien a `settings.json` o a otro
+archivo. Nunca los imprime.
+
+```json
+{
+  "hooks": {
+    "UserPromptSubmit": [
+      { "hooks": [{ "type": "command", "command": "/ruta/a/misMEM/scripts/mismem-hook.sh inject" }] }
+    ],
+    "Stop": [
+      { "hooks": [{ "type": "command", "command": "/ruta/a/misMEM/scripts/mismem-hook.sh used" }] }
+    ]
+  }
+}
+```
 
 ### Antes de activarlo: qué sale de tu máquina
 
