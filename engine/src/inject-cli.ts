@@ -13,6 +13,7 @@
 import { readFileSync } from "node:fs";
 import { defaultDbPath, openDb } from "./db.js";
 import { callRemoteTool } from "./hook-client.js";
+import { serverReady } from "./hook-readiness.js";
 import {
   DEFAULT_MAX_CHARS,
   DEFAULT_MAX_MEMORIES,
@@ -57,6 +58,9 @@ async function search(query: string, timeoutMs: number): Promise<RecallHit[]> {
   const args = { query, limit: CANDIDATES, reinforce: false, ...(scope ? { scope } : {}) };
   const url = process.env.MISMEM_HOOK_URL;
   if (url) {
+    const dbPath = process.env.MISMEM_DB ?? defaultDbPath();
+    // Un servidor sin `reinforce` descarta el campo y refuerza igual: no se le habla.
+    if (!(await serverReady(url, dbPath, timeoutMs))) return [];
     const result = (await callRemoteTool(url, "recall", args, timeoutMs)) as { hits?: RecallHit[] };
     return result?.hits ?? [];
   }
