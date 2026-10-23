@@ -1,0 +1,139 @@
+#!/usr/bin/env node
+/**
+ * mismem-used — hook `Stop` de Claude Code: refuerza los recuerdos que la respuesta usó.
+ *
+ * Lee por stdin el payload del hook (de ahí saca `transcript_path`), mira el último turno
+ * y manda a `reinforce` sólo los recuerdos cuyas palabras reaparecen en la respuesta.
+ *
+ * Con MISMEM_HOOK_URL habla con el servidor remoto por JSON-RPC; sin ella abre la base
+ * local. Nunca escribe en stdout salvo con --dry-run, y nunca sale con error: un hook que
+ * rompe no vale un punto de saliencia.
+ */
+import { readFileSync } from "node:fs";
+import { defaultDbPath, openDb } from "./db.js";
+import { reinforce } from "./tools.js";
+import {
+  assistantReply,
+  lastTurn,
+  recalledMemories,
+  usedMemoryIds,
+  type UsageOptions,
+} from "./usage.js";
+
+function envNumber(name: string): number | undefined {
+  const value = Number(process.env[name]);
+  return Number.isFinite(value) ? value : undefined;
+}
+
+/** Con un stdin que nadie cierra, un hook esperaría para siempre y colgaría el turno. */
+const STDIN_TIMEOUT_MS = 2000;
+
+function readStdin(): Promise<string> {
+  return new Promise((resolve) => {
+    let data = "";
+    if (process.stdin.isTTY) return resolve("");
+    const done = (): void => {
+      clearTimeout(timer);
+      resolve(data);
+    };
+    const timer = setTimeout(done, STDIN_TIMEOUT_MS);
+    timer.unref();
+    process.stdin.setEncoding("utf8");
+    process.stdin.on("data", (chunk) => (data += chunk));
+    process.stdin.on("end", done);
+    process.stdin.on("error", done);
+  });
+}
+
+/** El servidor responde el JSON-RPC enmarcado como SSE: la carga viene en una línea `data:`. */
+function parseRpc(body: string): unknown {
+  const line = body.split("\n").find((l) => l.startsWith("data: "));
+  return JSON.parse(line ? line.slice(6) : body);
+}
+
+async function reinforceRemote(url: string, ids: string[]): Promise<void> {
+  const headers: Record<string, string> = {
+    "content-type": "application/json",
+    accept: "application/json, text/event-stream",
+  };
+  const auth = process.env.MISMEM_HOOK_AUTH;
+  if (auth) headers.authorization = `Basic ${Buffer.from(auth).toString("base64")}`;
+  const res = await fetch(`${url.replace(/\/+$/, "")}/mcp`, {
+    method: "POST",
+    headers,
+    body: JSON.stringify({
+      jsonrpc: "2.0",
+      id: 1,
+      method: "tools/call",
+      params: { name: "reinforce", arguments: { memory_ids: ids } },
+    }),
+  });
+  if (!res.ok) throw new Error(`HTTP ${res.status}`);
+  const parsed = parseRpc(await res.text()) as { error?: { message?: string } };
+  if (parsed.error) throw new Error(parsed.error.message ?? "error del servidor");
+}
+
+function reinforceLocal(ids: string[]): void {
+  const db = openDb(process.env.MISMEM_DB ?? defaultDbPath());
+  try {
+    reinforce(db, { memory_ids: ids });
+  } finally {
+    db.close();
+  }
+}
+
+async function main(): Promise<void> {
+  const argv = process.argv.slice(2);
+  const dryRun = argv.includes("--dry-run");
+  const flagIndex = argv.indexOf("--transcript");
+  const fromFlag = flagIndex >= 0 ? argv[flagIndex + 1] : undefined;
+
+  // Con --transcript no hace falta stdin, y leerlo igual es colgarse esperando a nadie.
+  let transcript = fromFlag;
+  if (!transcript) {
+    const stdin = await readStdin();
+    if (!stdin.trim()) return;
+    const payload = JSON.parse(stdin) as { transcript_path?: string };
+    transcript = payload.transcript_path;
+  }
+  if (!transcript) return;
+
+  const lines = readFileSync(transcript, "utf8")
+    .split("\n")
+    .filter(Boolean)
+    .flatMap((line) => {
+      try {
+        return [JSON.parse(line) as unknown];
+      } catch {
+        return [];
+      }
+    });
+
+  const turn = lastTurn(lines);
+  const memories = recalledMemories(turn);
+  if (memories.length === 0) return;
+
+  const opts: UsageOptions = {
+    minOverlap: envNumber("MISMEM_HOOK_MIN_OVERLAP"),
+    minShared: envNumber("MISMEM_HOOK_MIN_SHARED"),
+  };
+  const used = usedMemoryIds(memories, assistantReply(turn), opts);
+
+  if (dryRun) {
+    // eslint-disable-next-line no-console
+    console.log(
+      JSON.stringify({ recalled: memories.length, used: used.length, memory_ids: used }, null, 2),
+    );
+    return;
+  }
+  if (used.length === 0) return;
+
+  const url = process.env.MISMEM_HOOK_URL;
+  if (url) await reinforceRemote(url, used);
+  else reinforceLocal(used);
+}
+
+main().catch((err: unknown) => {
+  // Un hook que falla no puede cortarle el turno a nadie: se queja y sale bien.
+  process.stderr.write(`[mismem-used] ${err instanceof Error ? err.message : String(err)}\n`);
+});

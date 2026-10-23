@@ -40,6 +40,13 @@ export const ForgetInput = z.object({
 });
 export type ForgetInput = z.infer<typeof ForgetInput>;
 
+/** Los recuerdos que de verdad se usaron en una respuesta, no los que el recall devolvió. */
+export const ReinforceInput = z.object({
+  memory_ids: z.array(z.string().min(1)).min(1).max(50),
+  boost: z.number().min(0).max(1).optional(),
+});
+export type ReinforceInput = z.infer<typeof ReinforceInput>;
+
 export const Layer = z.enum(["episode", "memory", "trait"]);
 export type Layer = z.infer<typeof Layer>;
 

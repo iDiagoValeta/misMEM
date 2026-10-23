@@ -8,7 +8,7 @@ import {
   ListToolsRequestSchema,
 } from "@modelcontextprotocol/sdk/types.js";
 import type { Database as DB } from "better-sqlite3";
-import { capture, recallHybrid, consolidate, crystallize, forget } from "./tools.js";
+import { capture, recallHybrid, consolidate, crystallize, forget, reinforce } from "./tools.js";
 import { embedPendingMemories } from "./embeddings/index.js";
 import {
   ENGRAM_TOOLS,
@@ -33,7 +33,7 @@ const CANONICAL_TOOLS = [
   {
     name: "recall",
     description:
-      "Hybrid search: FTS5 across all layers plus semantic ranking for memories. Reinforces returned memories (Hebbian).",
+      "Hybrid search: FTS5 across all layers plus semantic ranking for memories. Reinforces returned memories (Hebbian) unless MISMEM_REINFORCE_ON_RECALL=off.",
     inputSchema: {
       type: "object",
       required: ["query"],
@@ -41,6 +41,25 @@ const CANONICAL_TOOLS = [
         query: { type: "string" },
         scope: { type: "string" },
         limit: { type: "integer", minimum: 1, maximum: 50, default: 10 },
+      },
+    },
+  },
+  {
+    name: "reinforce",
+    description:
+      "Mark memories as actually used in an answer (Hebbian). Use with MISMEM_REINFORCE_ON_RECALL=off so salience tracks use, not appearance.",
+    inputSchema: {
+      type: "object",
+      required: ["memory_ids"],
+      properties: {
+        memory_ids: {
+          type: "array",
+          items: { type: "string" },
+          minItems: 1,
+          maxItems: 50,
+          description: "Ids of the memories the answer actually relied on",
+        },
+        boost: { type: "number", minimum: 0, maximum: 1 },
       },
     },
   },
@@ -138,6 +157,9 @@ export function createServer(db: DB): Server {
           }
           break;
         }
+        case "reinforce":
+          result = reinforce(db, args);
+          break;
         case "crystallize":
           result = crystallize(db, args);
           break;

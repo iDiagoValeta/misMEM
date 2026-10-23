@@ -6,10 +6,12 @@ import {
   ConsolidateInput,
   CrystallizeInput,
   ForgetInput,
+  ReinforceInput,
   type RecallHit,
 } from "./schema.js";
 import { contentHash } from "./db.js";
 import { excludeNoiseSql } from "./noise.js";
+import { searchTerms } from "./terms.js";
 import {
   embedTexts,
   loadEmbeddingConfig,
@@ -32,35 +34,6 @@ const RRF_K = 60;
 // sólo desempata. Más abajo los puestos se achican (≈ 0.00008 al final de los 50
 // candidatos) y una saliencia alta puede adelantar dos o tres lugares.
 const SALIENCE_RRF_WEIGHT = 0.0002;
-
-// Palabras que una pregunta trae y un recuerdo no: como FTS5 exige todas las de la consulta,
-// con ellas adentro una pregunta entera ("¿qué decidimos sobre el deploy?") no encontraba nada.
-const STOPWORDS = new Set(
-  (
-    "a al como con cual cuales cuando cuanta cuanto de del donde el en es estar fue la las le lo los me mi " +
-    "mas o para por porque que quien se ser sin sobre son su te tu u un una unas unos y ya " +
-    "acordate acorda conta contame cuenta deci decime dime recorda recordas sabe sabes " +
-    "the of and to is in for with that was on are by an be this from it as not what which who how why when where do does did"
-  ).split(" "),
-);
-const MIN_TERM_LENGTH = 3;
-
-const plain = (word: string): string =>
-  word
-    .toLowerCase()
-    .normalize("NFD")
-    .replace(/[\u0300-\u036f]/g, "");
-
-/** Las palabras de la consulta que sirven para buscar por coincidencia. */
-function searchTerms(query: string): string[] {
-  const words = query.split(/[^\p{L}\p{N}_]+/u).filter(Boolean);
-  // Un número corto (un puerto, una versión) distingue; una palabra de dos letras casi nunca.
-  const terms = words.filter(
-    (word) => (word.length >= MIN_TERM_LENGTH || /\p{N}/u.test(word)) && !STOPWORDS.has(plain(word)),
-  );
-  // Si no quedó ninguna, la consulta va como vino: mejor una búsqueda estricta que una vacía.
-  return terms.length > 0 ? terms : words;
-}
 
 function escapeFts(query: string): string {
   // Cada palabra entre comillas: FTS5 las une con AND y los caracteres especiales no rompen el MATCH.
@@ -88,6 +61,14 @@ export function capture(db: DB, raw: unknown): { id: string; deduped: boolean } 
     "INSERT INTO episodes (id, scope, body, created_at, content_hash) VALUES (?, ?, ?, ?, ?)",
   ).run(id, input.scope, input.body, now(), hash);
   return { id, deduped: false };
+}
+
+/**
+ * Reforzar lo que el recall devuelve premia a un recuerdo que aparece siempre y no sirve
+ * nunca. Con el hook del cliente puesto, el refuerzo llega por `reinforce` y esto se apaga.
+ */
+function reinforcesOnRecall(): boolean {
+  return (process.env.MISMEM_REINFORCE_ON_RECALL ?? "on").trim().toLowerCase() !== "off";
 }
 
 export interface RecallOptions {
@@ -200,7 +181,7 @@ function finalizeHits(
   options: RecallOptions,
   at: number,
 ): { hits: RecallHit[] } {
-  if (options.reinforce ?? true) {
+  if (options.reinforce ?? reinforcesOnRecall()) {
     reinforceMemories(
       db,
       hits.filter((h) => h.layer === "memory").map((h) => h.id),
@@ -209,6 +190,27 @@ function finalizeHits(
   }
 
   return { hits };
+}
+
+/**
+ * Refuerza los recuerdos que una respuesta usó de verdad. Devuelve cuántos ids no existían:
+ * si ese número sube, el que los manda está mirando una base distinta o inventando ids.
+ */
+export function reinforce(
+  db: DB,
+  raw: unknown,
+  options: { at?: number } = {},
+): { reinforced: number; unknown: number } {
+  const input = ReinforceInput.parse(raw);
+  const ids = [...new Set(input.memory_ids)];
+  const known = (
+    db
+      .prepare(`SELECT id FROM memories WHERE id IN (${ids.map(() => "?").join(", ")})`)
+      .all(...ids) as Array<{ id: string }>
+  ).map((row) => row.id);
+
+  reinforceMemories(db, known, { at: options.at, boost: input.boost });
+  return { reinforced: known.length, unknown: ids.length - known.length };
 }
 
 export function recall(

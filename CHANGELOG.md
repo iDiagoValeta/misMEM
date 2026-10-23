@@ -2,6 +2,26 @@
 
 ## Sin publicar
 
+### La saliencia puede seguir el uso en vez de la aparición
+
+- `recall` reforzaba todo lo que devolvía, así que un recuerdo que aparece siempre y no sirve
+  nunca ganaba importancia igual. Medido sobre 573 recuerdos devueltos en turnos reales de Claude
+  Code, la mediana de solapamiento entre el recuerdo y la respuesta es **0,07**: casi nada de lo
+  que se reforzaba se había usado.
+- Herramienta MCP nueva `reinforce(memory_ids[], boost?)`: marca los recuerdos que una respuesta
+  usó de verdad e informa cuántos ids no existían, así un cliente que inventa ids se nota.
+- `MISMEM_REINFORCE_ON_RECALL=off` apaga el refuerzo por aparición. Por defecto sigue en `on`:
+  apagarlo sin una fuente de refuerzo deja que el decaimiento mande.
+- `mismem-used`: hook `Stop` de Claude Code que lee el transcript, mira el último turno y refuerza
+  sólo los recuerdos cuyas palabras distintivas reaparecen en la respuesta. Habla con el servidor
+  remoto por JSON-RPC (`MISMEM_HOOK_URL`) o con la base local. Tiene `--dry-run`, nunca escribe en
+  stdout y nunca sale con error: un hook que rompe no vale un punto de saliencia.
+- Umbrales calibrados contra esos 573 casos, no inventados: 0,2 de solapamiento y 3 palabras
+  compartidas dejan pasar el 9 %, más o menos un recuerdo por llamada a `recall`.
+- La tokenización de la búsqueda por palabras se movió a `terms.ts` y la comparte el hook: si las
+  dos partieran el texto distinto, un recuerdo se encontraría con unas palabras y se daría por
+  usado con otras.
+
 ### El bench dice dónde cayó el acierto, no sólo si cayó
 
 - `mismem-bench` medía una sola cosa: si la memoria esperada estaba en el tope. Con eso, un cambio

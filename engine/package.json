@@ -42,7 +42,8 @@
     "mismem-migrate-engram": "./dist/migrate-engram-cli.js",
     "mismem-stats": "./dist/stats-cli.js",
     "mismem-embed": "./dist/embed-cli.js",
-    "mismem-bench": "./dist/bench-cli.js"
+    "mismem-bench": "./dist/bench-cli.js",
+    "mismem-used": "./dist/used-cli.js"
   },
   "scripts": {
     "build": "tsc",

@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach } from "vitest";
+import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import type { Database as DB } from "better-sqlite3";
 import { openDb } from "../src/db.js";
 import {
@@ -7,6 +7,7 @@ import {
   consolidate,
   crystallize,
   forget,
+  reinforce,
 } from "../src/tools.js";
 
 let db: DB;
@@ -126,6 +127,76 @@ describe("crystallize", () => {
     });
     expect(second.created).toBe(false);
     expect(second.strength).toBe(2);
+  });
+});
+
+describe("reinforce", () => {
+  function memory(gist: string): string {
+    const episode = capture(db, { scope: "test", body: `source ${gist}` });
+    const id = consolidate(db, { scope: "test", gist, source_episode_ids: [episode.id] }).memory_id;
+    db.prepare("UPDATE memories SET salience = 0.4 WHERE id = ?").run(id);
+    return id;
+  }
+  const salienceOf = (id: string): number =>
+    (db.prepare("SELECT salience AS s FROM memories WHERE id = ?").get(id) as { s: number }).s;
+
+  it("sube la saliencia sólo de los recuerdos que se usaron", () => {
+    const usado = memory("el deploy usa docker compose");
+    const ignorado = memory("el backup corre a las tres");
+
+    const result = reinforce(db, { memory_ids: [usado] });
+
+    expect(result).toEqual({ reinforced: 1, unknown: 0 });
+    expect(salienceOf(usado)).toBeGreaterThan(0.4);
+    expect(salienceOf(ignorado)).toBe(0.4);
+  });
+
+  it("informa los ids que no existen en vez de fallar en silencio", () => {
+    const real = memory("el deploy usa docker compose");
+
+    const result = reinforce(db, { memory_ids: [real, "01INVENTADO000000000000000"] });
+
+    expect(result).toEqual({ reinforced: 1, unknown: 1 });
+  });
+
+  it("rechaza una lista vacía", () => {
+    expect(() => reinforce(db, { memory_ids: [] })).toThrow();
+  });
+});
+
+describe("MISMEM_REINFORCE_ON_RECALL", () => {
+  const previous = process.env.MISMEM_REINFORCE_ON_RECALL;
+  afterEach(() => {
+    if (previous === undefined) delete process.env.MISMEM_REINFORCE_ON_RECALL;
+    else process.env.MISMEM_REINFORCE_ON_RECALL = previous;
+  });
+
+  function memory(gist: string): string {
+    const episode = capture(db, { scope: "test", body: `source ${gist}` });
+    const id = consolidate(db, { scope: "test", gist, source_episode_ids: [episode.id] }).memory_id;
+    db.prepare("UPDATE memories SET salience = 0.4 WHERE id = ?").run(id);
+    return id;
+  }
+  const salienceOf = (id: string): number =>
+    (db.prepare("SELECT salience AS s FROM memories WHERE id = ?").get(id) as { s: number }).s;
+
+  it("en off, aparecer en el recall ya no sube la saliencia", () => {
+    const id = memory("el deploy usa docker compose");
+    process.env.MISMEM_REINFORCE_ON_RECALL = "off";
+
+    const hits = recall(db, { query: "deploy docker" }).hits;
+
+    expect(hits.some((h) => h.id === id)).toBe(true);
+    expect(salienceOf(id)).toBe(0.4);
+  });
+
+  it("sin la variable sigue reforzando como hasta ahora", () => {
+    const id = memory("el deploy usa docker compose");
+    delete process.env.MISMEM_REINFORCE_ON_RECALL;
+
+    recall(db, { query: "deploy docker" });
+
+    expect(salienceOf(id)).toBeGreaterThan(0.4);
   });
 });
 

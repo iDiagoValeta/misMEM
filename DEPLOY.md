@@ -294,6 +294,16 @@ Los defaults son los del código (`engine/src`).
 | `MISMEM_HTTP_HOST` | `0.0.0.0` | Bind address |
 | `MISMEM_AUTH_USER` / `MISMEM_AUTH_PASS` | — | BasicAuth nativa. Si falta cualquiera de las dos, **sin auth** |
 | `MISMEM_SALIENCE_HALF_LIFE_DAYS` | `90` | Días en que una memoria sin uso pierde la mitad de su saliencia |
+| `MISMEM_REINFORCE_ON_RECALL` | `on` | `off` deja de reforzar lo que el recall devuelve; la saliencia pasa a subir sólo con `reinforce`. Ver "Refuerzo por uso" |
+
+**Refuerzo por uso (hook del cliente, opcional)**
+
+| Var | Default | Descripción |
+|-----|---------|-------------|
+| `MISMEM_HOOK_URL` | — | Base del misMEM remoto (`https://…`). Sin ella, `mismem-used` escribe en la base local |
+| `MISMEM_HOOK_AUTH` | — | `usuario:clave` del BasicAuth del servidor. Nunca se imprime |
+| `MISMEM_HOOK_MIN_OVERLAP` | `0.2` | Fracción de las palabras distintivas del recuerdo que la respuesta tiene que repetir |
+| `MISMEM_HOOK_MIN_SHARED` | `3` | Piso de palabras compartidas: con pocas, un solapamiento alto es casualidad |
 
 **Búsqueda por significado**
 
@@ -339,3 +349,49 @@ Los defaults son los del código (`engine/src`).
 - [ ] Backup diario programado y probado (restaurar uno en otra máquina)
 - [ ] Si hay búsqueda por significado: `embed-cli.js --status` sin memorias faltantes
 - [ ] Si hay consolidación: primera corrida con `--dry-run` y logs con rotación
+
+## Refuerzo por uso (hook del cliente)
+
+Por defecto, `recall` refuerza todo lo que devuelve. Eso premia al recuerdo que aparece
+siempre y no sirve nunca: medido sobre 573 recuerdos devueltos en turnos reales, la
+mediana de solapamiento entre el recuerdo y la respuesta es **0,07**. La enorme mayoría
+de lo que se refuerza no se usó.
+
+Con el hook `Stop` de Claude Code, la saliencia pasa a seguir el uso real:
+
+```json
+{
+  "hooks": {
+    "Stop": [
+      { "hooks": [{ "type": "command", "command": "mismem-used" }] }
+    ]
+  }
+}
+```
+
+Y en el entorno del hook:
+
+```bash
+MISMEM_REINFORCE_ON_RECALL=off   # en el servidor: que aparecer deje de contar
+MISMEM_HOOK_URL=https://tu-mismem
+MISMEM_HOOK_AUTH=usuario:clave
+```
+
+`mismem-used` lee el `transcript_path` del payload, mira el último turno, y manda a
+`reinforce` sólo los recuerdos cuyas palabras distintivas reaparecen en la respuesta.
+Nunca sale con error ni escribe en stdout: un hook que rompe no vale un punto de saliencia.
+
+### Antes de apagar el refuerzo por aparición
+
+Mirá primero qué reforzaría, sin escribir nada:
+
+```bash
+mismem-used --transcript ~/.claude/projects/<proyecto>/<sesión>.jsonl --dry-run
+```
+
+**Con los umbrales por defecto cuenta como usado el 9 % de lo devuelto.** Es la señal que
+se busca, pero cambia el balance con el olvido: si casi nada se refuerza, el decaimiento
+manda y `forget` empieza a borrar memorias que antes se salvaban por aparecer. Conviene
+dejar `MISMEM_REINFORCE_ON_RECALL=on` unos días, mirar los `--dry-run`, y recién después
+apagarlo — ajustando `MISMEM_SALIENCE_HALF_LIFE_DAYS` o el `salience_below` de `forget`
+si hace falta.
