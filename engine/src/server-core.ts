@@ -127,7 +127,7 @@ const ALL_TOOLS = [...CANONICAL_TOOLS, ...ENGRAM_TOOLS];
 
 export function createServer(db: DB): Server {
   const server = new Server(
-    { name: "mismem", version: "0.4.0" },
+    { name: "mismem", version: "0.5.0" },
     { capabilities: { tools: {} } },
   );
 
