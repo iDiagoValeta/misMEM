@@ -11,6 +11,7 @@
  */
 import { readFileSync } from "node:fs";
 import { defaultDbPath, openDb } from "./db.js";
+import { callRemoteTool } from "./hook-client.js";
 import { reinforce } from "./tools.js";
 import {
   assistantReply,
@@ -27,6 +28,7 @@ function envNumber(name: string): number | undefined {
 
 /** Con un stdin que nadie cierra, un hook esperaría para siempre y colgaría el turno. */
 const STDIN_TIMEOUT_MS = 2000;
+const REMOTE_TIMEOUT_MS = 5000;
 
 function readStdin(): Promise<string> {
   return new Promise((resolve) => {
@@ -43,34 +45,6 @@ function readStdin(): Promise<string> {
     process.stdin.on("end", done);
     process.stdin.on("error", done);
   });
-}
-
-/** El servidor responde el JSON-RPC enmarcado como SSE: la carga viene en una línea `data:`. */
-function parseRpc(body: string): unknown {
-  const line = body.split("\n").find((l) => l.startsWith("data: "));
-  return JSON.parse(line ? line.slice(6) : body);
-}
-
-async function reinforceRemote(url: string, ids: string[]): Promise<void> {
-  const headers: Record<string, string> = {
-    "content-type": "application/json",
-    accept: "application/json, text/event-stream",
-  };
-  const auth = process.env.MISMEM_HOOK_AUTH;
-  if (auth) headers.authorization = `Basic ${Buffer.from(auth).toString("base64")}`;
-  const res = await fetch(`${url.replace(/\/+$/, "")}/mcp`, {
-    method: "POST",
-    headers,
-    body: JSON.stringify({
-      jsonrpc: "2.0",
-      id: 1,
-      method: "tools/call",
-      params: { name: "reinforce", arguments: { memory_ids: ids } },
-    }),
-  });
-  if (!res.ok) throw new Error(`HTTP ${res.status}`);
-  const parsed = parseRpc(await res.text()) as { error?: { message?: string } };
-  if (parsed.error) throw new Error(parsed.error.message ?? "error del servidor");
 }
 
 function reinforceLocal(ids: string[]): void {
@@ -129,7 +103,7 @@ async function main(): Promise<void> {
   if (used.length === 0) return;
 
   const url = process.env.MISMEM_HOOK_URL;
-  if (url) await reinforceRemote(url, used);
+  if (url) await callRemoteTool(url, "reinforce", { memory_ids: used }, REMOTE_TIMEOUT_MS);
   else reinforceLocal(used);
 }
 

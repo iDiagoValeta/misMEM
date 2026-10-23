@@ -226,7 +226,7 @@ export function recall(
     ...lexical.memories,
     ...lexical.episodes.map((r) => ({ ...r, layer: "episode" as const })),
   ].slice(0, input.limit);
-  return finalizeHits(db, hits, options, at);
+  return finalizeHits(db, hits, { ...options, reinforce: options.reinforce ?? input.reinforce }, at);
 }
 
 function semanticHitToRecall(hit: SemanticHit, at: number): RecallHit {
@@ -323,7 +323,7 @@ export async function recallHybrid(
     ...lexical.episodes.map((r) => ({ ...r, layer: "episode" as const })),
   ].slice(0, input.limit);
 
-  return finalizeHits(db, hits, options, at);
+  return finalizeHits(db, hits, { ...options, reinforce: options.reinforce ?? input.reinforce }, at);
 }
 
 export function consolidate(

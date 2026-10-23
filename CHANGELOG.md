@@ -2,6 +2,19 @@
 
 ## Sin publicar
 
+### misMEM puede adelantar recuerdos antes de que el modelo los pida
+
+- El modelo sólo recuerda lo que pide: si no llama a `recall`, no recuerda. `mismem-inject` es un
+  hook `UserPromptSubmit` de Claude Code que busca con el prompt y devuelve unos pocos recuerdos
+  por `additionalContext`.
+- La búsqueda va con `reinforce: false` (campo nuevo en la entrada de `recall`): algo que el
+  usuario no pidió no es uso y no puede subir la saliencia.
+- Lo que inyecta queda acotado a propósito: sin episodios (son verbatim y `forget` los borra),
+  3 recuerdos como mucho, 1.200 caracteres, nada que ya esté en el contexto, y nada de los ámbitos
+  de `MISMEM_HOOK_EXCLUDE_SCOPES`. Un prompt sin dos palabras con sustancia ni gasta la llamada.
+- **Lo inyectado viaja en cada prompt al proveedor del modelo.** `DEPLOY.md` explica cómo excluir
+  los ámbitos personales y cómo revisar con `--dry-run`, que imprime ids y ámbitos pero no el texto.
+
 ### La saliencia puede seguir el uso en vez de la aparición
 
 - `recall` reforzaba todo lo que devolvía, así que un recuerdo que aparece siempre y no sirve
