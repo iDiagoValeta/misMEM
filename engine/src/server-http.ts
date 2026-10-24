@@ -35,6 +35,7 @@ import {
 } from "./viewer.js";
 import { handleGraph, handleMemories, handleMemory, handleScopes, handleTrait } from "./viewer-api.js";
 import { serveUi } from "./viewer-static.js";
+import { ACTION_MAX_BODY_BYTES, handleAction, writeGuard } from "./viewer-actions.js";
 
 const PORT = Number(process.env.MISMEM_HTTP_PORT ?? 3200);
 const HOST = process.env.MISMEM_HTTP_HOST ?? "0.0.0.0";
@@ -133,7 +134,7 @@ const httpServer = createHttpServer(async (req, res) => {
       return;
     }
 
-    // Read-only viewer + JSON API. Misma BasicAuth que /mcp.
+    // Viewer + su API. Misma BasicAuth que /mcp; las escrituras, además, con writeGuard.
     if (
       url.pathname === "/viewer" ||
       url.pathname.startsWith("/viewer/") ||
@@ -144,9 +145,35 @@ const httpServer = createHttpServer(async (req, res) => {
         send401(res);
         return;
       }
+      if (req.method === "POST" && url.pathname.startsWith("/api/")) {
+        const rejected = writeGuard(req);
+        if (rejected) {
+          res.statusCode = rejected.status;
+          res.setHeader("content-type", "application/json; charset=utf-8");
+          res.end(JSON.stringify({ error: rejected.error }));
+          return;
+        }
+        let body: unknown;
+        try {
+          body = await readJsonBody(req, ACTION_MAX_BODY_BYTES);
+        } catch (err) {
+          const tooLarge = err instanceof BodyTooLargeError;
+          if (!tooLarge && !(err instanceof InvalidJsonError)) throw err;
+          res.statusCode = tooLarge ? 413 : 400;
+          if (tooLarge) res.setHeader("connection", "close");
+          res.setHeader("content-type", "application/json; charset=utf-8");
+          res.end(JSON.stringify({ error: tooLarge ? "cuerpo demasiado grande" : "JSON inválido" }));
+          return;
+        }
+        if (await handleAction(db, res, url.pathname, body)) return;
+        res.statusCode = 404;
+        res.setHeader("content-type", "application/json; charset=utf-8");
+        res.end(JSON.stringify({ error: `unknown action: ${url.pathname}` }));
+        return;
+      }
       if (req.method !== "GET") {
         res.statusCode = 405;
-        res.setHeader("allow", "GET");
+        res.setHeader("allow", "GET, POST");
         res.end("Method Not Allowed");
         return;
       }

@@ -1,0 +1,176 @@
+/**
+ * Escrituras desde la interfaz: corregir, deshacer una consolidación, olvidar y cristalizar.
+ *
+ *   POST /api/memory/:id/edit           {gist, details?}
+ *   POST /api/memory/:id/unconsolidate  la memoria se borra y sus episodios vuelven a pendientes
+ *   POST /api/memory/:id/forget         la memoria y sus episodios se borran
+ *   POST /api/trait/:id/forget          el rasgo se borra
+ *   POST /api/crystallize               {scope, name, polarity?, memory_ids}
+ *
+ * Hasta acá toda la API del viewer era GET y la seguridad se apoyaba en eso. Una escritura
+ * pide además (writeGuard): POST con cuerpo JSON, que desde otro origen obliga a un preflight
+ * CORS que el servidor no contesta, y un Origin igual al propio servidor, que corta un
+ * formulario o un fetch desde otra web. La auth y el filtro de Host de server-http siguen
+ * delante, y el filtro de Host es el que cubre el DNS rebinding.
+ */
+import type { IncomingMessage, ServerResponse } from "node:http";
+import type { Database as DB } from "better-sqlite3";
+import { z } from "zod";
+import { CrystallizeInput } from "./schema.js";
+import { crystallize } from "./tools.js";
+import { embedPendingMemories } from "./embeddings/index.js";
+import { json } from "./viewer.js";
+
+/** Una acción no necesita más: lo grande va por capture o la ingesta. */
+export const ACTION_MAX_BODY_BYTES = 256 * 1024;
+
+/** Por qué se rechaza una escritura, o null si pasa. */
+export function writeGuard(req: IncomingMessage): { status: number; error: string } | null {
+  if (req.method !== "POST") return { status: 405, error: "las acciones van por POST" };
+  const type = req.headers["content-type"] ?? "";
+  if (!type.toLowerCase().startsWith("application/json")) {
+    return { status: 415, error: "las acciones llevan cuerpo application/json" };
+  }
+  const origin = req.headers.origin;
+  if (!origin) return { status: 403, error: "falta Origin" };
+  let originHost: string;
+  try {
+    originHost = new URL(origin).host;
+  } catch {
+    return { status: 403, error: "Origin inválido" };
+  }
+  if (originHost !== req.headers.host) return { status: 403, error: "Origin ajeno" };
+  return null;
+}
+
+const EditInput = z.object({
+  gist: z.string().trim().min(1).max(2000),
+  details: z.string().max(20_000).nullable().optional(),
+});
+
+type Reembed = (db: DB) => Promise<unknown>;
+
+const defaultReembed: Reembed = (db) => embedPendingMemories(db);
+
+function exists(db: DB, table: "memories" | "traits", id: string): boolean {
+  return db.prepare(`SELECT 1 FROM ${table} WHERE id = ?`).get(id) !== undefined;
+}
+
+export async function editMemory(
+  db: DB,
+  id: string,
+  raw: unknown,
+  reembed: Reembed = defaultReembed,
+): Promise<{ id: string; reembedded: boolean }> {
+  const input = EditInput.parse(raw);
+  db.transaction(() => {
+    db.prepare("UPDATE memories SET gist = ?, details = ? WHERE id = ?").run(
+      input.gist,
+      input.details?.trim() || null,
+      id,
+    );
+    // El vector viejo describe otro texto: sin borrarlo, la búsqueda semántica seguiría
+    // encontrando la memoria por lo que decía antes.
+    db.prepare("DELETE FROM memory_embeddings WHERE memory_id = ?").run(id);
+  })();
+  try {
+    await reembed(db);
+    return { id, reembedded: true };
+  } catch {
+    // Sin embedder la memoria se sigue encontrando por palabras; el backfill la recupera.
+    return { id, reembedded: false };
+  }
+}
+
+/** Deshace la consolidación: los episodios vuelven a pendientes por el ON DELETE SET NULL. */
+export function unconsolidateMemory(db: DB, id: string): { id: string; episodes_released: number } {
+  return db.transaction(() => {
+    const { n } = db.prepare("SELECT COUNT(*) AS n FROM episodes WHERE consolidated_into = ?").get(id) as {
+      n: number;
+    };
+    // Vuelven sin strikes: que el LLM no los citara antes no dice nada de la próxima vez.
+    db.prepare("UPDATE episodes SET uncited_count = 0 WHERE consolidated_into = ?").run(id);
+    db.prepare("DELETE FROM memories WHERE id = ?").run(id);
+    return { id, episodes_released: n };
+  })();
+}
+
+/** Olvida como `forget`: la memoria y lo que la respaldaba. */
+export function forgetMemory(db: DB, id: string): { id: string; episodes_deleted: number } {
+  return db.transaction(() => {
+    const episodes = db.prepare("DELETE FROM episodes WHERE consolidated_into = ?").run(id).changes;
+    db.prepare("DELETE FROM memories WHERE id = ?").run(id);
+    return { id, episodes_deleted: episodes };
+  })();
+}
+
+export function forgetTrait(db: DB, id: string): { id: string } {
+  db.prepare("DELETE FROM traits WHERE id = ?").run(id);
+  return { id };
+}
+
+/** Como la tool `crystallize`, pero sin aceptar memorias que no existen o de otro ámbito. */
+export function crystallizeFromUi(db: DB, raw: unknown): ReturnType<typeof crystallize> {
+  const input = CrystallizeInput.parse(raw);
+  const ids = [...new Set(input.evidence_memory_ids)];
+  const found = db
+    .prepare("SELECT id, scope FROM memories WHERE id IN (SELECT value FROM json_each(?))")
+    .all(JSON.stringify(ids)) as Array<{ id: string; scope: string }>;
+  const missing = ids.filter((id) => !found.some((m) => m.id === id));
+  if (missing.length > 0) throw new ActionError(400, `memorias que no existen: ${missing.join(", ")}`);
+  const foreign = found.filter((m) => m.scope !== input.scope).map((m) => m.id);
+  if (foreign.length > 0) throw new ActionError(400, `memorias de otro ámbito: ${foreign.join(", ")}`);
+  return crystallize(db, { ...input, evidence_memory_ids: ids });
+}
+
+export class ActionError extends Error {
+  constructor(
+    readonly status: number,
+    message: string,
+  ) {
+    super(message);
+    this.name = "ActionError";
+  }
+}
+
+const ROUTE = /^\/api\/(memory|trait)\/([^/]+)\/(edit|unconsolidate|forget)$/;
+
+/**
+ * Despacha una acción ya autorizada (writeGuard) con su cuerpo leído. Devuelve false si la
+ * ruta no es una acción, para que el llamador siga con su 404.
+ */
+export async function handleAction(
+  db: DB,
+  res: ServerResponse,
+  pathname: string,
+  body: unknown,
+  reembed: Reembed = defaultReembed,
+): Promise<boolean> {
+  try {
+    if (pathname === "/api/crystallize") {
+      json(res, 200, crystallizeFromUi(db, body));
+      return true;
+    }
+    const match = ROUTE.exec(pathname);
+    if (!match) return false;
+    const [, layer, rawId, action] = match;
+    const id = decodeURIComponent(rawId ?? "");
+    const table = layer === "trait" ? "traits" : "memories";
+    if (!exists(db, table, id)) {
+      json(res, 404, { error: `${layer} not found: ${id}` });
+      return true;
+    }
+    if (layer === "trait") {
+      if (action !== "forget") return false;
+      json(res, 200, forgetTrait(db, id));
+    } else if (action === "edit") json(res, 200, await editMemory(db, id, body, reembed));
+    else if (action === "unconsolidate") json(res, 200, unconsolidateMemory(db, id));
+    else json(res, 200, forgetMemory(db, id));
+    return true;
+  } catch (err) {
+    if (err instanceof ActionError) json(res, err.status, { error: err.message });
+    else if (err instanceof z.ZodError) json(res, 400, { error: err.issues.map((i) => i.message).join("; ") });
+    else throw err;
+    return true;
+  }
+}
