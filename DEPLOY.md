@@ -362,6 +362,7 @@ Los defaults son los del código (`engine/src`).
 | `DEEPSEEK_BASE_URL` / `OPENROUTER_BASE_URL` | las oficiales | Para un proxy o un servidor compatible |
 | `OPENROUTER_APP_URL` / `OPENROUTER_APP_TITLE` | repo de misMEM / `misMEM` | Cabeceras de atribución de OpenRouter |
 | `MISMEM_CONSOLIDATION_MAX_TOKENS` | `8192` | Tope de la respuesta; si se corta, la tanda se parte a la mitad |
+| `MISMEM_CONSOLIDATION_TIMEOUT_MS` | `120000` | Tope por llamada al LLM; si vence, ese ámbito falla y sus episodios quedan para la próxima corrida |
 | `MISMEM_CONSOLIDATION_MAX_PROMPT_CHARS` | `60000` | Caracteres de episodios por llamada |
 | `MISMEM_CONSOLIDATION_MAX_EPISODE_CHARS` | `12000` | Un episodio más largo viaja recortado (principio y final) |
 | `MISMEM_CONSOLIDATION_MAX_CALLS` | `60` | Llamadas por corrida; lo pendiente queda para la siguiente |
