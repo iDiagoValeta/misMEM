@@ -27,6 +27,8 @@ RUN corepack enable \
 
 COPY tsconfig.json ./
 COPY src ./src
+# La interfaz se compila a dist/ui junto con el servidor.
+COPY ui ./ui
 RUN pnpm build
 
 # ---------- runtime ----------

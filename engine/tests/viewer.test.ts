@@ -6,7 +6,6 @@ import {
   handleStats,
   handleRecent,
   handleSearch,
-  handleViewerHtml,
 } from "../src/viewer.js";
 
 let db: DB;
@@ -132,17 +131,5 @@ describe("viewer: /api/search", () => {
       urlFor("/api/search?q=%20"),
     );
     expect(res.statusCode).toBe(400);
-  });
-});
-
-describe("viewer: /viewer HTML", () => {
-  it("serves HTML with security headers", () => {
-    const res = mockRes();
-    handleViewerHtml(res as unknown as import("node:http").ServerResponse);
-    expect(res.statusCode).toBe(200);
-    expect(res.headers["content-type"]).toMatch(/text\/html/);
-    expect(res.headers["x-content-type-options"]).toBe("nosniff");
-    expect(res.headers["content-security-policy"]).toMatch(/default-src 'none'/);
-    expect(res.body).toContain("<title>misMEM viewer</title>");
   });
 });

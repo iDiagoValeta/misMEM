@@ -1,0 +1,629 @@
+/*
+ * Lenguaje visual de Daimon (superficies neutras, tinta casi negra, acento índigo y
+ * JetBrains Mono en la interfaz) con una sola licencia propia: el texto de cada recuerdo
+ * lleva tanta tinta como salience tiene hoy. Lo que se va olvidando se aclara.
+ */
+:root {
+  --paper: #f6f6f7;
+  --raised: #ffffff;
+  --ink: #1d1d20;
+  --ink-soft: #3f3f46;
+  --ink-muted: #74747e;
+  --ink-faint: #a2a2ab;
+  --line: #e4e4e8;
+  --hover: #eeeef1;
+
+  /* Un color por capa, el mismo en la lista, el detalle y el grafo. */
+  --memory: oklch(0.55 0.17 268);
+  --trait: oklch(0.56 0.1 195);
+  --episode: oklch(0.6 0.03 70);
+  --focus: oklch(0.55 0.17 268);
+
+  --mono: "JetBrains Mono", ui-monospace, monospace;
+  --read: "Literata Variable", Georgia, serif;
+  --radius: 6px;
+
+  color-scheme: light;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --paper: #1a1917;
+    --raised: #21201d;
+    --ink: #e8e4dc;
+    --ink-soft: #d2cec6;
+    --ink-muted: #a09c93;
+    --ink-faint: #6f6c64;
+    --line: #2f2d29;
+    --hover: #282622;
+    --memory: oklch(0.72 0.13 268);
+    --trait: oklch(0.72 0.09 195);
+    --episode: oklch(0.7 0.03 70);
+    --focus: oklch(0.72 0.13 268);
+    color-scheme: dark;
+  }
+}
+
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+}
+
+html,
+body {
+  margin: 0;
+  height: 100%;
+  background: var(--paper);
+  color: var(--ink);
+  font: 400 14px/1.5 var(--mono);
+  -webkit-font-smoothing: antialiased;
+}
+
+#root {
+  height: 100%;
+}
+
+button {
+  font: inherit;
+  color: inherit;
+  background: none;
+  border: 0;
+  padding: 0;
+  cursor: pointer;
+  text-align: left;
+}
+
+:focus-visible {
+  outline: 2px solid var(--focus);
+  outline-offset: 2px;
+  border-radius: 3px;
+}
+
+/* ── Esqueleto ─────────────────────────────────────────────── */
+
+.app {
+  display: grid;
+  grid-template-columns: 15rem minmax(0, 1fr) minmax(22rem, 36%);
+  grid-template-rows: auto minmax(0, 1fr);
+  grid-template-areas:
+    "bar bar bar"
+    "scopes list detail";
+  height: 100%;
+}
+
+.bar {
+  grid-area: bar;
+  display: flex;
+  align-items: center;
+  gap: 1.5rem;
+  padding: 0.75rem 1.25rem;
+  border-bottom: 1px solid var(--line);
+  background: var(--raised);
+}
+
+.brand {
+  font-weight: 600;
+  font-size: 1.05rem;
+  color: var(--ink);
+  text-decoration: none;
+  letter-spacing: -0.01em;
+}
+
+.brand span {
+  color: var(--memory);
+}
+
+.search {
+  flex: 1;
+  max-width: 34rem;
+}
+
+.search input {
+  width: 100%;
+  font: inherit;
+  color: var(--ink);
+  background: var(--paper);
+  border: 1px solid var(--line);
+  border-radius: var(--radius);
+  padding: 0.5rem 0.75rem;
+}
+
+.search input::placeholder {
+  color: var(--ink-faint);
+}
+
+.scopes {
+  grid-area: scopes;
+  overflow-y: auto;
+  padding: 1rem 0.5rem;
+  border-right: 1px solid var(--line);
+}
+
+.list {
+  grid-area: list;
+  overflow-y: auto;
+  padding: 0 1.5rem 3rem;
+}
+
+.detail {
+  grid-area: detail;
+  overflow-y: auto;
+  border-left: 1px solid var(--line);
+  background: var(--raised);
+}
+
+/* ── Ámbitos ───────────────────────────────────────────────── */
+
+.scope-select {
+  display: none;
+}
+
+.scope-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.scope {
+  display: grid;
+  grid-template-columns: minmax(0, 1fr) auto auto;
+  gap: 0.5rem;
+  width: 100%;
+  padding: 0.35rem 0.6rem;
+  border-radius: var(--radius);
+  color: var(--ink-soft);
+}
+
+.scope:hover {
+  background: var(--hover);
+}
+
+.scope[aria-current="true"] {
+  background: var(--hover);
+  color: var(--ink);
+  font-weight: 600;
+}
+
+.scope-name {
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
+.scope-count {
+  color: var(--ink-muted);
+  font-variant-numeric: tabular-nums;
+}
+
+.scope-pending {
+  color: var(--episode);
+  font-variant-numeric: tabular-nums;
+}
+
+/* ── Pestañas y filas ──────────────────────────────────────── */
+
+.tabs {
+  position: sticky;
+  top: 0;
+  z-index: 1;
+  display: flex;
+  gap: 1.25rem;
+  padding: 1rem 0 0.75rem;
+  background: var(--paper);
+}
+
+.tab {
+  padding: 0.25rem 0;
+  color: var(--ink-muted);
+  border-bottom: 2px solid transparent;
+}
+
+.tab[aria-selected="true"] {
+  color: var(--ink);
+  border-bottom-color: var(--memory);
+}
+
+.tab[data-layer="traits"][aria-selected="true"] {
+  border-bottom-color: var(--trait);
+}
+
+.tab[data-layer="pending"][aria-selected="true"] {
+  border-bottom-color: var(--episode);
+}
+
+.rows {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.row {
+  --layer: var(--memory);
+  display: grid;
+  gap: 0.35rem;
+  width: 100%;
+  padding: 0.85rem 0.9rem 0.85rem 1.1rem;
+  border-radius: var(--radius);
+  position: relative;
+}
+
+.row[data-layer="trait"] {
+  --layer: var(--trait);
+}
+
+.row[data-layer="episode"] {
+  --layer: var(--episode);
+}
+
+/* La marca de la capa, a la izquierda: el mismo color que en el grafo. */
+.row::before {
+  content: "";
+  position: absolute;
+  left: 0.35rem;
+  top: 0.95rem;
+  bottom: 0.95rem;
+  width: 3px;
+  border-radius: 2px;
+  background: var(--layer);
+  opacity: 0.55;
+}
+
+.row:hover {
+  background: var(--hover);
+}
+
+.row[aria-current="true"] {
+  background: var(--raised);
+  box-shadow: inset 0 0 0 1px var(--line);
+}
+
+.row[aria-current="true"]::before {
+  opacity: 1;
+}
+
+.row-text {
+  font-family: var(--read);
+  font-size: 1.06rem;
+  line-height: 1.5;
+  max-width: 68ch;
+  color: color-mix(in oklab, var(--ink) var(--ink-amount, 100%), var(--paper));
+  display: -webkit-box;
+  -webkit-line-clamp: 3;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.row[data-layer="episode"] .row-text {
+  font-family: var(--mono);
+  font-size: 0.86rem;
+  color: var(--ink-soft);
+}
+
+.row-meta {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.25rem 1rem;
+  font-size: 0.78rem;
+  color: var(--ink-muted);
+}
+
+.salience {
+  margin-left: auto;
+  font-variant-numeric: tabular-nums;
+}
+
+.layer-name {
+  color: var(--layer);
+}
+
+.note {
+  color: var(--ink-muted);
+  padding: 1rem 0;
+  max-width: 60ch;
+}
+
+.search-heading {
+  padding: 1.1rem 0 0.75rem;
+  margin: 0;
+  color: var(--ink-muted);
+}
+
+.search-heading q {
+  color: var(--ink);
+}
+
+/* ── Detalle ───────────────────────────────────────────────── */
+
+.detail-empty {
+  color: var(--ink-faint);
+  padding: 2.5rem 2rem;
+  max-width: 32ch;
+}
+
+.detail-body {
+  --layer: var(--memory);
+  padding: 1.75rem 2rem 3rem;
+}
+
+.detail-body[data-layer="trait"] {
+  --layer: var(--trait);
+}
+
+.detail-body[data-layer="episode"] {
+  --layer: var(--episode);
+}
+
+.close {
+  display: none;
+  float: right;
+  color: var(--ink-muted);
+}
+
+.kind {
+  margin: 0 0 0.75rem;
+  color: var(--layer);
+  font-weight: 600;
+}
+
+.detail-text {
+  margin: 0;
+  font-family: var(--read);
+  font-size: 1.45rem;
+  line-height: 1.45;
+  letter-spacing: -0.005em;
+  max-width: 40ch;
+  color: color-mix(in oklab, var(--ink) var(--ink-amount, 100%), var(--raised));
+}
+
+.episode-text {
+  font-family: var(--mono);
+  font-size: 0.92rem;
+  line-height: 1.6;
+  white-space: pre-wrap;
+  max-width: none;
+}
+
+.details {
+  margin: 1rem 0 0;
+  font-family: var(--read);
+  font-size: 1rem;
+  line-height: 1.6;
+  color: var(--ink-soft);
+  white-space: pre-wrap;
+  max-width: 60ch;
+}
+
+.meter {
+  display: grid;
+  gap: 0.35rem;
+  margin: 1.5rem 0 0;
+}
+
+.meter-label {
+  font-weight: 600;
+}
+
+.meter-track {
+  height: 4px;
+  border-radius: 2px;
+  background: var(--line);
+  overflow: hidden;
+}
+
+.meter-fill {
+  display: block;
+  height: 100%;
+  background: var(--layer);
+}
+
+.meter-note {
+  font-size: 0.78rem;
+  color: var(--ink-muted);
+}
+
+.facts {
+  display: grid;
+  grid-template-columns: max-content 1fr;
+  gap: 0.3rem 1.25rem;
+  margin: 1.5rem 0 0;
+  font-size: 0.86rem;
+}
+
+.facts dt {
+  color: var(--ink-muted);
+}
+
+.facts dd {
+  margin: 0;
+  overflow-wrap: anywhere;
+}
+
+.chain {
+  margin-top: 2rem;
+}
+
+.chain h2 {
+  font-size: 0.92rem;
+  font-weight: 600;
+  margin: 0 0 0.75rem;
+}
+
+.sources {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 0.75rem;
+}
+
+.source {
+  padding: 0.6rem 0 0.6rem 0.9rem;
+  border-left: 3px solid var(--episode);
+}
+
+.source-text {
+  margin: 0;
+  font-size: 0.84rem;
+  line-height: 1.6;
+  color: var(--ink-soft);
+  white-space: pre-wrap;
+  display: -webkit-box;
+  -webkit-line-clamp: 8;
+  -webkit-box-orient: vertical;
+  overflow: hidden;
+}
+
+.source-meta {
+  display: flex;
+  gap: 1rem;
+  margin: 0.35rem 0 0;
+  font-size: 0.76rem;
+  color: var(--ink-muted);
+}
+
+.source-missing {
+  font-size: 0.84rem;
+  color: var(--ink-faint);
+  padding-left: 0.9rem;
+  border-left: 3px dashed var(--line);
+}
+
+.links {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 0.5rem;
+}
+
+.link {
+  font-family: var(--read);
+  font-size: 1rem;
+  line-height: 1.45;
+  padding-left: 0.9rem;
+  border-left: 3px solid var(--trait);
+  color: color-mix(in oklab, var(--ink) var(--ink-amount, 100%), var(--raised));
+}
+
+.link[data-layer="memory"] {
+  border-left-color: var(--memory);
+}
+
+.link:hover {
+  text-decoration: underline;
+  text-underline-offset: 3px;
+}
+
+/* ── Pantallas medianas: los ámbitos pasan a desplegable ───── */
+
+@media (max-width: 1100px) {
+  .app {
+    grid-template-columns: minmax(0, 1fr) minmax(20rem, 42%);
+    grid-template-areas:
+      "bar bar"
+      "list detail";
+  }
+
+  /* El desplegable se superpone a la derecha de la barra, que le deja sitio. */
+  .scopes {
+    grid-area: bar;
+    justify-self: end;
+    align-self: center;
+    padding: 0 1.25rem;
+    border: 0;
+    overflow: visible;
+    z-index: 2;
+  }
+
+  .scope-list {
+    display: none;
+  }
+
+  .scope-select {
+    display: block;
+    font: inherit;
+    color: var(--ink);
+    background: var(--paper);
+    border: 1px solid var(--line);
+    border-radius: var(--radius);
+    padding: 0.45rem 0.5rem;
+    max-width: 14rem;
+  }
+
+  .search {
+    margin-right: 15rem;
+  }
+}
+
+/* ── Móvil: una columna y el detalle a pantalla completa ───── */
+
+@media (max-width: 720px) {
+  .app {
+    grid-template-columns: minmax(0, 1fr);
+    grid-template-rows: auto auto minmax(0, 1fr);
+    grid-template-areas:
+      "bar"
+      "scopes"
+      "list";
+  }
+
+  .bar {
+    padding: 0.75rem 1rem;
+    gap: 1rem;
+  }
+
+  .search {
+    margin-right: 0;
+  }
+
+  .scopes {
+    grid-area: scopes;
+    justify-self: stretch;
+    padding: 0.75rem 1rem 0;
+  }
+
+  .scope-select {
+    width: 100%;
+    max-width: none;
+  }
+
+  .list {
+    padding: 0 1rem 3rem;
+  }
+
+  .detail {
+    position: fixed;
+    inset: 0;
+    z-index: 10;
+    border: 0;
+    transform: translateY(100%);
+    transition: transform 0.22s ease;
+  }
+
+  .app[data-detail="open"] .detail {
+    transform: none;
+  }
+
+  .detail-empty {
+    display: none;
+  }
+
+  .detail-body {
+    padding: 1.25rem 1rem 3rem;
+  }
+
+  .close {
+    display: block;
+  }
+
+  .detail-text {
+    font-size: 1.25rem;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .detail {
+    transition: none;
+  }
+}

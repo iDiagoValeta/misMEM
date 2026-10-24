@@ -25,12 +25,12 @@ import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/
 import { openDefaultDb } from "./db.js";
 import { createServer } from "./server-core.js";
 import {
-  handleViewerHtml,
   handleStats,
   handleRecent,
   handleSearch,
 } from "./viewer.js";
 import { handleGraph, handleMemories, handleMemory, handleScopes, handleTrait } from "./viewer-api.js";
+import { serveUi } from "./viewer-static.js";
 
 const PORT = Number(process.env.MISMEM_HTTP_PORT ?? 3200);
 const HOST = process.env.MISMEM_HTTP_HOST ?? "0.0.0.0";
@@ -98,6 +98,7 @@ const httpServer = createHttpServer(async (req, res) => {
     // Read-only viewer + JSON API. Misma BasicAuth que /mcp.
     if (
       url.pathname === "/viewer" ||
+      url.pathname.startsWith("/viewer/") ||
       url.pathname === "/" ||
       url.pathname.startsWith("/api/")
     ) {
@@ -125,7 +126,13 @@ const httpServer = createHttpServer(async (req, res) => {
         const id = decodeURIComponent(detail[2] ?? "");
         return detail[1] === "memory" ? handleMemory(db, res, id) : handleTrait(db, res, id);
       }
-      return handleViewerHtml(res);
+      if (url.pathname.startsWith("/api/")) {
+        res.statusCode = 404;
+        res.setHeader("content-type", "application/json; charset=utf-8");
+        res.end(JSON.stringify({ error: `unknown endpoint: ${url.pathname}` }));
+        return;
+      }
+      return serveUi(res, url.pathname);
     }
 
     res.statusCode = 404;

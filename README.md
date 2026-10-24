@@ -92,7 +92,8 @@ Y en `mcp.json`: `"command": "node", "args": ["<ruta-al-repo>/misMEM/engine/dist
 
 - **`engine/src/server.ts`** — MCP server stdio (uso local).
 - **`engine/src/server-http.ts`** — Streamable HTTP para deploy remoto (BasicAuth opcional, `/healthz`). Ver [DEPLOY.md](./DEPLOY.md).
-- **`engine/src/viewer.ts`** — panel read-only en `/viewer` + `/api/{stats,recent,search}`.
+- **`engine/ui/`** — la interfaz (React + Vite, compilada a `dist/ui/`) que `server-http` sirve en `/viewer`: memorias por salience de hoy, rasgos, lo pendiente y de dónde sale cada recuerdo. `pnpm dev:ui` la levanta en desarrollo contra un servidor en `:3200`.
+- **`engine/src/viewer.ts`**, **`viewer-api.ts`** — su API de sólo lectura: `/api/{stats,recent,search,scopes,memories,graph}` y `/api/{memory,trait}/:id`.
 - **Consolidación LLM** — cron nocturno que destila episodios en memorias con DeepSeek directo u OpenRouter, con pre-filtro Pareto para descartar ruido. Ver [engine/src/consolidation/README.md](engine/src/consolidation/README.md).
 - **CLIs** — `mismem-ingest` (exports de ChatGPT / transcripts de VS Code), `mismem-consolidate`, `mismem-forget`, `mismem-stats`, `mismem-embed`, `mismem-migrate-engram` y `mismem-bench` (mide el recall con un banco de preguntas propio, sin reforzar).
 
