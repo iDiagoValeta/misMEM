@@ -100,6 +100,16 @@ describe("exportObsidian", () => {
     expect(keep).toBeTruthy();
   });
 
+  it("un <palabra> del texto no corta el Markdown de la nota: se escapa", () => {
+    const ids = [capture(db, { scope: "a", body: "probé fuser -k <puerto>/tcp" }).id];
+    consolidate(db, { scope: "a", gist: "Mata por puerto", details: "usa fuser -k <puerto>/tcp o ss -tlnp", source_episode_ids: ids });
+    exportObsidian(db, { dir: vault });
+    const note = read("Memorias", notes("Memorias")[0] as string);
+    expect(note).toContain("usa fuser -k &lt;puerto>/tcp");
+    expect(note).toContain("> probé fuser -k &lt;puerto>/tcp");
+    expect(note).not.toMatch(/<puerto>/);
+  });
+
   it("--dry-run cuenta sin escribir", () => {
     memoryFrom("a", "memoria", ["x"]);
     const stats = exportObsidian(db, { dir: vault, dryRun: true });

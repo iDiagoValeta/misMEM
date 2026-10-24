@@ -84,6 +84,12 @@ const shortId = (id: string): string => id.slice(-6);
 const day = (ts: number): string => new Date(ts).toISOString().slice(0, 10);
 /** YAML entre comillas dobles: JSON es un subconjunto válido. */
 const yaml = (value: string): string => JSON.stringify(value);
+/**
+ * Texto de un recuerdo dentro de la nota. Un `<palabra>` (p. ej. "fuser -k <puerto>/tcp")
+ * Obsidian lo toma por una etiqueta HTML que abre un bloque, y todo lo que sigue deja de
+ * leerse como Markdown: los enlaces de Origen salían en crudo. Se escapa el `<`.
+ */
+const text = (value: string): string => value.replace(/</g, "&lt;");
 /** Una etiqueta de Obsidian no admite espacios. */
 const tag = (value: string): string => value.replace(/\s+/g, "-");
 
@@ -156,16 +162,16 @@ export function exportObsidian(db: DB, opts: ExportOptions): ExportStats {
       `tags: [mismem/memoria, ${yaml(`ámbito/${tag(m.scope)}`)}]`,
       "---",
       "",
-      `# ${m.gist}`,
+      `# ${text(m.gist)}`,
       "",
     ];
-    if (m.details && m.details !== m.gist) lines.push(m.details, "");
+    if (m.details && m.details !== m.gist) lines.push(text(m.details), "");
     lines.push("## Origen", "");
     const sources = byMemory.get(m.id) ?? [];
     if (sources.length === 0) lines.push("Sin episodios: ya los borró `forget`.");
     for (const e of sources) {
       if (opts.episodes) lines.push(`- ${link(episodePath(e), `${day(e.created_at)} ${short(e.body)}`)}`);
-      else lines.push(`> ${day(e.created_at)}`, ...e.body.split("\n").map((l) => `> ${l}`), "");
+      else lines.push(`> ${day(e.created_at)}`, ...text(e.body).split("\n").map((l) => `> ${l}`), "");
     }
     const citing = citedBy.get(m.id) ?? [];
     if (citing.length > 0) {
@@ -196,7 +202,7 @@ export function exportObsidian(db: DB, opts: ExportOptions): ExportStats {
       `tags: [mismem/rasgo, ${yaml(`ámbito/${tag(t.scope)}`)}]`,
       "---",
       "",
-      `# ${t.name}`,
+      `# ${text(t.name)}`,
       "",
       "## Lo sostienen",
       "",
@@ -221,7 +227,7 @@ export function exportObsidian(db: DB, opts: ExportOptions): ExportStats {
         "tags: [mismem/episodio]",
         "---",
         "",
-        e.body,
+        text(e.body),
         "",
         memory ? `Consolidado en ${link(memory)}` : "",
         "",
