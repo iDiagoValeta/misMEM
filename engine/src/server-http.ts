@@ -8,8 +8,8 @@
  * Env vars:
  *   MISMEM_HTTP_PORT     (default 3200)
  *   MISMEM_HTTP_HOST     (default 0.0.0.0)
- *   MISMEM_AUTH_USER     opcional — si está, requiere BasicAuth en /mcp
- *   MISMEM_AUTH_PASS     opcional — pareja del anterior
+ *   MISMEM_AUTH_USER     opcional: con MISMEM_AUTH_PASS, BasicAuth en /mcp, /viewer y /api
+ *   MISMEM_AUTH_PASS     pareja del anterior; con una sola de las dos no arranca
  *   MISMEM_DB            ruta SQLite (default ~/.mismem/mem.db)
  *   MISMEM_ALLOWED_HOSTS sin auth, nombres de Host aceptados además de loopback (coma)
  *   MISMEM_HTTP_MAX_BODY_BYTES  tope del cuerpo de POST /mcp (default 4 MiB); más, 413
@@ -27,6 +27,7 @@ import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/
 import { openDefaultDb } from "./db.js";
 import { hostAllowed, parseHostList } from "./http-host.js";
 import { BodyTooLargeError, InvalidJsonError, loadMaxBodyBytes, readJsonBody } from "./http-body.js";
+import { loadAuth } from "./http-guard.js";
 import { createServer } from "./server-core.js";
 import {
   handleStats,
@@ -39,10 +40,17 @@ import { ACTION_MAX_BODY_BYTES, handleAction, writeGuard } from "./viewer-action
 
 const PORT = Number(process.env.MISMEM_HTTP_PORT ?? 3200);
 const HOST = process.env.MISMEM_HTTP_HOST ?? "0.0.0.0";
-const AUTH_USER = process.env.MISMEM_AUTH_USER;
-const AUTH_PASS = process.env.MISMEM_AUTH_PASS;
 const ALLOWED_HOSTS = parseHostList(process.env.MISMEM_ALLOWED_HOSTS);
 const MAX_BODY_BYTES = loadMaxBodyBytes();
+
+let AUTH: ReturnType<typeof loadAuth>;
+try {
+  AUTH = loadAuth();
+} catch (err) {
+  // eslint-disable-next-line no-console
+  console.error(`[mismem-http] ${(err as Error).message}`);
+  process.exit(1);
+}
 
 function safeEqual(a: string, b: string): boolean {
   const ab = Buffer.from(a, "utf8");
@@ -52,7 +60,7 @@ function safeEqual(a: string, b: string): boolean {
 }
 
 function checkBasicAuth(req: IncomingMessage): boolean {
-  if (!AUTH_USER || !AUTH_PASS) return true;
+  if (!AUTH) return true;
   const header = req.headers.authorization;
   if (!header?.startsWith("Basic ")) return false;
   const decoded = Buffer.from(header.slice(6), "base64").toString("utf8");
@@ -60,7 +68,7 @@ function checkBasicAuth(req: IncomingMessage): boolean {
   if (sep < 0) return false;
   const user = decoded.slice(0, sep);
   const pass = decoded.slice(sep + 1);
-  return safeEqual(user, AUTH_USER) && safeEqual(pass, AUTH_PASS);
+  return safeEqual(user, AUTH.user) && safeEqual(pass, AUTH.pass);
 }
 
 function send401(res: ServerResponse): void {
@@ -73,7 +81,7 @@ const db = openDefaultDb();
 
 const httpServer = createHttpServer(async (req, res) => {
   try {
-    if (!hostAllowed(req.headers.host, { auth: Boolean(AUTH_USER && AUTH_PASS), extra: ALLOWED_HOSTS })) {
+    if (!hostAllowed(req.headers.host, { auth: AUTH !== null, extra: ALLOWED_HOSTS })) {
       res.statusCode = 403;
       res.end("Forbidden host");
       return;

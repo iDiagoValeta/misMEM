@@ -23,6 +23,8 @@ export interface LlmConfig {
   appUrl?: string;
   appTitle?: string;
   maxTokens?: number;
+  /** Tope por llamada: sin él, un proveedor que acepta y no contesta colgaba la corrida. */
+  timeoutMs?: number;
 }
 
 // El máximo de salida de deepseek-chat: menos corta respuestas de tandas grandes.
@@ -43,6 +45,14 @@ export class LlmInvalidJsonError extends Error {
   override name = "LlmInvalidJsonError";
 }
 
+// De sobra para generar 8192 tokens; lo que tarde más es un proveedor colgado.
+const DEFAULT_TIMEOUT_MS = 120_000;
+
+function loadTimeoutMs(): number {
+  const value = Number(process.env.MISMEM_CONSOLIDATION_TIMEOUT_MS);
+  return Number.isFinite(value) && value > 0 ? value : DEFAULT_TIMEOUT_MS;
+}
+
 function loadMaxTokens(): number {
   const value = Number(process.env.MISMEM_CONSOLIDATION_MAX_TOKENS);
   return Number.isFinite(value) && value > 0 ? value : DEFAULT_MAX_TOKENS;
@@ -58,6 +68,7 @@ export function loadLlmConfig(): LlmConfig {
       model: configured && !configured.includes("/") ? configured : "deepseek-chat",
       baseUrl: process.env.DEEPSEEK_BASE_URL ?? "https://api.deepseek.com/v1",
       maxTokens: loadMaxTokens(),
+      timeoutMs: loadTimeoutMs(),
     };
   }
   const apiKey = process.env.OPENROUTER_API_KEY;
@@ -73,6 +84,7 @@ export function loadLlmConfig(): LlmConfig {
     appUrl: process.env.OPENROUTER_APP_URL ?? "https://github.com/lucasmella-stack/misMEM",
     appTitle: process.env.OPENROUTER_APP_TITLE ?? "misMEM",
     maxTokens: loadMaxTokens(),
+    timeoutMs: loadTimeoutMs(),
   };
 }
 
@@ -81,7 +93,27 @@ export async function distill(
   systemPrompt: string,
   userPrompt: string,
 ): Promise<DistilledMemory[]> {
+  const timeoutMs = cfg.timeoutMs ?? DEFAULT_TIMEOUT_MS;
+  // La misma señal corta también la lectura del cuerpo, que es donde se cuelga un stream a medias.
+  const signal = AbortSignal.timeout(timeoutMs);
+  try {
+    return await request(cfg, systemPrompt, userPrompt, signal);
+  } catch (err) {
+    if ((err as Error)?.name === "TimeoutError") {
+      throw new Error(`LLM sin respuesta en ${timeoutMs} ms`);
+    }
+    throw err;
+  }
+}
+
+async function request(
+  cfg: LlmConfig,
+  systemPrompt: string,
+  userPrompt: string,
+  signal: AbortSignal,
+): Promise<DistilledMemory[]> {
   const res = await fetch(`${cfg.baseUrl}/chat/completions`, {
+    signal,
     method: "POST",
     headers: {
       "Content-Type": "application/json",

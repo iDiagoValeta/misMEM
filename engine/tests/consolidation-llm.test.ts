@@ -12,6 +12,7 @@ const ENV_KEYS = [
   "OPENROUTER_API_KEY",
   "MISMEM_CONSOLIDATION_MODEL",
   "MISMEM_CONSOLIDATION_MAX_TOKENS",
+  "MISMEM_CONSOLIDATION_TIMEOUT_MS",
 ] as const;
 const saved = Object.fromEntries(ENV_KEYS.map((k) => [k, process.env[k]]));
 
@@ -64,8 +65,35 @@ describe("loadLlmConfig", () => {
   });
 });
 
+describe("timeout del LLM", () => {
+  const dummy = "x";
+
+  it("120 s por defecto, configurable", () => {
+    setEnv({ DEEPSEEK_API_KEY: dummy });
+    expect(loadLlmConfig().timeoutMs).toBe(120_000);
+    setEnv({ DEEPSEEK_API_KEY: dummy, MISMEM_CONSOLIDATION_TIMEOUT_MS: "30000" });
+    expect(loadLlmConfig().timeoutMs).toBe(30_000);
+    setEnv({ OPENROUTER_API_KEY: dummy, MISMEM_CONSOLIDATION_TIMEOUT_MS: "abc" });
+    expect(loadLlmConfig().timeoutMs).toBe(120_000);
+  });
+});
+
 describe("distill", () => {
   const cfg = { apiKey: "k", model: "deepseek-chat", baseUrl: "https://llm.test/v1", maxTokens: 1234 };
+
+  it("un proveedor que no responde corta en el tope en vez de colgar la corrida", async () => {
+    // Acepta el pedido y nunca contesta: sólo termina si alguien aborta la señal.
+    const hang = vi.fn(
+      (_url: string, init: RequestInit) =>
+        new Promise<Response>((_resolve, reject) => {
+          init.signal?.addEventListener("abort", () => reject(init.signal?.reason));
+        }),
+    );
+    vi.stubGlobal("fetch", hang);
+    const started = Date.now();
+    await expect(distill({ ...cfg, timeoutMs: 50 }, "sys", "user")).rejects.toThrow(/sin respuesta en 50 ms/);
+    expect(Date.now() - started).toBeLessThan(2000);
+  });
 
   it("manda el tope de tokens en el pedido", async () => {
     const fetchMock = vi.fn().mockResolvedValue(
