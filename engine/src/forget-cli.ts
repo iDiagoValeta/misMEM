@@ -4,7 +4,8 @@
  * Ideal para correr después de mismem-consolidate.
  */
 import { defaultDbPath, openDefaultDb } from "./db.js";
-import { ArgsError, parseForgetArgs } from "./forget-args.js";
+import { ArgsError, EXIT_USAGE } from "./cli-args.js";
+import { parseForgetArgs } from "./forget-args.js";
 import { forget } from "./tools.js";
 
 function help(): void {
@@ -36,7 +37,7 @@ async function main(): Promise<void> {
     if (!(err instanceof ArgsError)) throw err;
     console.error(`[forget] ${err.message}\n`);
     help();
-    process.exit(2);
+    process.exit(EXIT_USAGE);
   }
   if (opts.help) { help(); return; }
 

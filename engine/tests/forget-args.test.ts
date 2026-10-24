@@ -1,5 +1,6 @@
 import { describe, it, expect } from "vitest";
-import { ArgsError, parseForgetArgs } from "../src/forget-args.js";
+import { ArgsError } from "../src/cli-args.js";
+import { parseForgetArgs } from "../src/forget-args.js";
 
 describe("parseForgetArgs", () => {
   it("sin argumentos usa los defaults", () => {
