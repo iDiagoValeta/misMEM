@@ -11,6 +11,7 @@
  *   MISMEM_AUTH_USER     opcional — si está, requiere BasicAuth en /mcp
  *   MISMEM_AUTH_PASS     opcional — pareja del anterior
  *   MISMEM_DB            ruta SQLite (default ~/.mismem/mem.db)
+ *   MISMEM_ALLOWED_HOSTS sin auth, nombres de Host aceptados además de loopback (coma)
  *
  * Endpoints:
  *   GET  /healthz   →  200 ok (liveness)
@@ -23,6 +24,7 @@ import type { IncomingMessage, ServerResponse } from "node:http";
 import { timingSafeEqual } from "node:crypto";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 import { openDefaultDb } from "./db.js";
+import { hostAllowed, parseHostList } from "./http-host.js";
 import { createServer } from "./server-core.js";
 import {
   handleViewerHtml,
@@ -35,6 +37,7 @@ const PORT = Number(process.env.MISMEM_HTTP_PORT ?? 3200);
 const HOST = process.env.MISMEM_HTTP_HOST ?? "0.0.0.0";
 const AUTH_USER = process.env.MISMEM_AUTH_USER;
 const AUTH_PASS = process.env.MISMEM_AUTH_PASS;
+const ALLOWED_HOSTS = parseHostList(process.env.MISMEM_ALLOWED_HOSTS);
 
 function safeEqual(a: string, b: string): boolean {
   const ab = Buffer.from(a, "utf8");
@@ -65,6 +68,11 @@ const db = openDefaultDb();
 
 const httpServer = createHttpServer(async (req, res) => {
   try {
+    if (!hostAllowed(req.headers.host, { auth: Boolean(AUTH_USER && AUTH_PASS), extra: ALLOWED_HOSTS })) {
+      res.statusCode = 403;
+      res.end("Forbidden host");
+      return;
+    }
     const url = new URL(req.url ?? "/", `http://${req.headers.host ?? "localhost"}`);
 
     if (url.pathname === "/healthz") {
