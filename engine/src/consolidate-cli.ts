@@ -59,6 +59,7 @@ Env:
   OPENROUTER_API_KEY                    alternativa; hace falta una (salvo --dry-run)
   MISMEM_CONSOLIDATION_MODEL            default deepseek-chat (OpenRouter: deepseek/deepseek-chat)
   MISMEM_CONSOLIDATION_MAX_TOKENS       default 8192
+  MISMEM_CONSOLIDATION_TIMEOUT_MS       default 120000 (tope por llamada al LLM)
   MISMEM_CONSOLIDATION_MAX_PROMPT_CHARS default 60000
   MISMEM_CONSOLIDATION_MAX_EPISODE_CHARS default 12000
   MISMEM_CONSOLIDATION_MAX_CALLS        default 60
