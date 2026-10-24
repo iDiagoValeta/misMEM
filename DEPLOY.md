@@ -356,8 +356,11 @@ Los defaults son los del código (`engine/src`).
 
 | Var | Default | Descripción |
 |-----|---------|-------------|
-| `DEEPSEEK_API_KEY` | — | Consolida con DeepSeek directo. Gana sobre OpenRouter |
-| `OPENROUTER_API_KEY` | — | Alternativa. Hace falta una de las dos (salvo `--dry-run`) |
+| `MISMEM_LLM_PROVIDER` | — | `deepseek`, `openrouter`, `openai` o `compatible`. Sin ella, el primero con su variable, en ese orden |
+| `DEEPSEEK_API_KEY` | — | Consolida con DeepSeek directo |
+| `OPENROUTER_API_KEY` | — | OpenRouter |
+| `OPENAI_API_KEY` / `OPENAI_BASE_URL` | — / la oficial | OpenAI. Obliga a elegir `MISMEM_CONSOLIDATION_MODEL` |
+| `MISMEM_LLM_BASE_URL` / `MISMEM_LLM_API_KEY` | — | Cualquier servidor compatible con la API de OpenAI (vLLM, LM Studio, Ollama en `/v1`); la clave es opcional y el modelo obligatorio |
 | `MISMEM_CONSOLIDATION_MODEL` | `deepseek-chat` (OpenRouter: `deepseek/deepseek-chat`) | En DeepSeek un nombre con `/` se ignora |
 | `DEEPSEEK_BASE_URL` / `OPENROUTER_BASE_URL` | las oficiales | Para un proxy o un servidor compatible |
 | `OPENROUTER_APP_URL` / `OPENROUTER_APP_TITLE` | repo de misMEM / `misMEM` | Cabeceras de atribución de OpenRouter |
