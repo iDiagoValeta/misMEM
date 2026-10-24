@@ -87,9 +87,11 @@ const yaml = (value: string): string => JSON.stringify(value);
 /**
  * Texto de un recuerdo dentro de la nota. Un `<palabra>` (p. ej. "fuser -k <puerto>/tcp")
  * Obsidian lo toma por una etiqueta HTML que abre un bloque, y todo lo que sigue deja de
- * leerse como Markdown: los enlaces de Origen salían en crudo. Se escapa el `<`.
+ * leerse como Markdown: los enlaces de Origen salían en crudo. Un `[s]` suelto sale como
+ * enlace roto. Se escapan con barra, que Obsidian muestra limpio en lectura y en edición
+ * (una entidad `&lt;` se ve tal cual al editar).
  */
-const text = (value: string): string => value.replace(/</g, "&lt;");
+const text = (value: string): string => value.replace(/[<[\]]/g, (c) => `\\${c}`);
 /** Una etiqueta de Obsidian no admite espacios. */
 const tag = (value: string): string => value.replace(/\s+/g, "-");
 
