@@ -11,7 +11,7 @@ import {
 } from "./schema.js";
 import { contentHash } from "./db.js";
 import { excludeNoiseSql } from "./noise.js";
-import { searchTerms } from "./terms.js";
+import { plain, searchTerms } from "./terms.js";
 import {
   embedTexts,
   loadEmbeddingConfig,
@@ -35,13 +35,50 @@ const RRF_K = 60;
 // candidatos) y una saliencia alta puede adelantar dos o tres lugares.
 const SALIENCE_RRF_WEIGHT = 0.0002;
 
+const quoteFts = (term: string): string => `"${term.replace(/"/g, '""')}"`;
+
 function escapeFts(query: string): string {
   // Cada palabra entre comillas: FTS5 las une con AND y los caracteres especiales no rompen el MATCH.
   // Sin palabras, un término vacío no matchea nada y evita una expresión inválida.
-  const escaped = searchTerms(query)
-    .map((t) => `"${t.replace(/"/g, '""')}"`)
-    .join(" ");
+  const escaped = searchTerms(query).map(quoteFts).join(" ");
   return escaped || '""';
+}
+
+// El tokenizador no reduce a raíz: sin esto "controlo" no encuentra "controlan" ni "deudas"
+// encuentra "deuda". Una palabra de 5 letras o más busca por su principio, sin las últimas
+// tres (que es donde cambian género, número y conjugación) y nunca por menos de 4.
+const PREFIX_FROM_LENGTH = 5;
+const PREFIX_TRIM = 3;
+const PREFIX_MIN = 4;
+
+// Cuántas palabras tienen que coincidir en la consulta de rescate. Con una sola se colaría
+// cualquier recuerdo que comparta un verbo ("¿qué decidimos sobre kubernetes?" contra uno
+// de docker); con dos, una pregunta de dos palabras sigue exigiendo ambas.
+const RELAXED_MIN_MATCHES = 2;
+// Las parejas crecen con el cuadrado: 12 palabras son 66 parejas, de sobra para un prompt.
+const RELAXED_MAX_TERMS = 12;
+
+/**
+ * La consulta de rescate cuando la estricta no encontró nada: basta con que coincidan dos
+ * de las palabras, y por raíz aproximada. Una pregunta entera casi nunca repite todas las
+ * palabras de un recuerdo; el ranking de FTS5 sube lo que coincide en más términos.
+ */
+function relaxedFts(query: string): string {
+  const terms = [
+    ...new Set(
+      searchTerms(query).map((term) => {
+        const word = plain(term);
+        if (word.length < PREFIX_FROM_LENGTH) return quoteFts(word);
+        return `${quoteFts(word.slice(0, Math.max(PREFIX_MIN, word.length - PREFIX_TRIM)))}*`;
+      }),
+    ),
+  ].slice(0, RELAXED_MAX_TERMS);
+  if (terms.length < RELAXED_MIN_MATCHES) return terms[0] ?? '""';
+  const pairs: string[] = [];
+  for (let i = 0; i < terms.length; i++) {
+    for (let j = i + 1; j < terms.length; j++) pairs.push(`(${terms[i]} ${terms[j]})`);
+  }
+  return pairs.join(" OR ");
 }
 
 export function capture(db: DB, raw: unknown): { id: string; deduped: boolean } {
@@ -108,50 +145,47 @@ function lexicalCandidates(
   memories: RecallHit[];
   episodes: EpisodeCandidate[];
 } {
-  const fts = escapeFts(input.query);
+  const strict = escapeFts(input.query);
+  const relaxed = relaxedFts(input.query);
+  // Por capa: que un rasgo coincida no tiene que impedir el rescate de las memorias.
+  const withFallback = <T>(run: (q: string) => T[]): T[] => {
+    const rows = run(strict);
+    return rows.length === 0 && relaxed !== strict ? run(relaxed) : rows;
+  };
   const scopeFilter = input.scope ? "AND t.scope = @scope" : "";
 
-  const traitRows = db
-    .prepare(
-      `SELECT t.id, t.scope, t.name AS text, t.created_at
-       FROM traits_fts f JOIN traits t ON t.rowid = f.rowid
-       WHERE traits_fts MATCH @q ${scopeFilter}
-       ORDER BY rank, t.id LIMIT @limit`,
-    )
-    .all({
-      q: fts,
-      scope: input.scope,
-      limit: CANDIDATE_POOL_LIMIT,
-    }) as TraitCandidate[];
+  const traitStmt = db.prepare(
+    `SELECT t.id, t.scope, t.name AS text, t.created_at
+     FROM traits_fts f JOIN traits t ON t.rowid = f.rowid
+     WHERE traits_fts MATCH @q ${scopeFilter}
+     ORDER BY rank, t.id LIMIT @limit`,
+  );
+  const traitRows = withFallback(
+    (q) => traitStmt.all({ q, scope: input.scope, limit: CANDIDATE_POOL_LIMIT }) as TraitCandidate[],
+  );
 
-  const memoryRows = db
-    .prepare(
-      `SELECT m.id, m.scope, m.gist AS text, m.salience, m.created_at,
-              m.last_accessed_at, m.salience_updated_at, rank AS fts_rank
-       FROM memories_fts f JOIN memories m ON m.rowid = f.rowid
-       WHERE memories_fts MATCH @q ${input.scope ? "AND m.scope = @scope" : ""}
-         AND ${excludeNoiseSql("m")}
-       ORDER BY rank, m.salience DESC, m.id LIMIT @limit`,
-    )
-    .all({
-      q: fts,
-      scope: input.scope,
-      limit: MEMORY_FTS_SCAN_LIMIT,
-    }) as MemoryCandidate[];
+  const memoryStmt = db.prepare(
+    `SELECT m.id, m.scope, m.gist AS text, m.salience, m.created_at,
+            m.last_accessed_at, m.salience_updated_at, rank AS fts_rank
+     FROM memories_fts f JOIN memories m ON m.rowid = f.rowid
+     WHERE memories_fts MATCH @q ${input.scope ? "AND m.scope = @scope" : ""}
+       AND ${excludeNoiseSql("m")}
+     ORDER BY rank, m.salience DESC, m.id LIMIT @limit`,
+  );
+  const memoryRows = withFallback(
+    (q) => memoryStmt.all({ q, scope: input.scope, limit: MEMORY_FTS_SCAN_LIMIT }) as MemoryCandidate[],
+  );
 
-  const episodeRows = db
-    .prepare(
-      `SELECT e.id, e.scope, e.body AS text, e.created_at
-       FROM episodes_fts f JOIN episodes e ON e.rowid = f.rowid
-       WHERE episodes_fts MATCH @q ${input.scope ? "AND e.scope = @scope" : ""}
-         AND e.consolidated_into IS NULL
-       ORDER BY e.created_at DESC, e.id LIMIT @limit`,
-    )
-    .all({
-      q: fts,
-      scope: input.scope,
-      limit: CANDIDATE_POOL_LIMIT,
-    }) as EpisodeCandidate[];
+  const episodeStmt = db.prepare(
+    `SELECT e.id, e.scope, e.body AS text, e.created_at
+     FROM episodes_fts f JOIN episodes e ON e.rowid = f.rowid
+     WHERE episodes_fts MATCH @q ${input.scope ? "AND e.scope = @scope" : ""}
+       AND e.consolidated_into IS NULL
+     ORDER BY e.created_at DESC, e.id LIMIT @limit`,
+  );
+  const episodeRows = withFallback(
+    (q) => episodeStmt.all({ q, scope: input.scope, limit: CANDIDATE_POOL_LIMIT }) as EpisodeCandidate[],
+  );
 
   const memories: RecallHit[] = memoryRows
     .map((r) => ({
