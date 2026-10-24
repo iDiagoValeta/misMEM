@@ -24,11 +24,13 @@ const TYPES: Record<string, string> = {
   ".map": "application/json; charset=utf-8",
 };
 
-// Todo sale del propio servidor; React aplica estilos por CSSOM, que la CSP no bloquea.
+// Los scripts sólo del propio servidor. Los estilos además admiten inline: la librería del
+// grafo inserta sus propios <style> (tooltip) y sin esto el navegador los bloquea. Un estilo
+// inyectado no ejecuta código; lo que importa cerrar es script-src.
 const CSP = [
   "default-src 'none'",
   "script-src 'self'",
-  "style-src 'self'",
+  "style-src 'self' 'unsafe-inline'",
   "font-src 'self'",
   "img-src 'self' data:",
   "connect-src 'self'",

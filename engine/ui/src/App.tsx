@@ -1,11 +1,14 @@
-import { useEffect, useState, type FormEvent } from "react";
+import { lazy, Suspense, useEffect, useState, type FormEvent } from "react";
 import { api, type EpisodeItem } from "./api";
 import { useLoad } from "./useLoad";
 import { Scopes } from "./components/Scopes";
 import { EpisodeList, MemoryList, SearchResults, TraitList } from "./components/Lists";
 import { Detail } from "./components/Detail";
 
-export type View = "memories" | "traits" | "pending";
+// three.js pesa más que todo lo demás junto: se baja sólo al abrir el grafo.
+const GraphView = lazy(() => import("./components/GraphView"));
+
+export type View = "memories" | "traits" | "pending" | "graph";
 
 export type Selection =
   | { layer: "memory"; id: string }
@@ -16,6 +19,7 @@ const VIEWS: Array<{ id: View; label: string }> = [
   { id: "memories", label: "Memorias" },
   { id: "traits", label: "Rasgos" },
   { id: "pending", label: "Sin consolidar" },
+  { id: "graph", label: "Grafo" },
 ];
 
 export function App() {
@@ -62,7 +66,7 @@ export function App() {
         <Scopes state={scopes} current={scope} onChange={setScope} />
       </nav>
 
-      <main className="list">
+      <main className="list" data-view={query ? "search" : view}>
         {query ? (
           <SearchResults query={query} scope={scope} selected={selected} onSelect={setSelected} />
         ) : (
@@ -84,6 +88,11 @@ export function App() {
             {view === "memories" && <MemoryList scope={scope} selected={selected} onSelect={setSelected} />}
             {view === "traits" && <TraitList scope={scope} selected={selected} onSelect={setSelected} />}
             {view === "pending" && <EpisodeList scope={scope} selected={selected} onSelect={setSelected} />}
+            {view === "graph" && (
+              <Suspense fallback={<p className="note">Cargando el grafo…</p>}>
+                <GraphView scope={scope} onSelect={setSelected} />
+              </Suspense>
+            )}
           </>
         )}
       </main>

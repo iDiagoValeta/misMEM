@@ -2,7 +2,15 @@ import { describe, it, expect, beforeEach } from "vitest";
 import type { Database as DB } from "better-sqlite3";
 import { openDb } from "../src/db.js";
 import { capture, consolidate, crystallize } from "../src/tools.js";
-import { handleGraph, handleMemories, handleMemory, handleScopes, handleTrait } from "../src/viewer-api.js";
+import { saveMemoryEmbedding } from "../src/embeddings/index.js";
+import {
+  handleGraph,
+  handleMemories,
+  handleMemory,
+  handleScopes,
+  handleTrait,
+  relatedLinks,
+} from "../src/viewer-api.js";
 
 const DAY = 86_400_000;
 let db: DB;
@@ -157,5 +165,58 @@ describe("viewer-api: /api/graph", () => {
     const full = call((res) => handleGraph(db, res, url("/api/graph?episodes=1"))).body;
     expect(full.links).toContainEqual({ source: episodeIds[0], target: memoryId, kind: "origin" });
     expect(full.nodes.some((n: { layer: string }) => n.layer === "episode")).toBe(true);
+  });
+});
+
+describe("viewer-api: aristas por parecido", () => {
+  const vec = (...xs: number[]) => Float32Array.from(xs);
+  function withVector(gist: string, v: Float32Array, model = "m"): string {
+    const { memoryId } = memoryFrom("a", gist, [gist]);
+    saveMemoryEmbedding(db, memoryId, model, v);
+    return memoryId;
+  }
+
+  it("une las memorias parecidas una vez y deja fuera lo que no llega al umbral", () => {
+    const a = withVector("luces del teclado", vec(1, 0, 0));
+    const b = withVector("nitro-kb controla las luces", vec(0.95, 0.31, 0));
+    const c = withVector("la deuda del cashflow", vec(0, 0, 1));
+
+    const links = relatedLinks(db, [a, b, c], { minScore: 0.75 });
+    expect(links).toHaveLength(1);
+    expect(links[0]).toMatchObject({ kind: "related" });
+    expect([links[0]?.source, links[0]?.target].sort()).toEqual([a, b].sort());
+    expect(links[0]?.score).toBeGreaterThan(0.9);
+  });
+
+  it("cada memoria aporta como mucho perNode vecinas", () => {
+    // a-b 0,99, a-c 0,97, b-c 0,995: con una vecina por memoria, a elige b, b y c se eligen
+    // entre sí, y a-c (que nadie eligió primero) queda fuera.
+    const a = withVector("a", vec(1, 0));
+    const b = withVector("b", vec(0.99, 0.141));
+    const c = withVector("c", vec(0.97, 0.243));
+    const pairs = (perNode: number) =>
+      relatedLinks(db, [a, b, c], { minScore: 0.9, perNode })
+        .map((l) => [l.source, l.target].sort().join("|"))
+        .sort();
+    expect(pairs(1)).toEqual([[a, b].sort().join("|"), [b, c].sort().join("|")].sort());
+    expect(pairs(3)).toHaveLength(3);
+  });
+
+  it("no compara vectores de modelos distintos", () => {
+    const a = withVector("uno", vec(1, 0), "modelo-a");
+    const b = withVector("dos", vec(1, 0), "modelo-a");
+    const c = withVector("tres", vec(1, 0), "modelo-b");
+    const links = relatedLinks(db, [a, b, c], { minScore: 0.5 });
+    expect(links).toHaveLength(1);
+    expect([links[0]?.source, links[0]?.target]).not.toContain(c);
+  });
+
+  it("/api/graph sólo las incluye con related=1", () => {
+    withVector("uno", vec(1, 0));
+    withVector("dos", vec(1, 0));
+    const plain = call((res) => handleGraph(db, res, url("/api/graph"))).body;
+    expect(plain.links.some((l: { kind: string }) => l.kind === "related")).toBe(false);
+    const related = call((res) => handleGraph(db, res, url("/api/graph?related=1"))).body;
+    expect(related.links.filter((l: { kind: string }) => l.kind === "related")).toHaveLength(1);
   });
 });

@@ -333,6 +333,83 @@ button {
   color: var(--ink);
 }
 
+/* ── Grafo ─────────────────────────────────────────────────── */
+
+.list[data-view="graph"] {
+  display: flex;
+  flex-direction: column;
+  overflow: hidden;
+  padding-bottom: 0;
+}
+
+.tab[data-layer="graph"][aria-selected="true"] {
+  border-bottom-color: var(--ink);
+}
+
+.graph {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  min-height: 0;
+}
+
+.graph-bar {
+  display: flex;
+  flex-wrap: wrap;
+  align-items: center;
+  gap: 0.5rem 1.25rem;
+  padding: 0 0 0.75rem;
+  font-size: 0.82rem;
+  color: var(--ink-muted);
+}
+
+.legend {
+  --layer: var(--memory);
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  color: var(--ink-soft);
+}
+
+.legend[data-layer="trait"] {
+  --layer: var(--trait);
+}
+
+.legend[data-layer="episode"] {
+  --layer: var(--episode);
+}
+
+.legend::before {
+  content: "";
+  width: 0.6rem;
+  height: 0.6rem;
+  border-radius: 50%;
+  background: var(--layer);
+}
+
+.legend[data-layer="trait"]::before {
+  border-radius: 1px;
+  transform: rotate(45deg) scale(0.85);
+}
+
+.legend input {
+  accent-color: var(--episode);
+  margin: 0;
+}
+
+.graph-hint {
+  margin-left: auto;
+}
+
+.graph-canvas {
+  flex: 1;
+  min-height: 20rem;
+  border-radius: var(--radius);
+  overflow: hidden;
+  box-shadow: inset 0 0 0 1px var(--line);
+  margin-bottom: 1rem;
+}
+
 /* ── Detalle ───────────────────────────────────────────────── */
 
 .detail-empty {
