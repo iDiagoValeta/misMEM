@@ -312,7 +312,7 @@ Los defaults son los del código (`engine/src`).
 | `MISMEM_HTTP_PORT` | `3200` | Puerto HTTP |
 | `MISMEM_HTTP_HOST` | `0.0.0.0` | Bind address |
 | `MISMEM_ALLOWED_HOSTS` | — | Sin auth, el servidor sólo atiende `Host` de loopback (`localhost`, `127.0.0.1`, `[::1]`, `*.localhost`) y responde 403 al resto, contra DNS rebinding. Lista separada por comas para añadir otros nombres. Con auth no se filtra |
-| `MISMEM_AUTH_USER` / `MISMEM_AUTH_PASS` | — | BasicAuth nativa. Si falta cualquiera de las dos, **sin auth** |
+| `MISMEM_AUTH_USER` / `MISMEM_AUTH_PASS` | — | BasicAuth nativa. Sin ninguna, **sin auth**; con una sola, el servidor no arranca |
 | `MISMEM_SALIENCE_HALF_LIFE_DAYS` | `90` | Días en que una memoria sin uso pierde la mitad de su saliencia |
 | `MISMEM_REINFORCE_ON_RECALL` | `on` | `off` deja de reforzar lo que el recall devuelve; la saliencia pasa a subir sólo con `reinforce`. Ver "Refuerzo por uso" |
 
@@ -363,6 +363,7 @@ Los defaults son los del código (`engine/src`).
 | `DEEPSEEK_BASE_URL` / `OPENROUTER_BASE_URL` | las oficiales | Para un proxy o un servidor compatible |
 | `OPENROUTER_APP_URL` / `OPENROUTER_APP_TITLE` | repo de misMEM / `misMEM` | Cabeceras de atribución de OpenRouter |
 | `MISMEM_CONSOLIDATION_MAX_TOKENS` | `8192` | Tope de la respuesta; si se corta, la tanda se parte a la mitad |
+| `MISMEM_CONSOLIDATION_TIMEOUT_MS` | `120000` | Tope por llamada al LLM; si vence, ese ámbito falla y sus episodios quedan para la próxima corrida |
 | `MISMEM_CONSOLIDATION_MAX_PROMPT_CHARS` | `60000` | Caracteres de episodios por llamada |
 | `MISMEM_CONSOLIDATION_MAX_EPISODE_CHARS` | `12000` | Un episodio más largo viaja recortado (principio y final) |
 | `MISMEM_CONSOLIDATION_MAX_CALLS` | `60` | Llamadas por corrida; lo pendiente queda para la siguiente |
