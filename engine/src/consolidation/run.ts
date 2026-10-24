@@ -343,17 +343,6 @@ async function processScope(
     }
   }
 
-  if (distilled.length === 0) {
-    log(`[consolidation] scope="${scope}" -> LLM dijo "sin se\u00f1al", marcando ${candidates.length} como noise-consolidated`);
-    const stub = consolidate(db, {
-      scope,
-      gist: `[noise] ${candidates.length} episodios sin se\u00f1al consolidable (${new Date(cutoff).toISOString().slice(0, 10)})`,
-      source_episode_ids: candidates.map((e) => e.id),
-    });
-    db.prepare("UPDATE memories SET salience = 0.05 WHERE id = ?").run(stub.memory_id);
-    return { memories: 1 + (dropped_l0 > 0 ? 1 : 0), episodes: stub.consolidated + dropped_l0, dropped_l0 };
-  }
-
   const validIds = new Set(candidates.map((e) => e.id));
   const cited = new Set<string>();
   let totalEpisodes = dropped_l0;
@@ -380,9 +369,15 @@ async function processScope(
 
   // Lo que el LLM leyó y no citó puede no tener señal, o puede habérsele pasado. Cada
   // tanda sin citar suma un strike y recién al agotarlos pasa a ruido; mientras le queden,
-  // vuelve en la próxima corrida. Sólo si la tanda dio alguna memoria válida; una respuesta
-  // con todo inventado deja los episodios pendientes y sin strike.
-  const uncited = cited.size > 0 ? candidates.filter((e) => !cited.has(e.id)) : [];
+  // vuelve en la próxima corrida. Una lista vacía ("sin señal") cuenta igual para toda la
+  // tanda: antes la mandaba entera a ruido a la primera, y un mal día del modelo (o un
+  // episodio que le pide devolver la lista vacía) se llevaba hasta maxBatch episodios.
+  // Una respuesta con todo inventado, en cambio, deja los episodios pendientes y sin strike.
+  if (distilled.length === 0) {
+    log(`[consolidation] scope="${scope}" -> LLM dijo "sin se\u00f1al" para ${candidates.length} episodios: strike a todos`);
+  }
+  const uncited =
+    distilled.length === 0 ? candidates : cited.size > 0 ? candidates.filter((e) => !cited.has(e.id)) : [];
   if (uncited.length > 0) {
     const bump = db.prepare("UPDATE episodes SET uncited_count = uncited_count + 1 WHERE id = ?");
     const strikesOf = db.prepare("SELECT uncited_count FROM episodes WHERE id = ?");
