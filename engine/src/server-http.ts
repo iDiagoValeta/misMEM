@@ -30,6 +30,7 @@ import {
   handleRecent,
   handleSearch,
 } from "./viewer.js";
+import { handleGraph, handleMemories, handleMemory, handleScopes, handleTrait } from "./viewer-api.js";
 
 const PORT = Number(process.env.MISMEM_HTTP_PORT ?? 3200);
 const HOST = process.env.MISMEM_HTTP_HOST ?? "0.0.0.0";
@@ -115,6 +116,14 @@ const httpServer = createHttpServer(async (req, res) => {
       if (url.pathname === "/api/search") {
         await handleSearch(db, res, url);
         return;
+      }
+      if (url.pathname === "/api/scopes") return handleScopes(db, res);
+      if (url.pathname === "/api/memories") return handleMemories(db, res, url);
+      if (url.pathname === "/api/graph") return handleGraph(db, res, url);
+      const detail = /^\/api\/(memory|trait)\/([^/]+)$/.exec(url.pathname);
+      if (detail) {
+        const id = decodeURIComponent(detail[2] ?? "");
+        return detail[1] === "memory" ? handleMemory(db, res, id) : handleTrait(db, res, id);
       }
       return handleViewerHtml(res);
     }
