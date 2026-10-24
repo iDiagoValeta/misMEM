@@ -1,10 +1,11 @@
-import { lazy, Suspense, useEffect, useState, type FormEvent } from "react";
+import { lazy, Suspense, useCallback, useEffect, useState, type FormEvent } from "react";
 import { actions, api, type EpisodeItem, type Polarity } from "./api";
 import { useLoad } from "./useLoad";
 import { Scopes } from "./components/Scopes";
 import { EpisodeList, MemoryList, SearchResults, TraitList } from "./components/Lists";
 import { Detail } from "./components/Detail";
 import { Dialog } from "./components/Dialog";
+import { Consolidate } from "./components/Consolidate";
 
 // three.js pesa más que todo lo demás junto: se baja sólo al abrir el grafo.
 const GraphView = lazy(() => import("./components/GraphView"));
@@ -39,6 +40,7 @@ export function App() {
   const [version, setVersion] = useState(0);
   const [picked, setPicked] = useState<Map<string, string> | null>(null);
   const [crystallizing, setCrystallizing] = useState(false);
+  const [consolidating, setConsolidating] = useState(false);
   const scopes = useLoad(() => api.scopes(), [version]);
 
   // Escape cierra el detalle (en el móvil ocupa toda la pantalla), salvo que lo esté usando
@@ -50,6 +52,8 @@ export function App() {
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, []);
+
+  const refresh = useCallback(() => setVersion((v) => v + 1), []);
 
   const changed = (next?: Selection | null) => {
     setVersion((v) => v + 1);
@@ -90,6 +94,9 @@ export function App() {
             aria-label="Buscar en la memoria"
           />
         </form>
+        <button className="button bar-action" onClick={() => setConsolidating(true)}>
+          Consolidar ahora
+        </button>
       </header>
 
       <nav className="scopes" aria-label="Ámbitos">
@@ -176,6 +183,10 @@ export function App() {
           <p className="detail-empty">Elige un recuerdo para ver de dónde sale y qué lo cita.</p>
         )}
       </aside>
+
+      {consolidating && (
+        <Consolidate scope={scope} onClose={() => setConsolidating(false)} onFinished={refresh} />
+      )}
 
       {crystallizing && picked && pickedScope && (
         <CrystallizeDialog

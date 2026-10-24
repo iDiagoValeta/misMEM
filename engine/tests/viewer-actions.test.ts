@@ -146,7 +146,7 @@ describe("handleAction", () => {
         this.body = payload ?? "";
       },
     };
-    const handled = await handleAction(db, res as unknown as ServerResponse, path, body, noReembed);
+    const handled = await handleAction(db, res as unknown as ServerResponse, path, body, { reembed: noReembed });
     return { handled, status: res.statusCode, body: res.body ? JSON.parse(res.body) : undefined };
   }
 

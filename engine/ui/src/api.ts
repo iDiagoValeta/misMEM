@@ -123,6 +123,21 @@ async function post<T>(path: string, body: unknown = {}): Promise<T> {
 
 export type Polarity = "neutral" | "light" | "shadow";
 
+export interface ConsolidationState {
+  running: boolean;
+  scope: string | null;
+  started_at: number | null;
+  finished_at: number | null;
+  log: string[];
+  summary: {
+    memories_created: number;
+    episodes_consolidated: number;
+    llm_calls: number;
+    scopes_failed: number;
+  } | null;
+  error: string | null;
+}
+
 export const actions = {
   editMemory: (id: string, gist: string, details: string | null) =>
     post<{ id: string; reembedded: boolean }>(`memory/${encodeURIComponent(id)}/edit`, { gist, details }),
@@ -131,6 +146,7 @@ export const actions = {
   forgetMemory: (id: string) =>
     post<{ id: string; episodes_deleted: number }>(`memory/${encodeURIComponent(id)}/forget`),
   forgetTrait: (id: string) => post<{ id: string }>(`trait/${encodeURIComponent(id)}/forget`),
+  consolidate: (scope?: string) => post<ConsolidationState>("consolidate", scope ? { scope } : {}),
   crystallize: (scope: string, name: string, polarity: Polarity, ids: string[]) =>
     post<{ trait_id: string; created: boolean; strength: number }>("crystallize", {
       scope,
@@ -144,6 +160,7 @@ export const api = {
   stats: () =>
     get<{ counts: { episodes: number; memories: number; traits: number; consolidated: number } }>("stats"),
   scopes: () => get<{ scopes: ScopeCount[] }>("scopes"),
+  consolidation: () => get<ConsolidationState>("consolidate"),
   memories: (scope?: string) => get<{ total: number; memories: MemoryItem[] }>("memories", { scope, limit: "200" }),
   traits: (scope?: string) =>
     get<{ rows: TraitItem[] }>("recent", { layer: "trait", scope, limit: "200" }),

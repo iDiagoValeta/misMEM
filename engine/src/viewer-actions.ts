@@ -6,6 +6,7 @@
  *   POST /api/memory/:id/forget         la memoria y sus episodios se borran
  *   POST /api/trait/:id/forget          el rasgo se borra
  *   POST /api/crystallize               {scope, name, polarity?, memory_ids}
+ *   POST /api/consolidate               {scope?}: arranca una corrida en segundo plano
  *
  * Hasta acá toda la API del viewer era GET y la seguridad se apoyaba en eso. Una escritura
  * pide además (writeGuard): POST con cuerpo JSON, que desde otro origen obliga a un preflight
@@ -19,6 +20,7 @@ import { z } from "zod";
 import { CrystallizeInput } from "./schema.js";
 import { crystallize } from "./tools.js";
 import { embedPendingMemories } from "./embeddings/index.js";
+import { JobError, type ConsolidationJob } from "./consolidation/job.js";
 import { json } from "./viewer.js";
 
 /** Una acción no necesita más: lo grande va por capture o la ingesta. */
@@ -144,9 +146,15 @@ export async function handleAction(
   res: ServerResponse,
   pathname: string,
   body: unknown,
-  reembed: Reembed = defaultReembed,
+  opts: { reembed?: Reembed; job?: ConsolidationJob } = {},
 ): Promise<boolean> {
+  const reembed = opts.reembed ?? defaultReembed;
   try {
+    if (pathname === "/api/consolidate" && opts.job) {
+      const scope = z.object({ scope: z.string().min(1).max(128).optional() }).parse(body ?? {}).scope;
+      json(res, 202, opts.job.start(scope));
+      return true;
+    }
     if (pathname === "/api/crystallize") {
       json(res, 200, crystallizeFromUi(db, body));
       return true;
@@ -168,7 +176,7 @@ export async function handleAction(
     else json(res, 200, forgetMemory(db, id));
     return true;
   } catch (err) {
-    if (err instanceof ActionError) json(res, err.status, { error: err.message });
+    if (err instanceof ActionError || err instanceof JobError) json(res, err.status, { error: err.message });
     else if (err instanceof z.ZodError) json(res, 400, { error: err.issues.map((i) => i.message).join("; ") });
     else throw err;
     return true;

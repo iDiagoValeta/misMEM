@@ -36,6 +36,7 @@ import {
 import { handleGraph, handleMemories, handleMemory, handleScopes, handleTrait } from "./viewer-api.js";
 import { serveUi } from "./viewer-static.js";
 import { ACTION_MAX_BODY_BYTES, handleAction, writeGuard } from "./viewer-actions.js";
+import { ConsolidationJob } from "./consolidation/job.js";
 
 const PORT = Number(process.env.MISMEM_HTTP_PORT ?? 3200);
 const HOST = process.env.MISMEM_HTTP_HOST ?? "0.0.0.0";
@@ -70,6 +71,8 @@ function send401(res: ServerResponse): void {
 }
 
 const db = openDefaultDb();
+// La corrida de consolidación que se lanza desde la interfaz: una a la vez por proceso.
+const consolidationJob = new ConsolidationJob(db);
 
 const httpServer = createHttpServer(async (req, res) => {
   try {
@@ -165,7 +168,7 @@ const httpServer = createHttpServer(async (req, res) => {
           res.end(JSON.stringify({ error: tooLarge ? "cuerpo demasiado grande" : "JSON inválido" }));
           return;
         }
-        if (await handleAction(db, res, url.pathname, body)) return;
+        if (await handleAction(db, res, url.pathname, body, { job: consolidationJob })) return;
         res.statusCode = 404;
         res.setHeader("content-type", "application/json; charset=utf-8");
         res.end(JSON.stringify({ error: `unknown action: ${url.pathname}` }));
@@ -184,6 +187,13 @@ const httpServer = createHttpServer(async (req, res) => {
         return;
       }
       if (url.pathname === "/api/scopes") return handleScopes(db, res);
+      if (url.pathname === "/api/consolidate") {
+        res.statusCode = 200;
+        res.setHeader("content-type", "application/json; charset=utf-8");
+        res.setHeader("cache-control", "no-store");
+        res.end(JSON.stringify(consolidationJob.state()));
+        return;
+      }
       if (url.pathname === "/api/memories") return handleMemories(db, res, url);
       if (url.pathname === "/api/graph") return handleGraph(db, res, url);
       const detail = /^\/api\/(memory|trait)\/([^/]+)$/.exec(url.pathname);

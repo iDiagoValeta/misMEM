@@ -741,6 +741,27 @@ button {
   margin-top: 1.25rem;
 }
 
+.dialog-wide {
+  width: min(40rem, calc(100vw - 2rem));
+}
+
+.job-log {
+  margin: 1rem 0 0;
+  padding: 0.75rem;
+  max-height: 14rem;
+  overflow: auto;
+  background: var(--paper);
+  border-radius: var(--radius);
+  font: 0.76rem/1.5 var(--mono);
+  color: var(--ink-muted);
+  white-space: pre-wrap;
+}
+
+.bar-action {
+  margin-left: auto;
+  white-space: nowrap;
+}
+
 /* Selección para cristalizar. */
 .rows li.picking {
   display: grid;
@@ -807,8 +828,9 @@ button {
     max-width: 14rem;
   }
 
-  .search {
-    margin-right: 15rem;
+  /* La barra deja a la derecha el sitio del desplegable, que se le superpone. */
+  .bar {
+    padding-right: 17rem;
   }
 }
 
@@ -826,11 +848,7 @@ button {
 
   .bar {
     padding: 0.75rem 1rem;
-    gap: 1rem;
-  }
-
-  .search {
-    margin-right: 0;
+    gap: 0.75rem;
   }
 
   .scopes {
