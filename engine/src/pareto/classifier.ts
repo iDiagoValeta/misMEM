@@ -13,6 +13,10 @@
  *   L2  importance ≥ 0.60   → alta prioridad
  *   L3  importance ≥ 0.85   → semilla de trait (crystallize candidate)
  */
+import { contentTerms } from "../terms.js";
+
+/** Palabras con contenido desde las que un texto corto deja de ser muletilla. */
+const MIN_FACT_TERMS = 3;
 
 export interface ParetoScores {
   density: number;
@@ -145,7 +149,16 @@ export function classify(text: string, opts: ClassifyOptions = {}): ParetoResult
   const length_norm = computeLengthNorm(text);
 
   // Trivial: muy corto y sin densidad → L0 directo (evita inflado por novelty=1).
-  if (text.trim().length < 40 && density === 0 && loss_proxy === 0) {
+  // Pero un número o tres palabras con contenido ya son un dato ("el deploy tarda 40
+  // minutos", "usar pnpm, no npm"): ese va al LLM, que mandarlo cuesta casi nada y
+  // descartarlo acá lo borraba sin que nadie lo leyera.
+  if (
+    text.trim().length < 40 &&
+    density === 0 &&
+    loss_proxy === 0 &&
+    !/\p{N}/u.test(text) &&
+    contentTerms(text).size < MIN_FACT_TERMS
+  ) {
     return {
       importance: 0,
       level: 0,

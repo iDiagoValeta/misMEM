@@ -27,6 +27,23 @@ class UserStore {
     expect(r.level).toBe(0);
   });
 
+  it("un hecho corto con un número o tres palabras con contenido no es L0 directo", () => {
+    for (const text of [
+      "usar pnpm, no npm",
+      "Cambiamos la clave de producción",
+      "el deploy tarda 40 minutos",
+      "puerto SSH del NAS: 2222",
+    ]) {
+      expect(classify(text, { neighbors: ["otra nota distinta de antes"] }).level).toBeGreaterThan(0);
+    }
+  });
+
+  it("las muletillas cortas siguen siendo L0 sin pasar por el LLM", () => {
+    for (const text of ["ok", "dale", "listo", "hola que tal", "ok dale"]) {
+      expect(classify(text).level).toBe(0);
+    }
+  });
+
   it("una preferencia corta no se descarta como ruido", () => {
     for (const text of ["prefiero Rust para el backend", "dejé de usar npm", "me gusta Vitest"]) {
       expect(classify(text).level).toBeGreaterThan(0);
