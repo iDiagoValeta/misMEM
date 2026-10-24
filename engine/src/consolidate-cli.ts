@@ -1,40 +1,8 @@
 #!/usr/bin/env node
 import { defaultDbPath, openDefaultDb } from "./db.js";
 import { runConsolidation } from "./consolidation/run.js";
-
-function parseArgs(argv: string[]): {
-  scope?: string;
-  dryRun: boolean;
-  minAgeHours?: number;
-  minEpisodes?: number;
-  quietDays?: number;
-  maxBatch?: number;
-  uncitedStrikes?: number;
-  help: boolean;
-} {
-  const out: {
-    scope?: string;
-    dryRun: boolean;
-    minAgeHours?: number;
-    minEpisodes?: number;
-    quietDays?: number;
-    maxBatch?: number;
-    uncitedStrikes?: number;
-    help: boolean;
-  } = { dryRun: false, help: false };
-  for (let i = 0; i < argv.length; i++) {
-    const a = argv[i];
-    if (a === "--help" || a === "-h") out.help = true;
-    else if (a === "--dry-run") out.dryRun = true;
-    else if (a === "--scope") out.scope = argv[++i];
-    else if (a === "--min-age-hours") out.minAgeHours = Number(argv[++i]);
-    else if (a === "--min-episodes") out.minEpisodes = Number(argv[++i]);
-    else if (a === "--quiet-days") out.quietDays = Number(argv[++i]);
-    else if (a === "--max-batch") out.maxBatch = Number(argv[++i]);
-    else if (a === "--uncited-strikes") out.uncitedStrikes = Number(argv[++i]);
-  }
-  return out;
-}
+import { ArgsError, EXIT_USAGE } from "./cli-args.js";
+import { parseConsolidateArgs } from "./consolidate-args.js";
 
 function help(): void {
   console.log(`misMEM consolidate CLI
@@ -72,7 +40,15 @@ Env:
 }
 
 async function main(): Promise<void> {
-  const opts = parseArgs(process.argv.slice(2));
+  let opts;
+  try {
+    opts = parseConsolidateArgs(process.argv.slice(2));
+  } catch (err) {
+    if (!(err instanceof ArgsError)) throw err;
+    console.error(`[consolidate] ${err.message}\n`);
+    help();
+    process.exit(EXIT_USAGE);
+  }
   if (opts.help) { help(); return; }
 
   const db = openDefaultDb();
