@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import { formatInjection } from "../src/inject.js";
 import {
   assistantReply,
+  injectedMemories,
   lastTurn,
   overlap,
   recalledMemories,
@@ -78,31 +79,37 @@ describe("usedMemoryIds", () => {
   });
 });
 
-describe("recalledMemories, bloque inyectado", () => {
-  // Así lo guarda el cliente: no es un tool_result, y no vive en message.content.
-  const inyectado = (texto: string) => ({ type: "attachment", attachment: { content: [texto] } });
+describe("injectedMemories", () => {
+  // Claude Code guarda el additionalContext de un hook así, no como tool_result.
+  const adjunto = (texto: unknown, tipo = "hook_additional_context") => ({
+    type: "attachment",
+    attachment: { type: tipo, content: texto },
+  });
   const bloque = formatInjection([
     { layer: "memory", id: "01INY0000000000000000000AA", scope: "trabajo", text: "el deploy usa docker compose", created_at: 1 },
   ]);
 
-  it("ve lo que el hook de inyección adelantó, aunque no sea un tool_result", () => {
-    expect(recalledMemories([inyectado(bloque)])).toEqual([
+  it("ve lo que el hook de inyección adelantó", () => {
+    expect(injectedMemories([adjunto([bloque])])).toEqual([
       { id: "01INY0000000000000000000AA", text: "el deploy usa docker compose" },
     ]);
   });
 
-  it("no confunde un texto cualquiera con una inyección", () => {
-    expect(recalledMemories([inyectado("- [algo] trabajo — sin el encabezado")])).toEqual([]);
+  it("acepta el contenido como cadena suelta además de como lista", () => {
+    expect(injectedMemories([adjunto(bloque)])).toHaveLength(1);
   });
 
-  it("no duplica un recuerdo que vino inyectado y por recall", () => {
-    const porRecall = toolResult(hits({ layer: "memory", id: "01INY0000000000000000000AA", text: "el deploy usa docker compose" }));
-    expect(recalledMemories([inyectado(bloque), porRecall])).toHaveLength(1);
+  it("ignora el contexto que puso otro hook", () => {
+    expect(injectedMemories([adjunto(["algo de otro hook"])])).toEqual([]);
+  });
+
+  it("ignora un adjunto que no es contexto de hook", () => {
+    expect(injectedMemories([adjunto([bloque], "environment")])).toEqual([]);
   });
 
   it("un recuerdo inyectado y usado cuenta como usado", () => {
     const reply = "El deploy usa docker compose, como quedó definido.";
-    expect(usedMemoryIds(recalledMemories([inyectado(bloque)]), reply)).toEqual([
+    expect(usedMemoryIds(injectedMemories([adjunto([bloque])]), reply)).toEqual([
       "01INY0000000000000000000AA",
     ]);
   });

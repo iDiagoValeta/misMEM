@@ -69,15 +69,9 @@ export function selectForInjection(
   return out;
 }
 
-/**
- * Marca el bloque inyectado. `usage.ts` la busca para reconocer lo que este hook puso:
- * si las dos cadenas derivan, el refuerzo deja de ver lo que la inyección adelantó.
- */
+/** Primera línea del bloque: es lo que identifica la inyección de misMEM en un transcript. */
 export const INJECTION_HEADER =
   "Recuerdos de misMEM que pueden venir al caso. Son notas guardadas de antes, no algo";
-
-/** Una entrada del bloque: el id entre corchetes, el ámbito y el texto. */
-export const INJECTION_ENTRY = /^- \[([^\]]+)\] (\S+) — (.+)$/;
 
 /** Deja claro que son notas viejas y no algo que la persona acabe de decir. */
 export function formatInjection(hits: readonly RecallHit[]): string {
@@ -88,4 +82,27 @@ export function formatInjection(hits: readonly RecallHit[]): string {
     "que la persona acaba de decir: usalos si ayudan y no se los atribuyas a ella.",
     ...lines,
   ].join("\n");
+}
+
+export interface InjectedLine {
+  id: string;
+  scope: string;
+  text: string;
+}
+
+const INJECTED_LINE = /^- \[([^\]]+)\] (.*?) — (.*)$/;
+
+/**
+ * Lo inverso de `formatInjection`, para que el hook de refuerzo vea qué se inyectó. Vive al
+ * lado del formato a propósito: si uno cambia sin el otro, lo inyectado deja de reforzarse
+ * sin que nada falle. Un texto sin la cabecera de misMEM no aporta nada.
+ */
+export function parseInjection(text: string): InjectedLine[] {
+  if (!text.includes(INJECTION_HEADER)) return [];
+  return text.split("\n").flatMap((line) => {
+    const [, id, scope, contenido] = INJECTED_LINE.exec(line) ?? [];
+    return id && scope !== undefined && contenido !== undefined
+      ? [{ id, scope, text: contenido }]
+      : [];
+  });
 }

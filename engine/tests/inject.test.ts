@@ -1,6 +1,7 @@
 import { describe, it, expect } from "vitest";
 import {
   formatInjection,
+  parseInjection,
   inExcludedScope,
   parseScopeList,
   selectForInjection,
@@ -85,5 +86,22 @@ describe("formatInjection", () => {
     const text = formatInjection([hit({ id: "m1", scope: "trabajo" })]);
     expect(text).toContain("[m1] trabajo — el deploy usa docker compose");
     expect(text).toMatch(/no se los atribuyas/);
+  });
+});
+
+describe("parseInjection", () => {
+  it("es lo inverso de formatInjection, incluso con un guión largo en el texto", () => {
+    const hits = [
+      hit({ id: "m1", scope: "trabajo", text: "el deploy — con traefik — usa docker compose" }),
+      hit({ id: "t1", layer: "trait", scope: "lucas/perfil", text: "prefiere pnpm" }),
+    ];
+    expect(parseInjection(formatInjection(hits))).toEqual([
+      { id: "m1", scope: "trabajo", text: "el deploy — con traefik — usa docker compose" },
+      { id: "t1", scope: "lucas/perfil", text: "prefiere pnpm" },
+    ]);
+  });
+
+  it("un texto sin la cabecera no aporta nada", () => {
+    expect(parseInjection("- [m1] trabajo — parece una entrada pero no lo es")).toEqual([]);
   });
 });

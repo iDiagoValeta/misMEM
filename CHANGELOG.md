@@ -1,5 +1,27 @@
 # Changelog
 
+## Sin publicar
+
+### El refuerzo por uso ve lo que la inyección adelantó
+
+- Los dos hooks no se enganchaban: `mismem-used` sólo reconocía resultados de `recall`, y lo que
+  `mismem-inject` adelanta llega como adjunto `hook_additional_context`, no como `tool_result`. Un
+  recuerdo inyectado y usado nunca sumaba saliencia. Medido sobre un transcript real: la inyección
+  había dejado 6 ids en el turno y se veían 0.
+- `parseInjection` es lo inverso de `formatInjection` y vive en el mismo archivo, para que el
+  formato y su lectura no puedan derivar.
+- `reinforce` cuenta los rasgos aparte (`traits`) en vez de meterlos en `unknown`. La inyección
+  también adelanta rasgos, así que mezclarlos dejaba esa alarma —la de "alguien manda ids
+  inventados"— sonando desde el primer día.
+- Aportado por [@iDiagoValeta](https://github.com/iDiagoValeta) en #48, con el hallazgo de los
+  rasgos que quedaba abierto ahí.
+
+### El README dice lo que el código hace
+
+- Seis gestos, no cinco: faltaba `reinforce`, y `recall` ya no refuerza siempre.
+- Los binarios de los hooks (`mismem-inject`, `mismem-used`) y una sección que explica para qué
+  sirven, qué no sale de la máquina y cómo se enciende el refuerzo por uso.
+
 ## 0.5.0 — 2026-10-23
 
 ### Que el LLM ignore un episodio ya no lo condena a la primera

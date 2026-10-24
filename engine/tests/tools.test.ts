@@ -146,7 +146,7 @@ describe("reinforce", () => {
 
     const result = reinforce(db, { memory_ids: [usado] });
 
-    expect(result).toEqual({ reinforced: 1, unknown: 0 });
+    expect(result).toEqual({ reinforced: 1, traits: 0, unknown: 0 });
     expect(salienceOf(usado)).toBeGreaterThan(0.4);
     expect(salienceOf(ignorado)).toBe(0.4);
   });
@@ -156,7 +156,23 @@ describe("reinforce", () => {
 
     const result = reinforce(db, { memory_ids: [real, "01INVENTADO000000000000000"] });
 
-    expect(result).toEqual({ reinforced: 1, unknown: 1 });
+    expect(result).toEqual({ reinforced: 1, traits: 0, unknown: 1 });
+  });
+
+  it("un rasgo se cuenta aparte, no como id inventado", () => {
+    // La inyección también adelanta rasgos; si cayeran en `unknown`, esa alarma
+    // —la de "alguien manda ids que no existen"— sonaría desde el primer día.
+    const real = memory("el deploy usa docker compose");
+    const rasgo = crystallize(db, {
+      scope: "test",
+      name: "prefiere docker compose",
+      evidence_memory_ids: [real],
+    });
+    const rasgoId = (rasgo as { trait_id?: string; id?: string }).trait_id ?? (rasgo as { id: string }).id;
+
+    const result = reinforce(db, { memory_ids: [real, rasgoId, "01INVENTADO000000000000000"] });
+
+    expect(result).toEqual({ reinforced: 1, traits: 1, unknown: 1 });
   });
 
   it("rechaza una lista vacía", () => {

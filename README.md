@@ -34,12 +34,13 @@ Ejemplo: “hoy PostgreSQL rindió mejor” es un episode; “PostgreSQL es
 preferible en este proyecto” es una memory; “priorizamos soluciones robustas
 para concurrencia” puede cristalizar como trait.
 
-## Cinco gestos, un solo territorio
+## Seis gestos, un solo territorio
 
 | Invocación | Qué hace |
 |---|---|
 | `capture` | Inscribir un episodio en un scope jerárquico (`proyecto/diario`, `vscode/transcripts`, …) |
-| `recall` | Buscar con FTS5 + semántica y reforzar las memories devueltas |
+| `recall` | Buscar con FTS5 + semántica; refuerza lo devuelto salvo `reinforce: false` o `MISMEM_REINFORCE_ON_RECALL=off` |
+| `reinforce` | Marcar los recuerdos que una respuesta usó de verdad, no los que aparecieron |
 | `consolidate` | Espesar episodios relacionados en una memoria |
 | `crystallize` | Fijar un trait/ley con evidencia (identidad, decisiones firmes) |
 | `forget` | Soltar lo que ya no se consulta |
@@ -94,7 +95,7 @@ Y en `mcp.json`: `"command": "node", "args": ["<ruta-al-repo>/misMEM/engine/dist
 - **`engine/src/server-http.ts`** — Streamable HTTP para deploy remoto (BasicAuth opcional, `/healthz`). Ver [DEPLOY.md](./DEPLOY.md).
 - **`engine/src/viewer.ts`** — panel read-only en `/viewer` + `/api/{stats,recent,search}`.
 - **Consolidación LLM** — cron nocturno que destila episodios en memorias con DeepSeek directo u OpenRouter, con pre-filtro Pareto para descartar ruido. Ver [engine/src/consolidation/README.md](engine/src/consolidation/README.md).
-- **CLIs** — `mismem-ingest` (exports de ChatGPT / transcripts de VS Code), `mismem-consolidate`, `mismem-forget`, `mismem-stats`, `mismem-embed`, `mismem-migrate-engram` y `mismem-bench` (mide el recall con un banco de preguntas propio, sin reforzar).
+- **CLIs** — `mismem-ingest` (exports de ChatGPT / transcripts de VS Code), `mismem-consolidate`, `mismem-forget`, `mismem-stats`, `mismem-embed`, `mismem-migrate-engram`, `mismem-bench` (mide el recall con un banco de preguntas propio, sin reforzar) y los dos hooks, `mismem-inject` y `mismem-used`.
 
 ## Stack
 
@@ -107,13 +108,14 @@ Y en `mcp.json`: `"command": "node", "args": ["<ruta-al-repo>/misMEM/engine/dist
 ## Estado
 
 - ✅ Engine MCP funcionando (5 invocaciones + capa engram-compat).
-- ✅ Hebbian boost activo en recall; salience con decay.
+- ✅ Salience con decay; refuerzo por aparición en `recall` o por uso real vía hook.
 - ✅ Scopes jerárquicos sin cross-scope leakage.
 - ✅ Servidor Streamable HTTP + deploy Docker/Traefik.
 - ✅ Consolidación LLM nocturna (episodes → memories).
 - ✅ Viewer read-only + CLIs de introspección.
 - ✅ Dedup en captura/ingesta (re-ingestar es idempotente).
 - ✅ Recall híbrido: FTS5 + búsqueda semántica opcional vía [Ollama](https://ollama.com) o cualquier servidor compatible con OpenAI.
+- ✅ Hooks opcionales de cliente: adelantar recuerdos antes de responder y reforzar los que se usaron.
 - 🚧 Binario distribuible (Bun --compile).
 
 ### Búsqueda semántica (opcional)
@@ -153,6 +155,24 @@ Las memories pierden la mitad de su salience cada 90 días sin refuerzo
 pendiente y después suma el refuerzo Hebbiano. `forget` elimina memories bajo
 el umbral solo después de su período de gracia; `--dry-run` calcula el
 resultado sin modificar la DB.
+
+### Hooks del cliente (opcional)
+
+Dos binarios enganchan misMEM a [Claude Code](https://claude.com/claude-code) sin que el
+modelo tenga que acordarse de pedir nada:
+
+- **`mismem-inject`** (`UserPromptSubmit`) busca con el prompt y adelanta unos pocos
+  recuerdos. Busca con `reinforce: false`: lo que el usuario no pidió no es uso. Se
+  mantiene dormido hasta comprobar que el servidor expone `reinforce`, así que se puede
+  configurar antes de desplegar.
+- **`mismem-used`** (`Stop`) mira el último turno —lo que el modelo pidió con `recall` y
+  lo que la inyección le puso delante— y refuerza sólo aquello cuyas palabras distintivas
+  reaparecen en la respuesta. Es una aproximación: falla hacia no reforzar.
+
+Lo inyectado viaja en cada prompt al proveedor del modelo, así que
+`MISMEM_HOOK_EXCLUDE_SCOPES` decide qué ámbitos no salen. Con
+`MISMEM_REINFORCE_ON_RECALL=off`, la salience pasa a seguir el uso en vez de la aparición.
+Montaje y variables en [DEPLOY.md](./DEPLOY.md).
 
 ## Privacidad
 
