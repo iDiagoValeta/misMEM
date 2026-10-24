@@ -107,6 +107,39 @@ async function get<T>(path: string, params: Record<string, string | undefined> =
   return (await res.json()) as T;
 }
 
+/** Las escrituras: POST con JSON, que es lo que pide el servidor (viewer-actions.ts). */
+async function post<T>(path: string, body: unknown = {}): Promise<T> {
+  const res = await fetch(`../api/${path}`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: JSON.stringify(body),
+  });
+  if (!res.ok) {
+    const payload = (await res.json().catch(() => null)) as { error?: string } | null;
+    throw new Error(payload?.error ?? `HTTP ${res.status}`);
+  }
+  return (await res.json()) as T;
+}
+
+export type Polarity = "neutral" | "light" | "shadow";
+
+export const actions = {
+  editMemory: (id: string, gist: string, details: string | null) =>
+    post<{ id: string; reembedded: boolean }>(`memory/${encodeURIComponent(id)}/edit`, { gist, details }),
+  unconsolidate: (id: string) =>
+    post<{ id: string; episodes_released: number }>(`memory/${encodeURIComponent(id)}/unconsolidate`),
+  forgetMemory: (id: string) =>
+    post<{ id: string; episodes_deleted: number }>(`memory/${encodeURIComponent(id)}/forget`),
+  forgetTrait: (id: string) => post<{ id: string }>(`trait/${encodeURIComponent(id)}/forget`),
+  crystallize: (scope: string, name: string, polarity: Polarity, ids: string[]) =>
+    post<{ trait_id: string; created: boolean; strength: number }>("crystallize", {
+      scope,
+      name,
+      polarity,
+      evidence_memory_ids: ids,
+    }),
+};
+
 export const api = {
   stats: () =>
     get<{ counts: { episodes: number; memories: number; traits: number; consolidated: number } }>("stats"),

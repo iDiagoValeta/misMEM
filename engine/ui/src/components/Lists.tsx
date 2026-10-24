@@ -6,9 +6,14 @@ import { useLoad, type Loaded } from "../useLoad";
 
 interface ListProps {
   scope: string | undefined;
+  /** Cambia cuando algo se escribió: la lista vuelve a cargar. */
+  version: number;
   selected: Selection | null;
   onSelect: (selection: Selection) => void;
 }
+
+/** Selección para cristalizar: id → ámbito, para exigir que sean del mismo. */
+export type Picked = ReadonlyMap<string, string>;
 
 const LAYER_NAME: Record<Layer, string> = { episode: "episodio", memory: "memoria", trait: "rasgo" };
 
@@ -27,6 +32,7 @@ function Row({
   onClick,
   text,
   meta,
+  pick,
 }: {
   layer: Layer;
   active: boolean;
@@ -34,9 +40,19 @@ function Row({
   onClick: () => void;
   text: string;
   meta: ReactNode;
+  pick?: { checked: boolean; onChange: () => void };
 }) {
   return (
-    <li>
+    <li className={pick ? "picking" : undefined}>
+      {pick && (
+        <input
+          type="checkbox"
+          className="pick"
+          checked={pick.checked}
+          onChange={pick.onChange}
+          aria-label={`Seleccionar: ${text.slice(0, 80)}`}
+        />
+      )}
       <button
         className="row"
         data-layer={layer}
@@ -53,8 +69,15 @@ function Row({
 
 const plural = (n: number, one: string, many: string): string => `${n} ${n === 1 ? one : many}`;
 
-export function MemoryList({ scope, selected, onSelect }: ListProps) {
-  const state = useLoad(() => api.memories(scope), [scope]);
+export function MemoryList({
+  scope,
+  version,
+  selected,
+  onSelect,
+  picked,
+  onPick,
+}: ListProps & { picked?: Picked; onPick?: (id: string, scope: string) => void }) {
+  const state = useLoad(() => api.memories(scope), [scope, version]);
   return (
     <Rows state={state} empty="Todavía no hay memorias consolidadas en este ámbito.">
       {(data) =>
@@ -65,6 +88,7 @@ export function MemoryList({ scope, selected, onSelect }: ListProps) {
             active={selected?.layer === "memory" && selected.id === m.id}
             salience={m.salience}
             onClick={() => onSelect({ layer: "memory", id: m.id })}
+            pick={picked && onPick ? { checked: picked.has(m.id), onChange: () => onPick(m.id, m.scope) } : undefined}
             text={m.text}
             meta={
               <>
@@ -84,8 +108,8 @@ export function MemoryList({ scope, selected, onSelect }: ListProps) {
   );
 }
 
-export function TraitList({ scope, selected, onSelect }: ListProps) {
-  const state = useLoad(() => api.traits(scope), [scope]);
+export function TraitList({ scope, version, selected, onSelect }: ListProps) {
+  const state = useLoad(() => api.traits(scope), [scope, version]);
   return (
     <Rows state={state} empty="Ningún patrón se ha cristalizado como rasgo todavía.">
       {(data) =>
@@ -111,8 +135,8 @@ export function TraitList({ scope, selected, onSelect }: ListProps) {
   );
 }
 
-export function EpisodeList({ scope, selected, onSelect }: ListProps) {
-  const state = useLoad(() => api.episodes(scope), [scope]);
+export function EpisodeList({ scope, version, selected, onSelect }: ListProps) {
+  const state = useLoad(() => api.episodes(scope), [scope, version]);
   return (
     <Rows state={state} empty="Nada pendiente: todo lo capturado ya pasó por la consolidación.">
       {(data) =>
@@ -138,8 +162,8 @@ export function EpisodeList({ scope, selected, onSelect }: ListProps) {
   );
 }
 
-export function SearchResults({ query, scope, selected, onSelect }: ListProps & { query: string }) {
-  const state = useLoad(() => api.search(query, scope), [query, scope]);
+export function SearchResults({ query, scope, version, selected, onSelect }: ListProps & { query: string }) {
+  const state = useLoad(() => api.search(query, scope), [query, scope, version]);
   return (
     <>
       <p className="search-heading">
