@@ -1,4 +1,5 @@
 import { describe, it, expect } from "vitest";
+import { formatInjection } from "../src/inject.js";
 import {
   assistantReply,
   lastTurn,
@@ -74,6 +75,36 @@ describe("usedMemoryIds", () => {
   it("las palabras vacías no cuentan como solapamiento", () => {
     const reply = "de la que el en los una para por con sobre";
     expect(usedMemoryIds([usado, ignorado], reply)).toEqual([]);
+  });
+});
+
+describe("recalledMemories, bloque inyectado", () => {
+  // Así lo guarda el cliente: no es un tool_result, y no vive en message.content.
+  const inyectado = (texto: string) => ({ type: "attachment", attachment: { content: [texto] } });
+  const bloque = formatInjection([
+    { layer: "memory", id: "01INY0000000000000000000AA", scope: "trabajo", text: "el deploy usa docker compose", created_at: 1 },
+  ]);
+
+  it("ve lo que el hook de inyección adelantó, aunque no sea un tool_result", () => {
+    expect(recalledMemories([inyectado(bloque)])).toEqual([
+      { id: "01INY0000000000000000000AA", text: "el deploy usa docker compose" },
+    ]);
+  });
+
+  it("no confunde un texto cualquiera con una inyección", () => {
+    expect(recalledMemories([inyectado("- [algo] trabajo — sin el encabezado")])).toEqual([]);
+  });
+
+  it("no duplica un recuerdo que vino inyectado y por recall", () => {
+    const porRecall = toolResult(hits({ layer: "memory", id: "01INY0000000000000000000AA", text: "el deploy usa docker compose" }));
+    expect(recalledMemories([inyectado(bloque), porRecall])).toHaveLength(1);
+  });
+
+  it("un recuerdo inyectado y usado cuenta como usado", () => {
+    const reply = "El deploy usa docker compose, como quedó definido.";
+    expect(usedMemoryIds(recalledMemories([inyectado(bloque)]), reply)).toEqual([
+      "01INY0000000000000000000AA",
+    ]);
   });
 });
 
