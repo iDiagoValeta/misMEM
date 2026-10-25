@@ -43,6 +43,8 @@ describe("parseConsolidateArgs", () => {
   it("--scope sin valor corta: consolidaba todos los ámbitos", () => {
     expect(() => parseConsolidateArgs(["--scope"])).toThrow(/--scope necesita un valor/);
     expect(() => parseConsolidateArgs(["--scope", "--dry-run"])).toThrow(/--scope necesita un valor/);
+    // Un ámbito en blanco tampoco: no filtra nada y consolidaba todos los ámbitos en silencio.
+    expect(() => parseConsolidateArgs(["--scope", ""])).toThrow(/--scope necesita un valor/);
   });
 
   it("un número inválido corta: NaN dejaba la corrida muda con exit 0", () => {

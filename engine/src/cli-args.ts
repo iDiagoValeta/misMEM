@@ -13,7 +13,11 @@ export class ArgsError extends Error {
 /** El valor que sigue a `flag` en `argv[i + 1]`; otro `--flag` no cuenta como valor. */
 export function flagValue(argv: readonly string[], i: number, flag: string): string {
   const value = argv[i + 1];
-  if (value === undefined || value.startsWith("--")) throw new ArgsError(`${flag} necesita un valor`);
+  // Un valor en blanco es un valor ausente: si pasa, el que valida después (`--scope ""`)
+  // falla con exit 1 cuando el contrato del CLI es error de uso.
+  if (value === undefined || value.trim() === "" || value.startsWith("--")) {
+    throw new ArgsError(`${flag} necesita un valor`);
+  }
   return value;
 }
 
@@ -21,12 +25,13 @@ export function flagNumber(
   argv: readonly string[],
   i: number,
   flag: string,
-  opts: { integer?: boolean; min?: number } = {},
+  opts: { integer?: boolean; min?: number; max?: number } = {},
 ): number {
   const raw = flagValue(argv, i, flag);
   const value = Number(raw);
   if (raw.trim() === "" || !Number.isFinite(value)) throw new ArgsError(`${flag} no es un número: ${raw}`);
   if (opts.integer && !Number.isInteger(value)) throw new ArgsError(`${flag} tiene que ser entero: ${raw}`);
   if (opts.min !== undefined && value < opts.min) throw new ArgsError(`${flag} tiene que ser >= ${opts.min}: ${raw}`);
+  if (opts.max !== undefined && value > opts.max) throw new ArgsError(`${flag} tiene que ser <= ${opts.max}: ${raw}`);
   return value;
 }
