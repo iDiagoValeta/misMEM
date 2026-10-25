@@ -281,7 +281,12 @@ export function App() {
               </TabsContent>
               <TabsContent value="graph" className="m-0 h-full">
                 <Suspense fallback={<p className="text-sm text-ink-muted">Cargando el grafo…</p>}>
-                  <GraphView scope={scope} onSelect={setSelected} />
+                  <GraphView
+                    scope={scope}
+                    query={query}
+                    selectedId={selected?.id}
+                    onSelect={(layer, id) => setSelected({ layer, id })}
+                  />
                 </Suspense>
               </TabsContent>
             </div>
