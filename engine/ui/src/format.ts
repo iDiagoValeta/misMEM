@@ -22,13 +22,4 @@ export function ago(ts: number | null | undefined, now = Date.now()): string {
 
 export const exact = (ts: number): string => absolute.format(new Date(ts));
 
-/**
- * Cuánta tinta lleva un recuerdo: la salience de hoy entre 0 y 1, llevada a un rango
- * legible. Lo que se olvida se aclara, pero nunca hasta no poder leerse.
- */
-export function ink(salience: number | undefined): string {
-  const s = Math.max(0, Math.min(1, salience ?? 1));
-  return `${Math.round(38 + 62 * s)}%`;
-}
-
 export const percent = (value: number): string => `${Math.round(value * 100)} %`;

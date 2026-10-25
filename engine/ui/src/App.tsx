@@ -1,73 +1,159 @@
-import { lazy, Suspense, useCallback, useEffect, useState, type FormEvent } from "react";
-import { actions, api, type EpisodeItem, type Polarity } from "./api";
-import { useLoad } from "./useLoad";
+import { lazy, Suspense, useCallback, useEffect, useMemo, useRef, useState, type FormEvent } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { SearchIcon } from "lucide-react";
+import { toast } from "sonner";
+import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Input } from "@/components/ui/input";
+import { Tabs, TabsContent, TabsList, TabsTrigger } from "@/components/ui/tabs";
+import { Toaster } from "@/components/ui/sonner";
+import { actions, api, type EpisodeItem, type Layer, type Polarity } from "./api";
 import { Scopes } from "./components/Scopes";
-import { EpisodeList, MemoryList, SearchResults, TraitList } from "./components/Lists";
-import { Detail } from "./components/Detail";
-import { Dialog } from "./components/Dialog";
+import { MemoryList, PendingList, SearchResults, TraitList } from "./components/Lists";
+import { DetailPanel } from "./components/Detail";
 import { Consolidate } from "./components/Consolidate";
+import { ThemeToggle } from "./components/ThemeToggle";
+import { errorMessage } from "./lib/errors";
+import { applyTheme, browserStorage, loadTheme, resolveTheme, saveTheme, type ThemeChoice } from "./lib/theme";
 
-// three.js pesa más que todo lo demás junto: se baja sólo al abrir el grafo.
+// El grafo pesa más que el resto: se baja sólo al abrir su pestaña.
 const GraphView = lazy(() => import("./components/GraphView"));
 
-export type View = "memories" | "traits" | "pending" | "graph";
+export type View = "memories" | "traits" | "pending" | "results" | "graph";
 
-export type Selection =
-  | { layer: "memory"; id: string }
-  | { layer: "trait"; id: string }
-  | { layer: "episode"; id: string; episode: EpisodeItem };
+/**
+ * El episodio lleva su texto en la selección porque no hay endpoint de detalle por id:
+ * el snapshot de la fila es lo único que lo tiene. Las demás capas se piden por id.
+ */
+export type Selection = { layer: Layer; id: string; episode?: EpisodeItem };
 
-const VIEWS: Array<{ id: View; label: string }> = [
-  { id: "memories", label: "Memorias" },
-  { id: "traits", label: "Rasgos" },
-  { id: "pending", label: "Sin consolidar" },
-  { id: "graph", label: "Grafo" },
+const VIEWS: Array<{ id: View; label: string; short: string }> = [
+  { id: "memories", label: "Memorias", short: "Memorias" },
+  { id: "traits", label: "Rasgos", short: "Rasgos" },
+  { id: "pending", label: "Sin consolidar", short: "Pendientes" },
+  { id: "results", label: "Resultados", short: "Buscar" },
+  { id: "graph", label: "Grafo", short: "Grafo" },
 ];
 
-const POLARITIES: Array<{ id: Polarity; label: string }> = [
-  { id: "neutral", label: "Neutra: un patrón, sin juicio" },
-  { id: "light", label: "Luz: algo que conviene repetir" },
-  { id: "shadow", label: "Sombra: algo que conviene evitar" },
+const POLARITIES: Array<{ id: Polarity; label: string; hint: string }> = [
+  { id: "neutral", label: "Neutra", hint: "un patrón, sin juicio" },
+  { id: "light", label: "Luz", hint: "algo que conviene repetir" },
+  { id: "shadow", label: "Sombra", hint: "algo que conviene evitar" },
 ];
+
+/** Radix monta los diálogos fuera de <dialog>: Escape debe respetar ambos mundos. */
+function hasOpenDialog(): boolean {
+  return Boolean(
+    document.querySelector(
+      '[role="dialog"][data-state="open"], [role="alertdialog"][data-state="open"], dialog[open]',
+    ),
+  );
+}
+
+function useDebounced<T>(value: T, ms: number): T {
+  const [debounced, setDebounced] = useState(value);
+  useEffect(() => {
+    const timer = window.setTimeout(() => setDebounced(value), ms);
+    return () => window.clearTimeout(timer);
+  }, [value, ms]);
+  return debounced;
+}
 
 export function App() {
+  const queryClient = useQueryClient();
   const [scope, setScope] = useState<string | undefined>();
   const [view, setView] = useState<View>("memories");
+  const [selected, setSelected] = useState<Selection | undefined>();
   const [draft, setDraft] = useState("");
   const [query, setQuery] = useState("");
-  const [selected, setSelected] = useState<Selection | null>(null);
-  // Sube con cada escritura: las listas, los ámbitos y el detalle vuelven a cargar.
-  const [version, setVersion] = useState(0);
   const [picked, setPicked] = useState<Map<string, string> | null>(null);
   const [crystallizing, setCrystallizing] = useState(false);
   const [consolidating, setConsolidating] = useState(false);
-  const scopes = useLoad(() => api.scopes(), [version]);
+  const [themeChoice, setThemeChoice] = useState<ThemeChoice>(() => loadTheme(browserStorage()));
+  const [prefersDark, setPrefersDark] = useState(() => window.matchMedia("(prefers-color-scheme: dark)").matches);
+  const searchRef = useRef<HTMLInputElement>(null);
 
-  // Escape cierra el detalle (en el móvil ocupa toda la pantalla), salvo que lo esté usando
-  // un diálogo abierto, que se cierra solo.
+  const scopesQuery = useQuery({ queryKey: ["scopes"], queryFn: ({ signal }) => api.scopes(signal) });
+  const scopeList = scopesQuery.data?.scopes;
+
+  // Buscar espera 250 ms tras la última tecla; el `signal` de TanStack cancela la anterior.
+  const debouncedDraft = useDebounced(draft, 250);
   useEffect(() => {
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === "Escape" && !document.querySelector("dialog[open]")) setSelected(null);
+    const next = debouncedDraft.trim();
+    setQuery(next);
+    if (next) setView("results");
+  }, [debouncedDraft]);
+
+  const resolvedTheme = resolveTheme(themeChoice, prefersDark);
+  useEffect(() => {
+    applyTheme(document.documentElement, resolvedTheme);
+    saveTheme(browserStorage(), themeChoice);
+  }, [themeChoice, resolvedTheme]);
+
+  useEffect(() => {
+    const media = window.matchMedia("(prefers-color-scheme: dark)");
+    const onChange = (event: MediaQueryListEvent) => setPrefersDark(event.matches);
+    media.addEventListener("change", onChange);
+    return () => media.removeEventListener("change", onChange);
+  }, []);
+
+  useEffect(() => {
+    const onKey = (event: KeyboardEvent) => {
+      if (event.defaultPrevented) return;
+      const target = event.target as HTMLElement | null;
+      const editing =
+        target !== null &&
+        (target.tagName === "INPUT" ||
+          target.tagName === "TEXTAREA" ||
+          target.tagName === "SELECT" ||
+          target.isContentEditable);
+      if (event.key === "/" && !editing && !hasOpenDialog() && !event.metaKey && !event.ctrlKey && !event.altKey) {
+        event.preventDefault();
+        searchRef.current?.focus();
+        return;
+      }
+      // Escape cierra el detalle salvo que lo esté usando un diálogo abierto, que se cierra solo.
+      if (event.key === "Escape" && !hasOpenDialog()) setSelected(undefined);
     };
     window.addEventListener("keydown", onKey);
     return () => window.removeEventListener("keydown", onKey);
   }, []);
 
-  const refresh = useCallback(() => setVersion((v) => v + 1), []);
+  const refresh = useCallback(() => void queryClient.invalidateQueries(), [queryClient]);
 
-  const changed = (next?: Selection | null) => {
-    setVersion((v) => v + 1);
-    if (next !== undefined) setSelected(next);
+  const changeScope = (next: string | undefined) => {
+    setScope(next);
+    setSelected(undefined);
+    setPicked(null);
   };
 
-  const search = (e: FormEvent) => {
-    e.preventDefault();
-    setQuery(draft.trim());
+  const changeView = (next: View) => {
+    setView(next);
+    // Al salir de los resultados se limpia la caja: un texto visible sin lista debajo engaña.
+    if (next !== "results") {
+      setDraft("");
+      setQuery("");
+    }
+    if (next !== "memories") setPicked(null);
+  };
+
+  const submitSearch = (event: FormEvent) => {
+    event.preventDefault();
+    const term = draft.trim();
+    setQuery(term);
+    if (term) setView("results");
   };
 
   const togglePick = (id: string, memoryScope: string) =>
-    setPicked((prev) => {
-      const next = new Map(prev ?? []);
+    setPicked((previous) => {
+      const next = new Map(previous ?? []);
       if (next.has(id)) next.delete(id);
       else next.set(id, memoryScope);
       return next;
@@ -76,129 +162,175 @@ export function App() {
   const pickedScopes = new Set(picked?.values() ?? []);
   const pickedScope = pickedScopes.size === 1 ? [...pickedScopes][0] : undefined;
 
+  const totalTraits = useMemo(() => {
+    if (!scopeList) return undefined;
+    if (scope) return scopeList.find((entry) => entry.scope === scope)?.traits ?? 0;
+    return scopeList.reduce((total, entry) => total + entry.traits, 0);
+  }, [scopeList, scope]);
+
+  const changed = (next?: Selection | null) => {
+    refresh();
+    if (next !== undefined) setSelected(next ?? undefined);
+  };
+
+  const crystallized = (traitId: string) => {
+    setPicked(null);
+    refresh();
+    setSelected({ layer: "trait", id: traitId });
+    setView("traits");
+  };
+
   return (
-    <div className="app" data-detail={selected ? "open" : "closed"}>
-      <header className="bar">
-        <a className="brand" href="./" aria-label="misMEM, inicio">
-          mis<span>MEM</span>
+    <div className="flex h-dvh flex-col overflow-hidden bg-surface text-ink">
+      <header className="flex flex-wrap items-center gap-2 border-b border-edge px-3 py-2 sm:gap-3 sm:px-4">
+        <a href="./" className="font-semibold tracking-tight" aria-label="misMEM, inicio">
+          mis<span className="text-brand-text">MEM</span>
         </a>
-        <form className="search" role="search" onSubmit={search}>
-          <input
-            type="search"
-            value={draft}
-            onChange={(e) => {
-              setDraft(e.target.value);
-              if (!e.target.value) setQuery("");
-            }}
-            placeholder="Buscar en la memoria"
-            aria-label="Buscar en la memoria"
-          />
+        <form
+          role="search"
+          onSubmit={submitSearch}
+          className="order-last flex w-full min-w-0 items-center sm:order-none sm:w-auto sm:flex-1"
+        >
+          <div className="relative min-w-0 flex-1">
+            <SearchIcon
+              aria-hidden="true"
+              className="pointer-events-none absolute top-1/2 left-2.5 size-4 -translate-y-1/2 text-ink-muted"
+            />
+            <Input
+              ref={searchRef}
+              type="search"
+              value={draft}
+              onChange={(event) => setDraft(event.target.value)}
+              placeholder="Buscar en la memoria (/)"
+              aria-label="Buscar en la memoria"
+              className="bg-field pl-8"
+            />
+          </div>
         </form>
-        <button className="button bar-action" onClick={() => setConsolidating(true)}>
-          Consolidar ahora
-        </button>
+        <div className="ml-auto flex items-center gap-2">
+          <ThemeToggle choice={themeChoice} onChange={setThemeChoice} />
+          <Button
+            type="button"
+            variant="outline"
+            size="sm"
+            aria-haspopup="dialog"
+            onClick={() => setConsolidating(true)}
+          >
+            Consolidar ahora
+          </Button>
+        </div>
       </header>
 
-      <nav className="scopes" aria-label="Ámbitos">
-        <Scopes state={scopes} current={scope} onChange={setScope} />
-      </nav>
-
-      <main className="list" data-view={query ? "search" : view}>
-        {query ? (
-          <SearchResults query={query} scope={scope} version={version} selected={selected} onSelect={setSelected} />
-        ) : (
-          <>
-            <div className="tabs">
-              <div role="tablist" aria-label="Capa" className="tablist">
-                {VIEWS.map((v) => (
-                  <button
-                    key={v.id}
-                    role="tab"
-                    aria-selected={view === v.id}
-                    className="tab"
-                    data-layer={v.id}
-                    onClick={() => {
-                      setView(v.id);
-                      setPicked(null);
-                    }}
-                  >
-                    {v.label}
-                  </button>
-                ))}
-              </div>
-              {view === "memories" && (
-                <button
-                  className="tab-action"
-                  aria-pressed={picked !== null}
-                  onClick={() => setPicked(picked ? null : new Map())}
-                >
-                  {picked ? "Terminar selección" : "Seleccionar"}
-                </button>
-              )}
-            </div>
-            {view === "memories" && (
-              <MemoryList
-                scope={scope}
-                version={version}
-                selected={selected}
-                onSelect={setSelected}
-                picked={picked ?? undefined}
-                onPick={picked ? togglePick : undefined}
-              />
-            )}
-            {view === "traits" && <TraitList scope={scope} version={version} selected={selected} onSelect={setSelected} />}
-            {view === "pending" && (
-              <EpisodeList scope={scope} version={version} selected={selected} onSelect={setSelected} />
-            )}
-            {view === "graph" && (
-              <Suspense fallback={<p className="note">Cargando el grafo…</p>}>
-                <GraphView key={version} scope={scope} onSelect={setSelected} />
-              </Suspense>
-            )}
-          </>
-        )}
-        {picked && picked.size > 0 && (
-          <div className="pick-bar" role="status">
-            <span>
-              {picked.size === 1 ? "1 memoria seleccionada" : `${picked.size} memorias seleccionadas`}
-              {pickedScopes.size > 1 && ", de ámbitos distintos: un rasgo sólo junta memorias de uno"}
-            </span>
-            <button className="button primary" disabled={!pickedScope} onClick={() => setCrystallizing(true)}>
-              Cristalizar como rasgo
-            </button>
-          </div>
-        )}
-      </main>
-
-      <aside className="detail" aria-label="Detalle">
-        {selected ? (
-          <Detail
-            selection={selected}
-            version={version}
-            onSelect={setSelected}
-            onClose={() => setSelected(null)}
-            onChanged={changed}
+      <div className="flex min-h-0 flex-1 flex-col md:grid md:grid-cols-[minmax(0,1fr)_380px] md:overflow-hidden lg:grid-cols-[220px_minmax(0,1fr)_380px]">
+        <nav
+          aria-label="Ámbitos"
+          className="shrink-0 border-b border-edge md:col-span-2 lg:col-span-1 lg:min-h-0 lg:overflow-y-auto lg:border-r lg:border-b-0"
+        >
+          <Scopes
+            scopes={scopeList}
+            isPending={scopesQuery.isPending}
+            error={scopesQuery.error}
+            current={scope}
+            onChange={changeScope}
           />
-        ) : (
-          <p className="detail-empty">Elige un recuerdo para ver de dónde sale y qué lo cita.</p>
-        )}
-      </aside>
+        </nav>
 
-      {consolidating && (
-        <Consolidate scope={scope} onClose={() => setConsolidating(false)} onFinished={refresh} />
-      )}
+        <main className="flex min-h-0 flex-1 flex-col">
+          <Tabs
+            value={view}
+            onValueChange={(value) => changeView(value as View)}
+            className="flex min-h-0 flex-1 flex-col gap-0"
+          >
+            <div className="flex min-w-0 items-center gap-2 border-b border-edge px-3 py-2">
+              <div className="min-w-0 flex-1 overflow-x-auto">
+                <TabsList className="bg-field">
+                  {VIEWS.map((entry) => (
+                    <TabsTrigger
+                      key={entry.id}
+                      value={entry.id}
+                      className="px-1.5 text-xs md:px-2 md:text-sm xl:px-2.5"
+                    >
+                      <span className="xl:hidden">{entry.short}</span>
+                      <span className="hidden xl:inline">{entry.label}</span>
+                    </TabsTrigger>
+                  ))}
+                </TabsList>
+              </div>
+            </div>
+
+            <div className="min-h-0 flex-1 overflow-y-auto p-3">
+              <TabsContent value="memories" className="m-0">
+                <MemoryList
+                  scope={scope}
+                  selected={selected}
+                  onSelect={setSelected}
+                  picked={picked ?? undefined}
+                  onPick={picked ? togglePick : undefined}
+                  picking={picked !== null}
+                  onTogglePicking={() => setPicked(picked ? null : new Map())}
+                />
+              </TabsContent>
+              <TabsContent value="traits" className="m-0">
+                <TraitList scope={scope} selected={selected} onSelect={setSelected} totalTraits={totalTraits} />
+              </TabsContent>
+              <TabsContent value="pending" className="m-0">
+                <PendingList scope={scope} selected={selected} onSelect={setSelected} />
+              </TabsContent>
+              <TabsContent value="results" className="m-0">
+                <SearchResults term={query} scope={scope} selected={selected} onSelect={setSelected} />
+              </TabsContent>
+              <TabsContent value="graph" className="m-0 h-full">
+                <Suspense fallback={<p className="text-sm text-ink-muted">Cargando el grafo…</p>}>
+                  <GraphView scope={scope} onSelect={setSelected} />
+                </Suspense>
+              </TabsContent>
+            </div>
+          </Tabs>
+
+          {picked && picked.size > 0 && (
+            <div className="flex flex-wrap items-center gap-2 border-t border-edge bg-surface-raised px-3 py-2 text-xs">
+              <p role="status" className="text-ink-soft">
+                {picked.size === 1 ? "1 memoria seleccionada" : `${picked.size} memorias seleccionadas`}
+                {pickedScopes.size > 1 && ", de ámbitos distintos: un rasgo sólo junta memorias de uno"}
+              </p>
+              <Button
+                type="button"
+                size="sm"
+                className="ml-auto"
+                disabled={!pickedScope}
+                onClick={() => setCrystallizing(true)}
+              >
+                Cristalizar como rasgo
+              </Button>
+            </div>
+          )}
+        </main>
+
+        <DetailPanel
+          selected={selected}
+          onSelect={setSelected}
+          onClose={() => setSelected(undefined)}
+          onChanged={changed}
+        />
+      </div>
+
+      <Consolidate
+        open={consolidating}
+        scope={scope}
+        scopes={scopeList}
+        onClose={() => setConsolidating(false)}
+      />
 
       {crystallizing && picked && pickedScope && (
         <CrystallizeDialog
           scope={pickedScope}
           ids={[...picked.keys()]}
           onClose={() => setCrystallizing(false)}
-          onDone={(traitId) => {
-            setPicked(null);
-            changed({ layer: "trait", id: traitId });
-          }}
+          onDone={crystallized}
         />
       )}
+
+      <Toaster theme={resolvedTheme} position="bottom-right" />
     </div>
   );
 }
@@ -216,40 +348,81 @@ function CrystallizeDialog({
 }) {
   const [name, setName] = useState("");
   const [polarity, setPolarity] = useState<Polarity>("neutral");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState<string>();
+
+  const submit = async (event: FormEvent) => {
+    event.preventDefault();
+    if (!name.trim()) return;
+    setBusy(true);
+    setError(undefined);
+    try {
+      const out = await actions.crystallize(scope, name.trim(), polarity, ids);
+      toast.success(out.created ? "Rasgo cristalizado." : "Rasgo reforzado.");
+      onDone(out.trait_id);
+    } catch (err) {
+      setError(errorMessage(err));
+      setBusy(false);
+    }
+  };
+
   return (
-    <Dialog
-      title="Cristalizar como rasgo"
-      action="Cristalizar"
-      onClose={onClose}
-      onConfirm={async () => {
-        if (!name.trim()) throw new Error("el rasgo necesita un nombre");
-        const out = await actions.crystallize(scope, name.trim(), polarity, ids);
-        onDone(out.trait_id);
-      }}
-    >
-      <p>
-        Un rasgo es un patrón estable que las {ids.length} memorias sostienen en <strong>{scope}</strong>. Si ya existe
-        uno con el mismo nombre, gana fuerza en vez de duplicarse.
-      </p>
-      <label className="field">
-        <span>Nombre</span>
-        <input value={name} onChange={(e) => setName(e.target.value)} required autoFocus placeholder="Prefiere soluciones sin dependencias" />
-      </label>
-      <fieldset className="field">
-        <legend>Polaridad</legend>
-        {POLARITIES.map((p) => (
-          <label key={p.id} className="radio">
-            <input
-              type="radio"
-              name="polarity"
-              value={p.id}
-              checked={polarity === p.id}
-              onChange={() => setPolarity(p.id)}
+    <Dialog open onOpenChange={(next) => !next && onClose()}>
+      <DialogContent>
+        <DialogHeader>
+          <DialogTitle>Cristalizar como rasgo</DialogTitle>
+          <DialogDescription>
+            Un rasgo es un patrón estable que{" "}
+            {ids.length === 1 ? "1 memoria sostiene" : `las ${ids.length} memorias sostienen`} en {scope}. Si ya existe
+            uno con el mismo nombre, gana fuerza en vez de duplicarse.
+          </DialogDescription>
+        </DialogHeader>
+        <form className="flex flex-col gap-3" onSubmit={submit}>
+          <label className="flex flex-col gap-1 text-xs text-ink-muted">
+            <span>Nombre</span>
+            <Input
+              value={name}
+              onChange={(event) => setName(event.target.value)}
+              required
+              autoFocus
+              placeholder="Prefiere soluciones sin dependencias"
+              className="bg-field"
             />
-            {p.label}
           </label>
-        ))}
-      </fieldset>
+          <fieldset className="flex flex-col gap-1.5">
+            <legend className="mb-1 text-xs text-ink-muted">Polaridad</legend>
+            {POLARITIES.map((entry) => (
+              <label key={entry.id} className="flex items-start gap-2 text-sm text-ink-soft">
+                <input
+                  type="radio"
+                  name="polarity"
+                  value={entry.id}
+                  checked={polarity === entry.id}
+                  onChange={() => setPolarity(entry.id)}
+                  className="mt-0.5 accent-[var(--color-brand)]"
+                />
+                <span>
+                  {entry.label}
+                  <span className="block text-xs text-ink-muted">{entry.hint}</span>
+                </span>
+              </label>
+            ))}
+          </fieldset>
+          {error && (
+            <p role="alert" className="text-sm text-danger">
+              No se pudo: {error}
+            </p>
+          )}
+          <DialogFooter>
+            <Button type="button" variant="outline" onClick={onClose}>
+              Cancelar
+            </Button>
+            <Button type="submit" disabled={busy || !name.trim()}>
+              {busy ? "Un momento…" : "Cristalizar"}
+            </Button>
+          </DialogFooter>
+        </form>
+      </DialogContent>
     </Dialog>
   );
 }

@@ -5,6 +5,15 @@ export type ResolvedTheme = "dark" | "light";
 
 const STORAGE_KEY = "mismem-theme";
 
+/** Acceder a localStorage puede lanzar con cookies de terceros bloqueadas. */
+export function browserStorage(): Storage | null {
+  try {
+    return window.localStorage;
+  } catch {
+    return null;
+  }
+}
+
 export function resolveTheme(choice: ThemeChoice, prefersDark: boolean): ResolvedTheme {
   if (choice === "system") return prefersDark ? "dark" : "light";
   return choice;

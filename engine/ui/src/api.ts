@@ -89,17 +89,35 @@ export interface GraphLink {
 export interface GraphData {
   nodes: GraphNode[];
   links: GraphLink[];
-  truncated: { memories: boolean };
+  truncated: { memories: boolean; traits: boolean; episodes: boolean };
 }
+
+/** Una página de `/api/recent?layer=episode&pending=1`. */
+export interface RecentPage {
+  rows: EpisodeItem[];
+  total: number;
+}
+
+export interface MemoriesPage {
+  total: number;
+  memories: MemoryItem[];
+}
+
+/** Cuántas filas se piden por página. El tope del servidor es 200. */
+export const PAGE_SIZE = 50;
 
 export const isMissing = (item: object): item is Missing => "missing" in item;
 
-async function get<T>(path: string, params: Record<string, string | undefined> = {}): Promise<T> {
+async function get<T>(
+  path: string,
+  params: Record<string, string | undefined> = {},
+  signal?: AbortSignal,
+): Promise<T> {
   const query = new URLSearchParams();
   for (const [key, value] of Object.entries(params)) if (value) query.set(key, value);
   const qs = query.toString();
   // Relativo a /viewer/: funciona igual detrás de un proxy que monte misMEM en otra ruta.
-  const res = await fetch(`../api/${path}${qs ? `?${qs}` : ""}`);
+  const res = await fetch(`../api/${path}${qs ? `?${qs}` : ""}`, { signal });
   if (!res.ok) {
     const body = (await res.json().catch(() => null)) as { error?: string } | null;
     throw new Error(body?.error ?? `HTTP ${res.status}`);
@@ -157,18 +175,23 @@ export const actions = {
 };
 
 export const api = {
-  stats: () =>
-    get<{ counts: { episodes: number; memories: number; traits: number; consolidated: number } }>("stats"),
-  scopes: () => get<{ scopes: ScopeCount[] }>("scopes"),
-  consolidation: () => get<ConsolidationState>("consolidate"),
-  memories: (scope?: string) => get<{ total: number; memories: MemoryItem[] }>("memories", { scope, limit: "200" }),
-  traits: (scope?: string) =>
-    get<{ rows: TraitItem[] }>("recent", { layer: "trait", scope, limit: "200" }),
-  episodes: (scope?: string) =>
-    get<{ rows: EpisodeItem[] }>("recent", { layer: "episode", scope, limit: "200" }),
-  search: (q: string, scope?: string) => get<{ hits: SearchHit[] }>("search", { q, scope, limit: "40" }),
-  graph: (scope: string | undefined, episodes: boolean) =>
-    get<GraphData>("graph", { scope, related: "1", episodes: episodes ? "1" : undefined }),
-  memory: (id: string) => get<MemoryDetail>(`memory/${encodeURIComponent(id)}`),
-  trait: (id: string) => get<TraitDetail>(`trait/${encodeURIComponent(id)}`),
+  scopes: (signal?: AbortSignal) => get<{ scopes: ScopeCount[] }>("scopes", {}, signal),
+  consolidation: (signal?: AbortSignal) => get<ConsolidationState>("consolidate", {}, signal),
+  memories: (scope: string | undefined, offset: number, signal?: AbortSignal) =>
+    get<MemoriesPage>("memories", { scope, limit: String(PAGE_SIZE), offset: String(offset) }, signal),
+  pendingEpisodes: (scope: string | undefined, offset: number, signal?: AbortSignal) =>
+    get<RecentPage>(
+      "recent",
+      { layer: "episode", pending: "1", scope, limit: String(PAGE_SIZE), offset: String(offset) },
+      signal,
+    ),
+  traits: (scope: string | undefined, signal?: AbortSignal) =>
+    get<{ rows: TraitItem[] }>("recent", { layer: "trait", scope, limit: "200" }, signal),
+  // Los 50 mejores: es una lista por relevancia y la cola no aporta.
+  search: (q: string, scope: string | undefined, signal?: AbortSignal) =>
+    get<{ hits: SearchHit[] }>("search", { q, scope, limit: "50" }, signal),
+  graph: (scope: string | undefined, episodes: boolean, signal?: AbortSignal) =>
+    get<GraphData>("graph", { scope, related: "1", episodes: episodes ? "1" : undefined }, signal),
+  memory: (id: string, signal?: AbortSignal) => get<MemoryDetail>(`memory/${encodeURIComponent(id)}`, {}, signal),
+  trait: (id: string, signal?: AbortSignal) => get<TraitDetail>(`trait/${encodeURIComponent(id)}`, {}, signal),
 };

@@ -1,132 +1,218 @@
 import { useEffect, useRef, useState } from "react";
+import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { toast } from "sonner";
+import { Button } from "@/components/ui/button";
+import {
+  Dialog,
+  DialogContent,
+  DialogDescription,
+  DialogFooter,
+  DialogHeader,
+  DialogTitle,
+} from "@/components/ui/dialog";
+import { Skeleton } from "@/components/ui/skeleton";
+import { Switch } from "@/components/ui/switch";
 import { actions, api, type ConsolidationState, type ScopeCount } from "../api";
+import { errorMessage } from "../lib/errors";
 
 interface Props {
+  open: boolean;
   scope: string | undefined;
+  scopes: ScopeCount[] | undefined;
   onClose: () => void;
-  /** La corrida terminó: hay memorias nuevas que mostrar. */
-  onFinished: () => void;
 }
 
 const POLL_MS = 2000;
 
+type Phase = "loading" | "error" | "confirm" | "running" | "done";
+
 /**
- * Consolidar ahora: confirma, arranca la corrida en el servidor y enseña cómo va. Si al
- * abrirlo ya hay una en curso (lanzada desde otra pestaña), muestra esa en vez de otra.
+ * Consolidar ahora: confirma el gasto, arranca la corrida en el servidor y enseña cómo va.
+ * Si al abrirlo ya hay una en curso (otra pestaña), muestra esa en vez de lanzar otra.
  */
-export function Consolidate({ scope, onClose, onFinished }: Props) {
-  const ref = useRef<HTMLDialogElement>(null);
-  const [job, setJob] = useState<ConsolidationState>();
-  const [scopes, setScopes] = useState<ScopeCount[]>();
+export function Consolidate({ open, scope, scopes, onClose }: Props) {
+  const queryClient = useQueryClient();
   const [onlyScope, setOnlyScope] = useState(Boolean(scope));
-  const [error, setError] = useState<string>();
+  const [starting, setStarting] = useState(false);
+  const [startError, setStartError] = useState<string>();
   const [startedHere, setStartedHere] = useState(false);
+  const wasRunning = useRef(false);
+
+  const jobQuery = useQuery({
+    queryKey: ["consolidation"],
+    queryFn: ({ signal }) => api.consolidation(signal),
+    enabled: open,
+    retry: false,
+    // D29: TanStack no solapa peticiones. D4: un fallo del poll corta el intervalo y se avisa.
+    refetchInterval: (query) => (query.state.data?.running && !query.state.error ? POLL_MS : false),
+  });
 
   useEffect(() => {
-    ref.current?.showModal();
-    api.consolidation().then(setJob, (err: unknown) => setError(String(err)));
-    api.scopes().then(({ scopes: list }) => setScopes(list), () => undefined);
-  }, []);
+    if (!open) return;
+    setOnlyScope(Boolean(scope));
+    setStartedHere(false);
+    setStartError(undefined);
+    wasRunning.current = false;
+  }, [open, scope]);
 
-  // Mientras corre, se pregunta cada dos segundos; al terminar, se avisa una vez.
+  // La corrida terminó: las listas y los ámbitos ya pueden leer memorias nuevas.
+  const job = jobQuery.data;
   useEffect(() => {
-    if (!job?.running) return;
-    const timer = setInterval(() => {
-      api.consolidation().then((next) => {
-        setJob(next);
-        if (!next.running) onFinished();
-      });
-    }, POLL_MS);
-    return () => clearInterval(timer);
-  }, [job?.running, onFinished]);
+    if (!job) return;
+    if (job.running) {
+      wasRunning.current = true;
+      return;
+    }
+    if (wasRunning.current) {
+      wasRunning.current = false;
+      void queryClient.invalidateQueries();
+    }
+  }, [job, queryClient]);
 
   const pendingInScope = scopes
-    ?.filter((s) => !(onlyScope && scope) || s.scope === scope)
-    .reduce((n, s) => n + s.episodes_pending, 0);
+    ?.filter((entry) => !(onlyScope && scope) || entry.scope === scope)
+    .reduce((total, entry) => total + entry.episodes_pending, 0);
+
+  const phase: Phase = !job
+    ? jobQuery.isError
+      ? "error"
+      : "loading"
+    : job.running
+      ? "running"
+      : startedHere
+        ? "done"
+        : "confirm";
 
   const start = async () => {
-    setError(undefined);
+    setStarting(true);
+    setStartError(undefined);
     try {
-      setJob(await actions.consolidate(onlyScope ? scope : undefined));
+      const state = await actions.consolidate(onlyScope ? scope : undefined);
+      queryClient.setQueryData<ConsolidationState>(["consolidation"], state);
       setStartedHere(true);
+      toast.success("Consolidación lanzada.");
     } catch (err) {
-      setError(err instanceof Error ? err.message : String(err));
+      setStartError(errorMessage(err));
+    } finally {
+      setStarting(false);
     }
   };
 
-  const phase = !job ? "loading" : job.running ? "running" : job.finished_at && startedHere ? "done" : "confirm";
+  const log = job?.log ?? [];
+  const lastLine = log[log.length - 1] ?? "";
 
   return (
-    <dialog ref={ref} className="dialog dialog-wide" onClose={onClose} aria-labelledby="consolidate-title">
-      <h2 id="consolidate-title">Consolidar ahora</h2>
+    <Dialog open={open} onOpenChange={(next) => !next && onClose()}>
+      <DialogContent className="sm:max-w-lg">
+        <DialogHeader>
+          <DialogTitle>Consolidar ahora</DialogTitle>
+          <DialogDescription>
+            Un LLM lee los episodios sin consolidar y los resume en memorias.
+          </DialogDescription>
+        </DialogHeader>
 
-      {phase === "loading" && <p className="note">Comprobando si ya hay una en curso…</p>}
-
-      {phase === "confirm" && (
-        <div className="dialog-body">
-          <p>
-            Un LLM lee los episodios sin consolidar y los resume en memorias. Cada tanda es una llamada a la API
-            del proveedor configurado en el servidor, así que cuesta dinero; los topes de la consolidación siguen
-            valiendo.
-          </p>
-          {pendingInScope !== undefined && (
-            <p>
-              Hay {pendingInScope === 1 ? "1 episodio" : `${pendingInScope} episodios`} sin consolidar. Los de menos de un
-              día esperan a la próxima.
-            </p>
-          )}
-          {scope && (
-            <label className="radio">
-              <input type="checkbox" checked={onlyScope} onChange={(e) => setOnlyScope(e.target.checked)} />
-              Sólo el ámbito {scope}
-            </label>
-          )}
-        </div>
-      )}
-
-      {(phase === "running" || phase === "done") && job && (
-        <div className="dialog-body">
-          <p>
-            {job.running
-              ? `En curso${job.scope ? ` en ${job.scope}` : ""}. Puedes cerrar esto: sigue en el servidor.`
-              : job.error
-                ? `Falló: ${job.error}`
-                : "Terminó."}
-          </p>
-          {job.summary && (
-            <dl className="facts">
-              <dt>Memorias nuevas</dt>
-              <dd>{job.summary.memories_created}</dd>
-              <dt>Episodios consolidados</dt>
-              <dd>{job.summary.episodes_consolidated}</dd>
-              <dt>Llamadas al LLM</dt>
-              <dd>{job.summary.llm_calls}</dd>
-              <dt>Ámbitos con error</dt>
-              <dd>{job.summary.scopes_failed}</dd>
-            </dl>
-          )}
-          <pre className="job-log" aria-live="polite">
-            {job.log.slice(-10).join("\n") || "Esperando la primera línea…"}
-          </pre>
-        </div>
-      )}
-
-      {error && (
-        <p className="error" role="alert">
-          No se pudo: {error}
-        </p>
-      )}
-
-      <div className="dialog-actions">
-        <button type="button" className="button" onClick={() => ref.current?.close()}>
-          {phase === "confirm" ? "Cancelar" : "Cerrar"}
-        </button>
-        {phase === "confirm" && (
-          <button type="button" className="button primary" onClick={start}>
-            Consolidar ahora
-          </button>
+        {phase === "loading" && (
+          <div aria-busy="true" className="flex flex-col gap-2">
+            <span role="status" className="sr-only">
+              Comprobando si ya hay una consolidación en curso…
+            </span>
+            <Skeleton className="h-5 w-2/3 bg-field" />
+            <Skeleton className="h-16 w-full bg-field" />
+          </div>
         )}
-      </div>
-    </dialog>
+
+        {phase === "error" && (
+          <div className="flex flex-col gap-2">
+            <p role="alert" className="rounded-md bg-field px-2 py-1.5 text-sm text-danger">
+              No se pudo consultar el estado de la consolidación: {errorMessage(jobQuery.error)}
+            </p>
+            <div>
+              <Button type="button" variant="outline" size="sm" onClick={() => void jobQuery.refetch()}>
+                Reintentar
+              </Button>
+            </div>
+          </div>
+        )}
+
+        {phase === "confirm" && (
+          <div className="flex flex-col gap-3 text-sm text-ink-soft">
+            <p>
+              Cada tanda es una llamada a la API del proveedor configurado en el servidor, así que cuesta dinero; los
+              topes de la consolidación siguen valiendo.
+            </p>
+            {pendingInScope !== undefined && (
+              <p className="text-ink-muted">
+                Hay {pendingInScope === 1 ? "1 episodio" : `${pendingInScope} episodios`} sin consolidar. Los de menos de
+                un día esperan a la próxima.
+              </p>
+            )}
+            {scope && (
+              <label className="flex items-center justify-between gap-3">
+                <span>Sólo el ámbito {scope}</span>
+                <Switch checked={onlyScope} onCheckedChange={setOnlyScope} aria-label={`Sólo el ámbito ${scope}`} />
+              </label>
+            )}
+          </div>
+        )}
+
+        {(phase === "running" || phase === "done") && job && (
+          <div className="flex flex-col gap-3">
+            <p className="text-sm text-ink-soft">
+              {job.running
+                ? `En curso${job.scope ? ` en ${job.scope}` : ""}. Puedes cerrar esto: sigue en el servidor.`
+                : job.error
+                  ? `Falló: ${job.error}`
+                  : "Terminó."}
+            </p>
+            {job.summary && (
+              <dl className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-sm">
+                <dt className="text-ink-muted">Memorias nuevas</dt>
+                <dd className="tabular-nums text-ink-soft">{job.summary.memories_created}</dd>
+                <dt className="text-ink-muted">Episodios consolidados</dt>
+                <dd className="tabular-nums text-ink-soft">{job.summary.episodes_consolidated}</dd>
+                <dt className="text-ink-muted">Llamadas al LLM</dt>
+                <dd className="tabular-nums text-ink-soft">{job.summary.llm_calls}</dd>
+                <dt className="text-ink-muted">Ámbitos con error</dt>
+                <dd className="tabular-nums text-ink-soft">{job.summary.scopes_failed}</dd>
+              </dl>
+            )}
+            {/* D16: el log visible no es región viva; abajo se anuncia sólo la última línea. */}
+            <pre className="max-h-40 overflow-auto rounded-md bg-field p-2 text-[11px] leading-relaxed text-ink-soft">
+              {log.slice(-10).join("\n") || "Esperando la primera línea…"}
+            </pre>
+            <p className="sr-only" aria-live="polite">
+              {lastLine}
+            </p>
+          </div>
+        )}
+
+        {jobQuery.isError && job && (
+          <p role="status" className="rounded-md bg-field px-2 py-1.5 text-sm text-ink-muted">
+            Se perdió la conexión al consultar el avance: {errorMessage(jobQuery.error)}. Vuelve a intentarlo para
+            seguir la corrida.
+            <Button type="button" variant="ghost" size="xs" className="ml-2" onClick={() => void jobQuery.refetch()}>
+              Reintentar
+            </Button>
+          </p>
+        )}
+
+        {startError && (
+          <p role="alert" className="rounded-md bg-field px-2 py-1.5 text-sm text-danger">
+            No se pudo: {startError}
+          </p>
+        )}
+
+        <DialogFooter>
+          <Button type="button" variant="outline" onClick={onClose}>
+            {phase === "confirm" ? "Cancelar" : "Cerrar"}
+          </Button>
+          {phase === "confirm" && (
+            <Button type="button" onClick={() => void start()} disabled={starting} aria-busy={starting}>
+              {starting ? "Arrancando…" : "Consolidar ahora"}
+            </Button>
+          )}
+        </DialogFooter>
+      </DialogContent>
+    </Dialog>
   );
 }
