@@ -1,5 +1,6 @@
-import { useEffect, useState, type FormEvent } from "react";
+import { useEffect, useRef, useState, type FormEvent, type RefObject } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
+import { m } from "motion/react";
 import { toast } from "sonner";
 import {
   AlertDialog,
@@ -39,12 +40,58 @@ const truncate = (text: string, max: number): string => (text.length > max ? `${
  */
 export function DetailPanel(props: DetailProps) {
   const isDesktop = useMediaQuery("(min-width: 768px)");
+  const [announcement, setAnnouncement] = useState("");
+  const titleRef = useRef<HTMLElement>(null);
+  const openerRef = useRef<HTMLElement | null>(null);
+  const lastSelection = useRef<string | undefined>(undefined);
+
+  // En escritorio el detalle no es modal: al abrirlo el foco va al título y al cerrarlo
+  // vuelve a la fila que lo abrió si sigue montada. En móvil lo hace el Sheet de Radix.
+  useEffect(() => {
+    if (!isDesktop) return;
+    const key = props.selected ? `${props.selected.layer}:${props.selected.id}` : undefined;
+    if (key === lastSelection.current) return;
+    // Sólo la primera apertura guarda el origen: encadenar selecciones dentro del propio
+    // detalle no puede sustituirlo por un botón que va a desmontarse.
+    const opening = lastSelection.current === undefined;
+    lastSelection.current = key;
+    if (key) {
+      if (opening) {
+        const active = document.activeElement;
+        openerRef.current = active instanceof HTMLElement ? active : null;
+      }
+      titleRef.current?.focus();
+      return;
+    }
+    const opener = openerRef.current;
+    openerRef.current = null;
+    if (opener?.isConnected) opener.focus();
+  }, [props.selected, isDesktop]);
+
+  // D14: la región viva se monta una vez y sólo cambia su texto; una región que nace
+  // poblada no se anuncia. Vive aquí para sobrevivir a cada selección.
+  useEffect(() => {
+    if (!props.selected) setAnnouncement("");
+  }, [props.selected]);
+
+  const live = (
+    <p className="sr-only" aria-live="polite">
+      {announcement}
+    </p>
+  );
 
   if (isDesktop) {
     return (
       <aside aria-label="Detalle" className="min-h-0 overflow-y-auto border-l border-edge bg-surface-raised">
+        {live}
         {props.selected ? (
-          <Detail {...props} selected={props.selected} />
+          <Detail
+            key={`${props.selected.layer}:${props.selected.id}`}
+            {...props}
+            selected={props.selected}
+            titleRef={titleRef}
+            onAnnounce={setAnnouncement}
+          />
         ) : (
           <p className="p-4 text-sm text-ink-muted">Elige un recuerdo para ver de dónde sale y qué lo cita.</p>
         )}
@@ -60,39 +107,73 @@ export function DetailPanel(props: DetailProps) {
           <SheetDescription>Contenido del elemento seleccionado.</SheetDescription>
         </SheetHeader>
         <div className="min-h-0 flex-1 overflow-y-auto">
-          {props.selected && <Detail {...props} selected={props.selected} />}
+          {live}
+          {props.selected && (
+            <Detail
+              key={`${props.selected.layer}:${props.selected.id}`}
+              {...props}
+              selected={props.selected}
+              titleRef={titleRef}
+              onAnnounce={setAnnouncement}
+            />
+          )}
         </div>
       </SheetContent>
     </Sheet>
   );
 }
 
-function Detail({ selected, onSelect, onClose, onChanged }: DetailProps & { selected: Selection }) {
+function Detail({
+  selected,
+  onSelect,
+  onClose,
+  onChanged,
+  titleRef,
+  onAnnounce,
+}: DetailProps & {
+  selected: Selection;
+  titleRef: RefObject<HTMLElement | null>;
+  onAnnounce: (text: string) => void;
+}) {
   return (
-    <article className="p-4" data-layer={selected.layer}>
+    <m.article
+      ref={titleRef}
+      tabIndex={-1}
+      aria-labelledby="detail-title"
+      className="p-4 outline-none"
+      data-layer={selected.layer}
+      initial={{ opacity: 0 }}
+      animate={{ opacity: 1 }}
+      transition={{ duration: 0.15 }}
+    >
       <div className="mb-3 flex items-center justify-between gap-2">
-        <span className="text-[11px] uppercase tracking-wider text-ink-muted">Detalle</span>
+        <h2 id="detail-title" className="text-[11px] uppercase tracking-wider text-ink-muted">
+          Detalle
+        </h2>
         <Button type="button" variant="ghost" size="xs" onClick={onClose}>
           Cerrar
         </Button>
       </div>
       {selected.layer === "memory" && (
-        <MemoryView key={selected.id} id={selected.id} onSelect={onSelect} onChanged={onChanged} />
+        <MemoryView
+          key={selected.id}
+          id={selected.id}
+          onSelect={onSelect}
+          onChanged={onChanged}
+          onAnnounce={onAnnounce}
+        />
       )}
       {selected.layer === "trait" && (
-        <TraitView key={selected.id} id={selected.id} onSelect={onSelect} onChanged={onChanged} />
+        <TraitView
+          key={selected.id}
+          id={selected.id}
+          onSelect={onSelect}
+          onChanged={onChanged}
+          onAnnounce={onAnnounce}
+        />
       )}
-      {selected.layer === "episode" && <EpisodeView selection={selected} />}
-    </article>
-  );
-}
-
-/** El título del detalle se anuncia al cambiar de selección (D14). */
-function LiveTitle({ children }: { children: string }) {
-  return (
-    <p className="sr-only" aria-live="polite">
-      {children}
-    </p>
+      {selected.layer === "episode" && <EpisodeView selection={selected} onAnnounce={onAnnounce} />}
+    </m.article>
   );
 }
 
@@ -125,10 +206,12 @@ function MemoryView({
   id,
   onSelect,
   onChanged,
+  onAnnounce,
 }: {
   id: string;
   onSelect: (selection: Selection) => void;
   onChanged: (next?: Selection | null) => void;
+  onAnnounce: (text: string) => void;
 }) {
   const queryClient = useQueryClient();
   const query = useQuery({ queryKey: ["memory", id], queryFn: ({ signal }) => api.memory(id, signal) });
@@ -138,6 +221,10 @@ function MemoryView({
   const [actionError, setActionError] = useState<string>();
 
   const data = query.data;
+  useEffect(() => {
+    if (data) onAnnounce(`Memoria abierta: ${truncate(data.memory.text, 120)}`);
+  }, [data, onAnnounce]);
+
   if (!data) {
     return query.isError ? <DetailFailure what="la memoria" error={query.error} /> : <DetailLoading label="Cargando la memoria…" />;
   }
@@ -188,7 +275,6 @@ function MemoryView({
 
   return (
     <>
-      <LiveTitle>{`Memoria abierta: ${truncate(memory.text, 120)}`}</LiveTitle>
       <p className="mb-1 text-[11px] uppercase tracking-wider text-brand-text">Memoria</p>
 
       {editing ? (
@@ -442,10 +528,12 @@ function TraitView({
   id,
   onSelect,
   onChanged,
+  onAnnounce,
 }: {
   id: string;
   onSelect: (selection: Selection) => void;
   onChanged: (next?: Selection | null) => void;
+  onAnnounce: (text: string) => void;
 }) {
   const query = useQuery({ queryKey: ["trait", id], queryFn: ({ signal }) => api.trait(id, signal) });
   const [confirm, setConfirm] = useState(false);
@@ -453,6 +541,10 @@ function TraitView({
   const [actionError, setActionError] = useState<string>();
 
   const data = query.data;
+  useEffect(() => {
+    if (data) onAnnounce(`Rasgo abierto: ${truncate(data.trait.text, 120)}`);
+  }, [data, onAnnounce]);
+
   if (!data) {
     return query.isError ? <DetailFailure what="el rasgo" error={query.error} /> : <DetailLoading label="Cargando el rasgo…" />;
   }
@@ -477,7 +569,6 @@ function TraitView({
 
   return (
     <>
-      <LiveTitle>{`Rasgo abierto: ${truncate(trait.text, 120)}`}</LiveTitle>
       <p className="mb-1 text-[11px] uppercase tracking-wider text-brand-text">Rasgo</p>
       <p className="text-sm leading-relaxed text-ink">{trait.text}</p>
 
@@ -574,8 +665,18 @@ function TraitView({
   );
 }
 
-function EpisodeView({ selection }: { selection: Selection }) {
+function EpisodeView({
+  selection,
+  onAnnounce,
+}: {
+  selection: Selection;
+  onAnnounce: (text: string) => void;
+}) {
   const episode = selection.episode;
+  useEffect(() => {
+    onAnnounce(episode ? `Episodio abierto: ${truncate(episode.text, 120)}` : "Episodio abierto");
+  }, [episode, onAnnounce]);
+
   if (!episode) {
     return (
       <p className="text-sm text-ink-muted">
@@ -585,7 +686,6 @@ function EpisodeView({ selection }: { selection: Selection }) {
   }
   return (
     <>
-      <LiveTitle>{`Episodio abierto: ${truncate(episode.text, 120)}`}</LiveTitle>
       <p className="mb-1 text-[11px] uppercase tracking-wider text-ink-muted">Episodio sin consolidar</p>
       <p className="whitespace-pre-wrap text-sm leading-relaxed text-ink">{episode.text}</p>
       <dl className="mt-4 grid grid-cols-[auto_1fr] gap-x-3 gap-y-1 text-sm">

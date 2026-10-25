@@ -72,14 +72,17 @@
   --color-field: #bcbab3;
   --color-ink: #121114;
   --color-ink-soft: #333236;
-  /* #5c5a54 del diseño se queda en 4,16:1 sobre surface: se oscurece lo justo para AA (4,57:1). */
-  --color-ink-muted: #56544e;
+  /* Oscurecer la tinta cuesta menos que aclarar `field`: los chips seguirían leyéndose
+     como campos. #56544e se quedaba en 3,90:1 sobre field (el fondo real de chips y
+     avisos), así que este tono sube el peor par a 4,63:1 y conserva 5,44:1 en surface. */
+  --color-ink-muted: #4b4943;
   --color-ink-faint: #807d75;
   --color-edge: rgb(0 0 0 / 0.12);
   --color-divider: rgb(0 0 0 / 0.22);
   --color-brand: #b23a76;
-  /* El #b23a76 de marca no pasa AA como texto: este tono lo oscurece hasta 4,69:1 y 5,20:1. */
-  --color-brand-text: #8e2e5e;
+  /* El #b23a76 de marca no pasa AA como texto. #8e2e5e pasaba sobre surface pero se
+     quedaba en 4,00:1 sobre field y 3,94:1 sobre brand/15; este tono da 4,78 y 4,71. */
+  --color-brand-text: #7c274f;
   --color-brand-contrast: #ffffff;
   --color-composer: #dbd8d1;
   --color-composer-border: rgb(0 0 0 / 0.18);

@@ -1,6 +1,7 @@
 import { StrictMode } from "react";
 import { createRoot } from "react-dom/client";
 import { QueryClient, QueryClientProvider } from "@tanstack/react-query";
+import { domAnimation, LazyMotion, MotionConfig } from "motion/react";
 import "./styles.css";
 import { App } from "./App";
 import { applyTheme, browserStorage, loadTheme, resolveTheme } from "./lib/theme";
@@ -21,7 +22,13 @@ const queryClient = new QueryClient({
 createRoot(document.getElementById("root") as HTMLElement).render(
   <StrictMode>
     <QueryClientProvider client={queryClient}>
-      <App />
+      {/* `user` respeta prefers-reduced-motion: las microinteracciones no se imponen. */}
+      <MotionConfig reducedMotion="user">
+        {/* `strict` obliga a usar `m` y evita arrastrar la API completa de motion. */}
+        <LazyMotion features={domAnimation} strict>
+          <App />
+        </LazyMotion>
+      </MotionConfig>
     </QueryClientProvider>
   </StrictMode>,
 );

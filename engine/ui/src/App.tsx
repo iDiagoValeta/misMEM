@@ -185,6 +185,9 @@ export function App() {
   };
 
   const crystallized = (traitId: string) => {
+    // Sin esto el diálogo sigue marcado como abierto y reaparece al elegir la primera
+    // memoria de la siguiente selección, sin volver a pulsar "Cristalizar como rasgo".
+    setCrystallizing(false);
     setPicked(null);
     refresh();
     setSelected({ layer: "trait", id: traitId });

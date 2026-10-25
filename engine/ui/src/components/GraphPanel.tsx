@@ -18,6 +18,7 @@ export interface GraphSettings {
   localEnabled: boolean;
   depth: 1 | 2 | 3;
   colorByScope: boolean;
+  arrows: boolean;
   textThreshold: number;
   nodeSize: number;
   center: number;
@@ -35,6 +36,8 @@ export const DEFAULT_SETTINGS: GraphSettings = {
   localEnabled: false,
   depth: 2,
   colorByScope: true,
+  // Apagadas por defecto: la maqueta aprobada no las tenía y suman tinta al dibujo.
+  arrows: false,
   textThreshold: 1.6,
   nodeSize: 1,
   center: 0.06,
@@ -196,6 +199,12 @@ export function GraphPanel({ settings, onChange, scopes, width }: Props) {
         </Section>
 
         <Section title="Visualización">
+          <ToggleRow
+            id="gp-arrows"
+            label="Flechas"
+            checked={settings.arrows}
+            onChange={(v) => onChange({ arrows: v })}
+          />
           <SliderRow
             id="gp-text"
             label="Umbral de texto"

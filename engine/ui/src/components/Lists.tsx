@@ -1,4 +1,5 @@
-import { keepPreviousData, useInfiniteQuery, useQuery } from "@tanstack/react-query";
+import { useInfiniteQuery, useQuery } from "@tanstack/react-query";
+import { m } from "motion/react";
 import type { ReactNode } from "react";
 import { Button } from "@/components/ui/button";
 import { Skeleton } from "@/components/ui/skeleton";
@@ -8,6 +9,7 @@ import type { Selection } from "../App";
 import { ago, percent } from "../format";
 import { errorMessage } from "../lib/errors";
 import { inkPercent } from "../lib/ink";
+import { mergePages } from "../lib/pages";
 
 interface ListProps {
   scope: string | undefined;
@@ -63,9 +65,10 @@ function Row({
           aria-label={`Seleccionar: ${text.slice(0, 80)}`}
         />
       )}
-      <button
+      <m.button
         type="button"
         onClick={onClick}
+        whileTap={{ scale: 0.99 }}
         aria-current={active ? "true" : undefined}
         data-layer={layer}
         className={cn(
@@ -80,7 +83,7 @@ function Row({
           {text}
         </span>
         <span className="mt-1.5 flex flex-wrap items-center gap-1.5 text-[11px]">{meta}</span>
-      </button>
+      </m.button>
     </li>
   );
 }
@@ -168,7 +171,7 @@ export function MemoryList({
   });
 
   if (query.isPending) return <Loading label="Cargando las memorias…" />;
-  const rows = query.data?.pages.flatMap((page) => page.memories) ?? [];
+  const rows = mergePages(query.data?.pages.map((page) => page.memories) ?? []);
   const total = query.data?.pages[0]?.total ?? 0;
   const remaining = Math.max(0, total - rows.length);
 
@@ -288,7 +291,7 @@ export function PendingList({ scope, selected, onSelect }: ListProps) {
   });
 
   if (query.isPending) return <Loading label="Cargando los episodios sin consolidar…" />;
-  const rows = query.data?.pages.flatMap((page) => page.rows) ?? [];
+  const rows = mergePages(query.data?.pages.map((page) => page.rows) ?? []);
   const total = query.data?.pages[0]?.total ?? 0;
   const remaining = Math.max(0, total - rows.length);
 
@@ -330,8 +333,10 @@ export function SearchResults({ term, scope, selected, onSelect }: ListProps & {
     queryKey: ["search", scope ?? "", trimmed],
     queryFn: ({ signal }) => api.search(trimmed, scope, signal),
     enabled: trimmed.length > 0,
-    // Al afinar la consulta se conserva la lista anterior mientras llega la nueva.
-    placeholderData: keepPreviousData,
+    // Al afinar la consulta se conserva la lista anterior mientras llega la nueva, pero
+    // cambiar de ámbito no puede enseñar los hits del anterior bajo la cabecera nueva.
+    placeholderData: (previous, previousQuery) =>
+      previousQuery?.queryKey[1] === (scope ?? "") ? previous : undefined,
   });
 
   if (!trimmed) {

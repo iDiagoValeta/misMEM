@@ -346,6 +346,9 @@ export default function GraphView({ scope, query, selectedId, active: visible, o
           linkColor={linkColor}
           linkWidth={linkWidth}
           linkLineDash={(link) => (link.kind === "related" ? [2, 2] : null)}
+          // En la punta de la arista; longitud 0 deja la línea limpia cuando están apagadas.
+          linkDirectionalArrowLength={settings.arrows ? 3 : 0}
+          linkDirectionalArrowRelPos={1}
           onNodeHover={onNodeHover}
           onNodeClick={onNodeClick}
           onEngineStop={onEngineStop}
