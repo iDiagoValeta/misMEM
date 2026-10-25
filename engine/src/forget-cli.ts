@@ -4,36 +4,9 @@
  * Ideal para correr después de mismem-consolidate.
  */
 import { defaultDbPath, openDefaultDb } from "./db.js";
+import { ArgsError, EXIT_USAGE } from "./cli-args.js";
+import { parseForgetArgs } from "./forget-args.js";
 import { forget } from "./tools.js";
-
-interface Args {
-  scope?: string;
-  beforeDays: number;
-  memoryGraceDays: number;
-  salienceBelow: number;
-  dryRun: boolean;
-  help: boolean;
-}
-
-function parseArgs(argv: string[]): Args {
-  const out: Args = {
-    beforeDays: 90,
-    memoryGraceDays: 30,
-    salienceBelow: 0.1,
-    dryRun: false,
-    help: false,
-  };
-  for (let i = 0; i < argv.length; i++) {
-    const a = argv[i];
-    if (a === "--help" || a === "-h") out.help = true;
-    else if (a === "--dry-run") out.dryRun = true;
-    else if (a === "--scope") out.scope = argv[++i];
-    else if (a === "--before-days") out.beforeDays = Number(argv[++i]);
-    else if (a === "--memory-grace-days") out.memoryGraceDays = Number(argv[++i]);
-    else if (a === "--salience-below") out.salienceBelow = Number(argv[++i]);
-  }
-  return out;
-}
 
 function help(): void {
   console.log(`misMEM forget CLI
@@ -57,7 +30,15 @@ Env:
 }
 
 async function main(): Promise<void> {
-  const opts = parseArgs(process.argv.slice(2));
+  let opts;
+  try {
+    opts = parseForgetArgs(process.argv.slice(2));
+  } catch (err) {
+    if (!(err instanceof ArgsError)) throw err;
+    console.error(`[forget] ${err.message}\n`);
+    help();
+    process.exit(EXIT_USAGE);
+  }
   if (opts.help) { help(); return; }
 
   const db = openDefaultDb();
