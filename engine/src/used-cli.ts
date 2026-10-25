@@ -15,6 +15,7 @@ import { callRemoteTool } from "./hook-client.js";
 import { reinforce } from "./tools.js";
 import {
   assistantReply,
+  injectedMemories,
   lastTurn,
   recalledMemories,
   usedMemoryIds,
@@ -84,7 +85,11 @@ async function main(): Promise<void> {
     });
 
   const turn = lastTurn(lines);
-  const memories = recalledMemories(turn);
+  // Lo que el modelo pidió y lo que el hook de inyección le puso delante, sin repetir ids.
+  const porId = new Map(
+    [...recalledMemories(turn), ...injectedMemories(turn)].map((m) => [m.id, m]),
+  );
+  const memories = [...porId.values()];
   if (memories.length === 0) return;
 
   const opts: UsageOptions = {

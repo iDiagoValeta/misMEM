@@ -1,7 +1,8 @@
 # misMEM — Consolidación LLM (ciclo de sueño)
 
-Destila episodios verbatim en memorias estructuradas usando un LLM: DeepSeek directo si hay
-`DEEPSEEK_API_KEY`, si no OpenRouter.
+Destila episodios verbatim en memorias estructuradas usando un LLM: DeepSeek, OpenRouter, OpenAI
+o cualquier servidor compatible con la API de OpenAI (`MISMEM_LLM_PROVIDER`; sin ella, el primero
+que tenga su clave).
 
 ## Arquitectura
 
@@ -21,7 +22,7 @@ mismem-consolidate [--dry-run] [--scope <name>] [--min-age-hours 24] [--min-epis
 
 ## Configuración
 
-Las variables (`DEEPSEEK_API_KEY`, `OPENROUTER_API_KEY`, `MISMEM_CONSOLIDATION_*`) y sus defaults están
+Las variables (`MISMEM_LLM_PROVIDER`, las claves de cada proveedor, `MISMEM_CONSOLIDATION_*`) y sus defaults están
 en la [referencia única de DEPLOY.md](../../../DEPLOY.md#variables-de-entorno-referencia-única).
 
 ## Calidad
@@ -34,13 +35,13 @@ en la [referencia única de DEPLOY.md](../../../DEPLOY.md#variables-de-entorno-r
 - **Anti-alucinación**: filtra `evidence_episode_ids` que no estén en el batch
 - **Ruido**: lo que no llega a memoria queda atado a una memoria marcadora (`[noise] …` o `[pareto:l0] …`)
   con `salience=0.05`, y `forget` lo borra a los 30 días **junto con sus episodios**. El marcador no vuelve
-  en el recall ni gasta un embedding (`engine/src/noise.ts`). Pasa en tres casos:
-  el pre-filtro Pareto lo descartó, el LLM devolvió `memories: []`, o el LLM leyó el episodio y no lo citó
-  en `MISMEM_CONSOLIDATION_UNCITED_STRIKES` tandas seguidas. Los dos últimos dependen del LLM:
+  en el recall ni gasta un embedding (`engine/src/noise.ts`). Pasa en dos casos:
+  el pre-filtro Pareto lo descartó, o el LLM leyó el episodio y no lo citó en
+  `MISMEM_CONSOLIDATION_UNCITED_STRIKES` tandas seguidas. El segundo depende del LLM:
   conviene mirar el log de las primeras corridas y tener respaldos que duren más que esos 30 días.
 - **Episodio que el LLM no cita**: suma un strike (`episodes.uncited_count`) y vuelve en la corrida
-  siguiente, no en la misma. Recién al agotar los strikes pasa a ruido. El resumen lo cuenta en
-  `episodes_uncited_pending`.
+  siguiente, no en la misma. Recién al agotar los strikes pasa a ruido. Un `memories: []` ("sin señal")
+  cuenta como no citar toda la tanda. El resumen lo cuenta en `episodes_uncited_pending`.
 - **Episodio que no entra**: si con un solo episodio la respuesta igual llega cortada o inválida, ese
   episodio queda pendiente (no se marca ruido ni falla el ámbito) y la corrida sigue con el resto. Se
   reintenta la noche siguiente y aparece en el resumen como `episodes_skipped`.

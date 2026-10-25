@@ -1,45 +1,13 @@
 #!/usr/bin/env node
 import { defaultDbPath, openDefaultDb } from "./db.js";
 import { runConsolidation } from "./consolidation/run.js";
-
-function parseArgs(argv: string[]): {
-  scope?: string;
-  dryRun: boolean;
-  minAgeHours?: number;
-  minEpisodes?: number;
-  quietDays?: number;
-  maxBatch?: number;
-  uncitedStrikes?: number;
-  help: boolean;
-} {
-  const out: {
-    scope?: string;
-    dryRun: boolean;
-    minAgeHours?: number;
-    minEpisodes?: number;
-    quietDays?: number;
-    maxBatch?: number;
-    uncitedStrikes?: number;
-    help: boolean;
-  } = { dryRun: false, help: false };
-  for (let i = 0; i < argv.length; i++) {
-    const a = argv[i];
-    if (a === "--help" || a === "-h") out.help = true;
-    else if (a === "--dry-run") out.dryRun = true;
-    else if (a === "--scope") out.scope = argv[++i];
-    else if (a === "--min-age-hours") out.minAgeHours = Number(argv[++i]);
-    else if (a === "--min-episodes") out.minEpisodes = Number(argv[++i]);
-    else if (a === "--quiet-days") out.quietDays = Number(argv[++i]);
-    else if (a === "--max-batch") out.maxBatch = Number(argv[++i]);
-    else if (a === "--uncited-strikes") out.uncitedStrikes = Number(argv[++i]);
-  }
-  return out;
-}
+import { ArgsError, EXIT_USAGE } from "./cli-args.js";
+import { parseConsolidateArgs } from "./consolidate-args.js";
 
 function help(): void {
   console.log(`misMEM consolidate CLI
 
-Destila episodios pendientes en memorias usando un LLM (DeepSeek directo u OpenRouter).
+Destila episodios pendientes en memorias usando un LLM (DeepSeek, OpenRouter, OpenAI o compatible).
 
 Usage:
   mismem-consolidate [opciones]
@@ -55,10 +23,15 @@ Opciones:
   --help                   Esta ayuda
 
 Env:
-  DEEPSEEK_API_KEY                      DeepSeek directo (gana sobre OpenRouter)
-  OPENROUTER_API_KEY                    alternativa; hace falta una (salvo --dry-run)
+  MISMEM_LLM_PROVIDER                   deepseek | openrouter | openai | compatible
+                                        (sin ella, el primero con su variable, en ese orden)
+  DEEPSEEK_API_KEY                      DeepSeek directo
+  OPENROUTER_API_KEY                    OpenRouter
+  OPENAI_API_KEY                        OpenAI (con MISMEM_CONSOLIDATION_MODEL obligatorio)
+  MISMEM_LLM_BASE_URL, MISMEM_LLM_API_KEY  servidor compatible con OpenAI (modelo obligatorio)
   MISMEM_CONSOLIDATION_MODEL            default deepseek-chat (OpenRouter: deepseek/deepseek-chat)
   MISMEM_CONSOLIDATION_MAX_TOKENS       default 8192
+  MISMEM_CONSOLIDATION_TIMEOUT_MS       default 120000 (tope por llamada al LLM)
   MISMEM_CONSOLIDATION_MAX_PROMPT_CHARS default 60000
   MISMEM_CONSOLIDATION_MAX_EPISODE_CHARS default 12000
   MISMEM_CONSOLIDATION_MAX_CALLS        default 60
@@ -72,7 +45,15 @@ Env:
 }
 
 async function main(): Promise<void> {
-  const opts = parseArgs(process.argv.slice(2));
+  let opts;
+  try {
+    opts = parseConsolidateArgs(process.argv.slice(2));
+  } catch (err) {
+    if (!(err instanceof ArgsError)) throw err;
+    console.error(`[consolidate] ${err.message}\n`);
+    help();
+    process.exit(EXIT_USAGE);
+  }
   if (opts.help) { help(); return; }
 
   const db = openDefaultDb();

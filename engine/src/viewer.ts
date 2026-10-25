@@ -21,13 +21,13 @@ function isLayer(v: string | null): v is Layer {
   return v !== null && (LAYERS as readonly string[]).includes(v);
 }
 
-function clampLimit(raw: string | null, def: number, max: number): number {
+export function clampLimit(raw: string | null, def: number, max: number): number {
   const n = Number(raw);
   if (!Number.isFinite(n) || n <= 0) return def;
   return Math.min(max, Math.floor(n));
 }
 
-function json(res: ServerResponse, status: number, payload: unknown): void {
+export function json(res: ServerResponse, status: number, payload: unknown): void {
   res.statusCode = status;
   res.setHeader("content-type", "application/json; charset=utf-8");
   res.setHeader("cache-control", "no-store");

@@ -311,7 +311,9 @@ Los defaults son los del código (`engine/src`).
 | `MISMEM_DB` | `~/.mismem/mem.db` (en la imagen: `/data/mem.db`) | Ruta SQLite |
 | `MISMEM_HTTP_PORT` | `3200` | Puerto HTTP |
 | `MISMEM_HTTP_HOST` | `0.0.0.0` | Bind address |
-| `MISMEM_AUTH_USER` / `MISMEM_AUTH_PASS` | — | BasicAuth nativa. Si falta cualquiera de las dos, **sin auth** |
+| `MISMEM_ALLOWED_HOSTS` | — | Sin auth, el servidor sólo atiende `Host` de loopback (`localhost`, `127.0.0.1`, `[::1]`, `*.localhost`) y responde 403 al resto, contra DNS rebinding. Lista separada por comas para añadir otros nombres. Con auth no se filtra |
+| `MISMEM_HTTP_MAX_BODY_BYTES` | `4194304` (4 MiB) | Tope del cuerpo de `POST /mcp`; más grande responde 413 sin juntarlo en memoria |
+| `MISMEM_AUTH_USER` / `MISMEM_AUTH_PASS` | — | BasicAuth nativa. Sin ninguna, **sin auth**; con una sola, el servidor no arranca |
 | `MISMEM_SALIENCE_HALF_LIFE_DAYS` | `90` | Días en que una memoria sin uso pierde la mitad de su saliencia |
 | `MISMEM_REINFORCE_ON_RECALL` | `on` | `off` deja de reforzar lo que el recall devuelve; la saliencia pasa a subir sólo con `reinforce`. Ver "Refuerzo por uso" |
 
@@ -356,12 +358,16 @@ Los defaults son los del código (`engine/src`).
 
 | Var | Default | Descripción |
 |-----|---------|-------------|
-| `DEEPSEEK_API_KEY` | — | Consolida con DeepSeek directo. Gana sobre OpenRouter |
-| `OPENROUTER_API_KEY` | — | Alternativa. Hace falta una de las dos (salvo `--dry-run`) |
+| `MISMEM_LLM_PROVIDER` | — | `deepseek`, `openrouter`, `openai` o `compatible`. Sin ella, el primero con su variable, en ese orden |
+| `DEEPSEEK_API_KEY` | — | Consolida con DeepSeek directo |
+| `OPENROUTER_API_KEY` | — | OpenRouter |
+| `OPENAI_API_KEY` / `OPENAI_BASE_URL` | — / la oficial | OpenAI. Obliga a elegir `MISMEM_CONSOLIDATION_MODEL` |
+| `MISMEM_LLM_BASE_URL` / `MISMEM_LLM_API_KEY` | — | Cualquier servidor compatible con la API de OpenAI (vLLM, LM Studio, Ollama en `/v1`); la clave es opcional y el modelo obligatorio |
 | `MISMEM_CONSOLIDATION_MODEL` | `deepseek-chat` (OpenRouter: `deepseek/deepseek-chat`) | En DeepSeek un nombre con `/` se ignora |
 | `DEEPSEEK_BASE_URL` / `OPENROUTER_BASE_URL` | las oficiales | Para un proxy o un servidor compatible |
 | `OPENROUTER_APP_URL` / `OPENROUTER_APP_TITLE` | repo de misMEM / `misMEM` | Cabeceras de atribución de OpenRouter |
 | `MISMEM_CONSOLIDATION_MAX_TOKENS` | `8192` | Tope de la respuesta; si se corta, la tanda se parte a la mitad |
+| `MISMEM_CONSOLIDATION_TIMEOUT_MS` | `120000` | Tope por llamada al LLM; si vence, ese ámbito falla y sus episodios quedan para la próxima corrida |
 | `MISMEM_CONSOLIDATION_MAX_PROMPT_CHARS` | `60000` | Caracteres de episodios por llamada |
 | `MISMEM_CONSOLIDATION_MAX_EPISODE_CHARS` | `12000` | Un episodio más largo viaja recortado (principio y final) |
 | `MISMEM_CONSOLIDATION_MAX_CALLS` | `60` | Llamadas por corrida; lo pendiente queda para la siguiente |

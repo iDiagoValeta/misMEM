@@ -23,6 +23,8 @@ export interface LlmConfig {
   appUrl?: string;
   appTitle?: string;
   maxTokens?: number;
+  /** Tope por llamada: sin él, un proveedor que acepta y no contesta colgaba la corrida. */
+  timeoutMs?: number;
 }
 
 // El máximo de salida de deepseek-chat: menos corta respuestas de tandas grandes.
@@ -43,37 +45,98 @@ export class LlmInvalidJsonError extends Error {
   override name = "LlmInvalidJsonError";
 }
 
+// De sobra para generar 8192 tokens; lo que tarde más es un proveedor colgado.
+const DEFAULT_TIMEOUT_MS = 120_000;
+
+function loadTimeoutMs(): number {
+  const value = Number(process.env.MISMEM_CONSOLIDATION_TIMEOUT_MS);
+  return Number.isFinite(value) && value > 0 ? value : DEFAULT_TIMEOUT_MS;
+}
+
 function loadMaxTokens(): number {
   const value = Number(process.env.MISMEM_CONSOLIDATION_MAX_TOKENS);
   return Number.isFinite(value) && value > 0 ? value : DEFAULT_MAX_TOKENS;
 }
 
+export type LlmProvider = "deepseek" | "openrouter" | "openai" | "compatible";
+
+const PROVIDERS: readonly LlmProvider[] = ["deepseek", "openrouter", "openai", "compatible"];
+
+/** Sin MISMEM_LLM_PROVIDER, el primero que tenga su variable, en el orden de siempre. */
+function pickProvider(): LlmProvider | undefined {
+  const explicit = process.env.MISMEM_LLM_PROVIDER?.trim().toLowerCase();
+  if (explicit) {
+    if (!(PROVIDERS as readonly string[]).includes(explicit)) {
+      throw new Error(`MISMEM_LLM_PROVIDER=${explicit} no existe: usar ${PROVIDERS.join(", ")}`);
+    }
+    return explicit as LlmProvider;
+  }
+  if (process.env.DEEPSEEK_API_KEY) return "deepseek";
+  if (process.env.OPENROUTER_API_KEY) return "openrouter";
+  if (process.env.OPENAI_API_KEY) return "openai";
+  if (process.env.MISMEM_LLM_BASE_URL) return "compatible";
+  return undefined;
+}
+
+function required(name: string, provider: LlmProvider): string {
+  const value = process.env[name];
+  if (!value) throw new Error(`Con el proveedor ${provider} falta ${name}.`);
+  return value;
+}
+
+/**
+ * Con OpenAI o un servidor compatible no hay un modelo por defecto que valga: elegirlo es
+ * una decisión de coste de quien paga, y un nombre fijado acá caducaría.
+ */
+function requiredModel(provider: LlmProvider): string {
+  const model = process.env.MISMEM_CONSOLIDATION_MODEL;
+  if (!model) throw new Error(`Con el proveedor ${provider} hay que elegir el modelo en MISMEM_CONSOLIDATION_MODEL.`);
+  return model;
+}
+
 export function loadLlmConfig(): LlmConfig {
   const configured = process.env.MISMEM_CONSOLIDATION_MODEL;
-  const deepseekKey = process.env.DEEPSEEK_API_KEY;
-  if (deepseekKey) {
-    return {
-      apiKey: deepseekKey,
-      // "deepseek/deepseek-chat" es el nombre en OpenRouter; DeepSeek no lo acepta.
-      model: configured && !configured.includes("/") ? configured : "deepseek-chat",
-      baseUrl: process.env.DEEPSEEK_BASE_URL ?? "https://api.deepseek.com/v1",
-      maxTokens: loadMaxTokens(),
-    };
+  const limits = { maxTokens: loadMaxTokens(), timeoutMs: loadTimeoutMs() };
+  const provider = pickProvider();
+  switch (provider) {
+    case "deepseek":
+      return {
+        apiKey: required("DEEPSEEK_API_KEY", provider),
+        // "deepseek/deepseek-chat" es el nombre en OpenRouter; DeepSeek no lo acepta.
+        model: configured && !configured.includes("/") ? configured : "deepseek-chat",
+        baseUrl: process.env.DEEPSEEK_BASE_URL ?? "https://api.deepseek.com/v1",
+        ...limits,
+      };
+    case "openrouter":
+      return {
+        apiKey: required("OPENROUTER_API_KEY", provider),
+        model: configured ?? "deepseek/deepseek-chat",
+        baseUrl: process.env.OPENROUTER_BASE_URL ?? "https://openrouter.ai/api/v1",
+        appUrl: process.env.OPENROUTER_APP_URL ?? "https://github.com/lucasmella-stack/misMEM",
+        appTitle: process.env.OPENROUTER_APP_TITLE ?? "misMEM",
+        ...limits,
+      };
+    case "openai":
+      return {
+        apiKey: required("OPENAI_API_KEY", provider),
+        model: requiredModel(provider),
+        baseUrl: process.env.OPENAI_BASE_URL ?? "https://api.openai.com/v1",
+        ...limits,
+      };
+    case "compatible":
+      return {
+        // Un servidor local (Ollama, LM Studio, vLLM) puede no pedir clave.
+        apiKey: process.env.MISMEM_LLM_API_KEY ?? "",
+        model: requiredModel(provider),
+        baseUrl: required("MISMEM_LLM_BASE_URL", provider).replace(/\/+$/, ""),
+        ...limits,
+      };
+    default:
+      throw new Error(
+        "Falta un proveedor para consolidar: DEEPSEEK_API_KEY, OPENROUTER_API_KEY, OPENAI_API_KEY " +
+          "o MISMEM_LLM_BASE_URL (un servidor compatible con la API de OpenAI). Ver MISMEM_LLM_PROVIDER.",
+      );
   }
-  const apiKey = process.env.OPENROUTER_API_KEY;
-  if (!apiKey) {
-    throw new Error(
-      "Falta DEEPSEEK_API_KEY u OPENROUTER_API_KEY. Setear una como env var antes de consolidar.",
-    );
-  }
-  return {
-    apiKey,
-    model: configured ?? "deepseek/deepseek-chat",
-    baseUrl: process.env.OPENROUTER_BASE_URL ?? "https://openrouter.ai/api/v1",
-    appUrl: process.env.OPENROUTER_APP_URL ?? "https://github.com/lucasmella-stack/misMEM",
-    appTitle: process.env.OPENROUTER_APP_TITLE ?? "misMEM",
-    maxTokens: loadMaxTokens(),
-  };
 }
 
 export async function distill(
@@ -81,11 +144,31 @@ export async function distill(
   systemPrompt: string,
   userPrompt: string,
 ): Promise<DistilledMemory[]> {
+  const timeoutMs = cfg.timeoutMs ?? DEFAULT_TIMEOUT_MS;
+  // La misma señal corta también la lectura del cuerpo, que es donde se cuelga un stream a medias.
+  const signal = AbortSignal.timeout(timeoutMs);
+  try {
+    return await request(cfg, systemPrompt, userPrompt, signal);
+  } catch (err) {
+    if ((err as Error)?.name === "TimeoutError") {
+      throw new Error(`LLM sin respuesta en ${timeoutMs} ms`);
+    }
+    throw err;
+  }
+}
+
+async function request(
+  cfg: LlmConfig,
+  systemPrompt: string,
+  userPrompt: string,
+  signal: AbortSignal,
+): Promise<DistilledMemory[]> {
   const res = await fetch(`${cfg.baseUrl}/chat/completions`, {
+    signal,
     method: "POST",
     headers: {
       "Content-Type": "application/json",
-      Authorization: `Bearer ${cfg.apiKey}`,
+      ...(cfg.apiKey ? { Authorization: `Bearer ${cfg.apiKey}` } : {}),
       ...(cfg.appUrl ? { "HTTP-Referer": cfg.appUrl } : {}),
       ...(cfg.appTitle ? { "X-Title": cfg.appTitle } : {}),
     },

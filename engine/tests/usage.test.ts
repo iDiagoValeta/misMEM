@@ -1,6 +1,8 @@
 import { describe, it, expect } from "vitest";
+import { formatInjection } from "../src/inject.js";
 import {
   assistantReply,
+  injectedMemories,
   lastTurn,
   overlap,
   recalledMemories,
@@ -74,6 +76,42 @@ describe("usedMemoryIds", () => {
   it("las palabras vacías no cuentan como solapamiento", () => {
     const reply = "de la que el en los una para por con sobre";
     expect(usedMemoryIds([usado, ignorado], reply)).toEqual([]);
+  });
+});
+
+describe("injectedMemories", () => {
+  // Claude Code guarda el additionalContext de un hook así, no como tool_result.
+  const adjunto = (texto: unknown, tipo = "hook_additional_context") => ({
+    type: "attachment",
+    attachment: { type: tipo, content: texto },
+  });
+  const bloque = formatInjection([
+    { layer: "memory", id: "01INY0000000000000000000AA", scope: "trabajo", text: "el deploy usa docker compose", created_at: 1 },
+  ]);
+
+  it("ve lo que el hook de inyección adelantó", () => {
+    expect(injectedMemories([adjunto([bloque])])).toEqual([
+      { id: "01INY0000000000000000000AA", text: "el deploy usa docker compose" },
+    ]);
+  });
+
+  it("acepta el contenido como cadena suelta además de como lista", () => {
+    expect(injectedMemories([adjunto(bloque)])).toHaveLength(1);
+  });
+
+  it("ignora el contexto que puso otro hook", () => {
+    expect(injectedMemories([adjunto(["algo de otro hook"])])).toEqual([]);
+  });
+
+  it("ignora un adjunto que no es contexto de hook", () => {
+    expect(injectedMemories([adjunto([bloque], "environment")])).toEqual([]);
+  });
+
+  it("un recuerdo inyectado y usado cuenta como usado", () => {
+    const reply = "El deploy usa docker compose, como quedó definido.";
+    expect(usedMemoryIds(injectedMemories([adjunto([bloque])]), reply)).toEqual([
+      "01INY0000000000000000000AA",
+    ]);
   });
 });
 
