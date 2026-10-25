@@ -166,6 +166,39 @@ describe("viewer-api: /api/graph", () => {
     expect(full.links).toContainEqual({ source: episodeIds[0], target: memoryId, kind: "origin" });
     expect(full.nodes.some((n: { layer: string }) => n.layer === "episode")).toBe(true);
   });
+
+  it("truncated no da falso positivo con exactamente el tope", () => {
+    const { memoryId } = memoryFrom("a", "una", ["e1", "e2"]);
+    crystallize(db, { scope: "a", name: "r1", evidence_memory_ids: [memoryId] });
+
+    // Exactamente el tope de cada capa no es un recorte.
+    const exact = call((res) =>
+      handleGraph(db, res, url("/api/graph?episodes=1"), Date.now(), { memories: 1, traits: 1, episodes: 2 }),
+    ).body;
+    expect(exact.truncated).toEqual({ memories: false, traits: false, episodes: false });
+
+    memoryFrom("a", "dos", ["e3"]);
+    const memoriesOver = call((res) =>
+      handleGraph(db, res, url("/api/graph"), Date.now(), { memories: 1 }),
+    ).body;
+    expect(memoriesOver.truncated).toEqual({ memories: true, traits: false, episodes: false });
+
+    crystallize(db, { scope: "a", name: "r2", evidence_memory_ids: [memoryId] });
+    const traitsOver = call((res) =>
+      handleGraph(db, res, url("/api/graph"), Date.now(), { traits: 1 }),
+    ).body;
+    expect(traitsOver.truncated).toEqual({ memories: false, traits: true, episodes: false });
+
+    // Tres episodios para dos de tope; sin episodes=1 la capa ni se pide ni se marca.
+    const episodesOver = call((res) =>
+      handleGraph(db, res, url("/api/graph?episodes=1"), Date.now(), { episodes: 2 }),
+    ).body;
+    expect(episodesOver.truncated).toEqual({ memories: false, traits: false, episodes: true });
+    const episodesOff = call((res) =>
+      handleGraph(db, res, url("/api/graph"), Date.now(), { episodes: 2 }),
+    ).body;
+    expect(episodesOff.truncated).toEqual({ memories: false, traits: false, episodes: false });
+  });
 });
 
 describe("viewer-api: aristas por parecido", () => {

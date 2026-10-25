@@ -58,6 +58,13 @@ const GRAPH_LABEL_CHARS = 120;
 const RELATED_MIN_SCORE = 0.75;
 const RELATED_PER_NODE = 3;
 
+/** Topes por capa; los tests los bajan para no sembrar cientos de filas. */
+export interface GraphCaps {
+  memories?: number;
+  traits?: number;
+  episodes?: number;
+}
+
 type GraphLink = { source: string; target: string; kind: "origin" | "evidence" | "related"; score?: number };
 
 /**
@@ -290,28 +297,51 @@ export function handleTrait(db: DB, res: ServerResponse, id: string, at = Date.n
 const label = (text: string): string =>
   text.length > GRAPH_LABEL_CHARS ? `${text.slice(0, GRAPH_LABEL_CHARS - 1)}…` : text;
 
-export function handleGraph(db: DB, res: ServerResponse, url: URL, at = Date.now()): void {
+export function handleGraph(
+  db: DB,
+  res: ServerResponse,
+  url: URL,
+  at = Date.now(),
+  caps: GraphCaps = {},
+): void {
   const scope = url.searchParams.get("scope");
   const withEpisodes = url.searchParams.get("episodes") === "1";
   const withRelated = url.searchParams.get("related") === "1";
+  const maxMemories = caps.memories ?? GRAPH_MAX_MEMORIES;
+  const maxTraits = caps.traits ?? GRAPH_MAX_TRAITS;
+  const maxEpisodes = caps.episodes ?? GRAPH_MAX_EPISODES;
 
+  // Los totales se cuentan antes de recortar: una capa truncada es la que tenía más filas
+  // que su tope, no la que justo lo llenaba.
+  const memoriesWhere = `(@scope IS NULL OR scope = @scope) AND ${excludeNoiseSql("m")}`;
+  const memoryTotal = (
+    db.prepare(`SELECT COUNT(*) AS n FROM memories m WHERE ${memoriesWhere}`).get({ scope }) as { n: number }
+  ).n;
   const memories = (
     db
-      .prepare(
-        `SELECT ${MEMORY_COLUMNS} FROM memories m
-         WHERE (@scope IS NULL OR scope = @scope) AND ${excludeNoiseSql("m")}`,
-      )
+      .prepare(`SELECT ${MEMORY_COLUMNS} FROM memories m WHERE ${memoriesWhere}`)
       .all({ scope }) as MemoryRow[]
   )
     .map((row) => ({ row, salience: effectiveSalience(row, at) }))
     .sort((a, b) => b.salience - a.salience)
-    .slice(0, GRAPH_MAX_MEMORIES);
+    .slice(0, maxMemories);
+  const traitTotal = (
+    db
+      .prepare(`SELECT COUNT(*) AS n FROM traits WHERE (@scope IS NULL OR scope = @scope)`)
+      .get({ scope }) as { n: number }
+  ).n;
   const traits = db
     .prepare(
       `SELECT id, scope, name, strength, polarity, evidence_memory_ids, created_at, updated_at FROM traits
        WHERE (@scope IS NULL OR scope = @scope) ORDER BY strength DESC LIMIT @limit`,
     )
-    .all({ scope, limit: GRAPH_MAX_TRAITS }) as TraitRow[];
+    .all({ scope, limit: maxTraits }) as TraitRow[];
+
+  const truncated = {
+    memories: memoryTotal > maxMemories,
+    traits: traitTotal > maxTraits,
+    episodes: false,
+  };
 
   const nodes: Array<Record<string, unknown>> = [];
   const links: GraphLink[] = [];
@@ -327,13 +357,25 @@ export function handleGraph(db: DB, res: ServerResponse, url: URL, at = Date.now
     }
   }
   if (withEpisodes && memoryIds.size > 0) {
+    const idsJson = JSON.stringify([...memoryIds]);
+    // Los episodios del grafo son los que cuelgan de las memorias visibles; el recorte
+    // ocurre sobre ese conjunto, así que el total se cuenta con el mismo WHERE.
+    const episodeTotal = (
+      db
+        .prepare(
+          `SELECT COUNT(*) AS n FROM episodes
+           WHERE consolidated_into IN (SELECT value FROM json_each(?))`,
+        )
+        .get(idsJson) as { n: number }
+    ).n;
+    truncated.episodes = episodeTotal > maxEpisodes;
     const episodes = db
       .prepare(
         `SELECT id, scope, body, created_at, consolidated_into FROM episodes
          WHERE consolidated_into IN (SELECT value FROM json_each(?))
          ORDER BY created_at DESC LIMIT ?`,
       )
-      .all(JSON.stringify([...memoryIds]), GRAPH_MAX_EPISODES) as EpisodeRow[];
+      .all(idsJson, maxEpisodes) as EpisodeRow[];
     for (const e of episodes) {
       nodes.push({ id: e.id, layer: "episode", scope: e.scope, label: label(e.body) });
       links.push({ source: e.id, target: e.consolidated_into as string, kind: "origin" });
@@ -342,5 +384,5 @@ export function handleGraph(db: DB, res: ServerResponse, url: URL, at = Date.now
 
   if (withRelated) links.push(...relatedLinks(db, [...memoryIds]));
 
-  json(res, 200, { nodes, links, truncated: { memories: memoryIds.size === GRAPH_MAX_MEMORIES } });
+  json(res, 200, { nodes, links, truncated });
 }

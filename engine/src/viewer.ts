@@ -34,6 +34,12 @@ export function json(res: ServerResponse, status: number, payload: unknown): voi
   res.end(JSON.stringify(payload));
 }
 
+/** Un offset inválido o negativo cuenta como 0; SQLite no acepta NaN ni Infinity. */
+function parseOffset(raw: string | null): number {
+  const n = Number(raw);
+  return Number.isFinite(n) && n > 0 ? Math.floor(n) : 0;
+}
+
 export function handleStats(db: DB, res: ServerResponse): void {
   const counts = {
     episodes: (
@@ -76,6 +82,27 @@ export function handleRecent(db: DB, res: ServerResponse, url: URL): void {
   const layer: Layer = layerParam;
   const scope = url.searchParams.get("scope");
   const limit = clampLimit(url.searchParams.get("limit"), 50, 200);
+
+  // Sólo los episodios tienen estado de consolidación: en las otras capas `pending` no
+  // cambia nada y la respuesta sigue siendo la de siempre, sin `total`.
+  if (layer === "episode" && url.searchParams.get("pending") === "1") {
+    const offset = parseOffset(url.searchParams.get("offset"));
+    const where = "consolidated_into IS NULL AND (@scope IS NULL OR scope = @scope)";
+    // El total va antes del LIMIT: el cliente pagina con él, no con el tamaño de la página.
+    const total = (
+      db.prepare(`SELECT COUNT(*) AS n FROM episodes WHERE ${where}`).get({ scope }) as { n: number }
+    ).n;
+    const rows = db
+      .prepare(
+        `SELECT id, scope, body AS text, created_at, consolidated_into
+         FROM episodes
+         WHERE ${where}
+         ORDER BY created_at DESC, rowid DESC LIMIT @limit OFFSET @offset`,
+      )
+      .all({ scope, limit, offset });
+    json(res, 200, { layer, scope, rows, total });
+    return;
+  }
 
   let rows: unknown[];
   if (layer === "episode") {

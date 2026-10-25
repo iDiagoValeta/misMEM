@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach } from "vitest";
 import type { Database as DB } from "better-sqlite3";
 import { openDb } from "../src/db.js";
-import { capture } from "../src/tools.js";
+import { capture, consolidate } from "../src/tools.js";
 import {
   handleStats,
   handleRecent,
@@ -97,6 +97,44 @@ describe("viewer: /api/recent", () => {
     const j = JSON.parse(res.body);
     expect(j.rows).toHaveLength(1);
     expect(j.rows[0].text).toBe("beta");
+  });
+
+  it("recent con pending=1 sólo trae pendientes, pagina y da total", () => {
+    capture(db, { scope: "a", body: "pendiente viejo" });
+    capture(db, { scope: "a", body: "pendiente medio" });
+    const done1 = capture(db, { scope: "a", body: "consolidado uno" });
+    const done2 = capture(db, { scope: "a", body: "consolidado dos" });
+    capture(db, { scope: "a", body: "pendiente nuevo" });
+    consolidate(db, {
+      scope: "a",
+      gist: "una memoria",
+      source_episode_ids: [done1.id, done2.id],
+    });
+
+    const read = (query: string) => {
+      const res = mockRes();
+      handleRecent(db, res as unknown as import("node:http").ServerResponse, urlFor(`/api/recent?${query}`));
+      return JSON.parse(res.body);
+    };
+
+    // El total es el de pendientes del ámbito, no el de filas de la página.
+    const page1 = read("layer=episode&scope=a&pending=1&limit=2&offset=0");
+    expect(page1.rows.map((r: { text: string }) => r.text)).toEqual(["pendiente nuevo", "pendiente medio"]);
+    expect(page1.total).toBe(3);
+    expect(page1.rows.every((r: { consolidated_into: string | null }) => r.consolidated_into === null)).toBe(true);
+
+    const page2 = read("layer=episode&scope=a&pending=1&limit=2&offset=2");
+    expect(page2.rows.map((r: { text: string }) => r.text)).toEqual(["pendiente viejo"]);
+    expect(page2.total).toBe(3);
+
+    // Un offset inválido no rompe la página: cuenta como 0.
+    const badOffset = read("layer=episode&scope=a&pending=1&limit=2&offset=-4");
+    expect(badOffset.rows.map((r: { text: string }) => r.text)).toEqual(["pendiente nuevo", "pendiente medio"]);
+
+    // Sin pending=1 la respuesta sigue siendo la de antes, sin total.
+    const plain = read("layer=episode&scope=a&limit=2");
+    expect("total" in plain).toBe(false);
+    expect(plain.rows).toHaveLength(2);
   });
 
   it("rejects invalid layer", () => {
