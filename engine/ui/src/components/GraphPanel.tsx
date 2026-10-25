@@ -48,6 +48,8 @@ interface Props {
   onChange: (patch: Partial<GraphSettings>) => void;
   /** Un ámbito por nodo, en el orden en que llegan: el panel cuenta y colorea. */
   scopes: string[];
+  /** Ancho del contenedor del grafo: decide si el panel arranca desplegado. */
+  width: number;
 }
 
 function ToggleRow({
@@ -121,16 +123,19 @@ function Section({ title, defaultOpen, children }: { title: string; defaultOpen?
   );
 }
 
-export function GraphPanel({ settings, onChange, scopes }: Props) {
-  // En el móvil el panel taparía medio grafo: arranca plegado y se abre al tocarlo.
-  const [open, setOpen] = useState(() => window.matchMedia("(min-width: 768px)").matches);
+export function GraphPanel({ settings, onChange, scopes, width }: Props) {
+  // En un contenedor estrecho el panel tapa medio grafo: arranca plegado y se abre al
+  // tocarlo. Mientras el padre no ha medido (width 0) se queda plegado y se despliega
+  // en cuanto llega un ancho de escritorio; después manda lo que elija la persona.
+  const [open, setOpen] = useState<boolean>();
+  const expanded = open ?? width >= 900;
 
   const palette = useMemo(() => scopePalette(scopes), [scopes]);
   const unpainted = scopes.some((scope) => !palette.has(scope));
 
   return (
     <Collapsible
-      open={open}
+      open={expanded}
       onOpenChange={setOpen}
       className="absolute top-3 left-3 z-10 max-h-[calc(100%-1.5rem)] w-[min(17rem,calc(100%-1.5rem))] overflow-y-auto rounded-lg border border-edge bg-surface-raised/95 px-3 py-1.5 text-xs shadow-lg backdrop-blur-sm"
     >
@@ -139,7 +144,7 @@ export function GraphPanel({ settings, onChange, scopes }: Props) {
           type="button"
           variant="ghost"
           size="sm"
-          aria-label={open ? "Plegar los ajustes del grafo" : "Desplegar los ajustes del grafo"}
+          aria-label={expanded ? "Plegar los ajustes del grafo" : "Desplegar los ajustes del grafo"}
           className="h-8 w-full justify-between px-0 font-semibold text-ink-soft [&[data-state=open]>svg]:rotate-180"
         >
           Ajustes del grafo

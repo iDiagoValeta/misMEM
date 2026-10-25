@@ -11,6 +11,8 @@ interface Props {
   scope: string | undefined;
   query: string;
   selectedId?: string;
+  /** La pestaña está a la vista: si no, se pausa la animación aunque el grafo siga montado. */
+  active: boolean;
   onSelect: (layer: Layer, id: string) => void;
 }
 
@@ -70,7 +72,7 @@ const radiusOf = (node: Node, size: number): number =>
 
 const EMPTY = { nodes: [] as GraphNode[], links: [] as GraphLink[], truncated: { memories: false, traits: false, episodes: false } };
 
-export default function GraphView({ scope, query, selectedId, onSelect }: Props) {
+export default function GraphView({ scope, query, selectedId, active: visible, onSelect }: Props) {
   const [settings, setSettings] = useState<GraphSettings>(DEFAULT_SETTINGS);
   const [hovered, setHovered] = useState<string | null>(null);
   const [size, setSize] = useState({ width: 0, height: 0 });
@@ -271,11 +273,22 @@ export default function GraphView({ scope, query, selectedId, onSelect }: Props)
       if (!entry) return;
       const width = Math.round(entry.contentRect.width);
       const height = Math.round(entry.contentRect.height);
+      // La pestaña inactiva se oculta con display:none y mediría cero: aceptarlo
+      // desmontaría el canvas y se perderían cámara y simulación al volver.
+      if (width === 0 || height === 0) return;
       setSize((previous) => (previous.width === width && previous.height === height ? previous : { width, height }));
     });
     observer.observe(element);
     return () => observer.disconnect();
   }, []);
+
+  // Oculto sigue montado, pero no debe gastar CPU: se pausa la animación y se reanuda
+  // al volver, sin reiniciar ni la simulación ni la cámara. `size.width` reaplica el
+  // estado cuando el canvas termina de montarse después del primer efecto.
+  useEffect(() => {
+    if (visible) graphRef.current?.resumeAnimation();
+    else graphRef.current?.pauseAnimation();
+  }, [visible, size.width]);
 
   // force-graph muta los nodos y les añade x/y; este ref da acceso a esas coordenadas.
   const positioned = graphData.nodes as Array<GraphNode & { x?: number; y?: number }>;
@@ -339,7 +352,7 @@ export default function GraphView({ scope, query, selectedId, onSelect }: Props)
         />
       )}
 
-      <GraphPanel settings={settings} onChange={changeSettings} scopes={scopes} />
+      <GraphPanel settings={settings} onChange={changeSettings} scopes={scopes} width={size.width} />
 
       {data === undefined && graphQuery.isPending && (
         <div className="pointer-events-none absolute inset-0 grid place-items-center">

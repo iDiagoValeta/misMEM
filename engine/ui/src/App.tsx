@@ -21,12 +21,14 @@ import { DetailPanel } from "./components/Detail";
 import { Consolidate } from "./components/Consolidate";
 import { ThemeToggle } from "./components/ThemeToggle";
 import { errorMessage } from "./lib/errors";
+import { viewAfterQuery, type View } from "./lib/search-view";
 import { applyTheme, browserStorage, loadTheme, resolveTheme, saveTheme, type ThemeChoice } from "./lib/theme";
 
 // El grafo pesa más que el resto: se baja sólo al abrir su pestaña.
 const GraphView = lazy(() => import("./components/GraphView"));
 
-export type View = "memories" | "traits" | "pending" | "results" | "graph";
+// El tipo vive con la lógica de búsqueda y se reexporta: Detail y Lists ya lo tomaban de aquí.
+export type { View } from "./lib/search-view";
 
 /**
  * El episodio lleva su texto en la selección porque no hay endpoint de detalle por id:
@@ -88,8 +90,15 @@ export function App() {
   useEffect(() => {
     const next = debouncedDraft.trim();
     setQuery(next);
-    if (next) setView("results");
+    setView((current) => viewAfterQuery(current, next));
   }, [debouncedDraft]);
+
+  // El grafo se monta la primera vez que se abre y ya no se desmonta: Radix tira las
+  // pestañas inactivas, y con ellas la cámara, la simulación asentada y los ajustes.
+  const [graphSeen, setGraphSeen] = useState(false);
+  useEffect(() => {
+    if (view === "graph") setGraphSeen(true);
+  }, [view]);
 
   const resolvedTheme = resolveTheme(themeChoice, prefersDark);
   useEffect(() => {
@@ -135,12 +144,14 @@ export function App() {
   };
 
   const changeView = (next: View) => {
-    setView(next);
-    // Al salir de los resultados se limpia la caja: un texto visible sin lista debajo engaña.
-    if (next !== "results") {
+    // Las listas no filtran por texto: al entrar en una se limpia la caja, porque un texto
+    // visible que no filtra nada engaña. El grafo sí la usa como filtro local, así que al
+    // entrar en él la consulta se conserva.
+    if (next === "memories" || next === "traits" || next === "pending") {
       setDraft("");
       setQuery("");
     }
+    setView(next);
     if (next !== "memories") setPicked(null);
   };
 
@@ -148,7 +159,7 @@ export function App() {
     event.preventDefault();
     const term = draft.trim();
     setQuery(term);
-    if (term) setView("results");
+    setView((current) => viewAfterQuery(current, term));
   };
 
   const togglePick = (id: string, memoryScope: string) =>
@@ -179,6 +190,10 @@ export function App() {
     setSelected({ layer: "trait", id: traitId });
     setView("traits");
   };
+
+  // En el grafo sin selección la columna de detalle vacía no aporta: el grafo se queda
+  // su ancho. Por debajo de md el detalle va en un Sheet y no ocupa columna.
+  const graphAlone = view === "graph" && !selected;
 
   return (
     <div className="flex h-dvh flex-col overflow-hidden bg-surface text-ink">
@@ -221,7 +236,13 @@ export function App() {
         </div>
       </header>
 
-      <div className="flex min-h-0 flex-1 flex-col md:grid md:grid-cols-[minmax(0,1fr)_380px] md:overflow-hidden lg:grid-cols-[220px_minmax(0,1fr)_380px]">
+      <div
+        className={`flex min-h-0 flex-1 flex-col md:grid md:overflow-hidden ${
+          graphAlone
+            ? "md:grid-cols-[minmax(0,1fr)] lg:grid-cols-[220px_minmax(0,1fr)]"
+            : "md:grid-cols-[minmax(0,1fr)_380px] lg:grid-cols-[220px_minmax(0,1fr)_380px]"
+        }`}
+      >
         <nav
           aria-label="Ámbitos"
           className="shrink-0 border-b border-edge md:col-span-2 lg:col-span-1 lg:min-h-0 lg:overflow-y-auto lg:border-r lg:border-b-0"
@@ -279,16 +300,24 @@ export function App() {
               <TabsContent value="results" className="m-0">
                 <SearchResults term={query} scope={scope} selected={selected} onSelect={setSelected} />
               </TabsContent>
-              <TabsContent value="graph" className="m-0 h-full">
-                <Suspense fallback={<p className="text-sm text-ink-muted">Cargando el grafo…</p>}>
-                  <GraphView
-                    scope={scope}
-                    query={query}
-                    selectedId={selected?.id}
-                    onSelect={(layer, id) => setSelected({ layer, id })}
-                  />
-                </Suspense>
-              </TabsContent>
+              {/* forceMount: cambiar de pestaña no puede tirar la cámara ni la simulación. */}
+              {(graphSeen || view === "graph") && (
+                <TabsContent
+                  value="graph"
+                  forceMount
+                  className="m-0 h-full data-[state=inactive]:hidden"
+                >
+                  <Suspense fallback={<p className="text-sm text-ink-muted">Cargando el grafo…</p>}>
+                    <GraphView
+                      scope={scope}
+                      query={query}
+                      selectedId={selected?.id}
+                      active={view === "graph"}
+                      onSelect={(layer, id) => setSelected({ layer, id })}
+                    />
+                  </Suspense>
+                </TabsContent>
+              )}
             </div>
           </Tabs>
 
@@ -311,12 +340,16 @@ export function App() {
           )}
         </main>
 
-        <DetailPanel
-          selected={selected}
-          onSelect={setSelected}
-          onClose={() => setSelected(undefined)}
-          onChanged={changed}
-        />
+        {/* `contents` mantiene el <aside> como celda; en el grafo sin selección se oculta y la
+            rejilla pierde esa columna para que el grafo respire. */}
+        <div className={graphAlone ? "hidden" : "contents"}>
+          <DetailPanel
+            selected={selected}
+            onSelect={setSelected}
+            onClose={() => setSelected(undefined)}
+            onChanged={changed}
+          />
+        </div>
       </div>
 
       <Consolidate
