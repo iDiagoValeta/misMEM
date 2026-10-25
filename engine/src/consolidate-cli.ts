@@ -39,7 +39,7 @@ function parseArgs(argv: string[]): {
 function help(): void {
   console.log(`misMEM consolidate CLI
 
-Destila episodios pendientes en memorias usando un LLM (DeepSeek directo u OpenRouter).
+Destila episodios pendientes en memorias usando un LLM (DeepSeek, OpenRouter, OpenAI o compatible).
 
 Usage:
   mismem-consolidate [opciones]
@@ -55,8 +55,12 @@ Opciones:
   --help                   Esta ayuda
 
 Env:
-  DEEPSEEK_API_KEY                      DeepSeek directo (gana sobre OpenRouter)
-  OPENROUTER_API_KEY                    alternativa; hace falta una (salvo --dry-run)
+  MISMEM_LLM_PROVIDER                   deepseek | openrouter | openai | compatible
+                                        (sin ella, el primero con su variable, en ese orden)
+  DEEPSEEK_API_KEY                      DeepSeek directo
+  OPENROUTER_API_KEY                    OpenRouter
+  OPENAI_API_KEY                        OpenAI (con MISMEM_CONSOLIDATION_MODEL obligatorio)
+  MISMEM_LLM_BASE_URL, MISMEM_LLM_API_KEY  servidor compatible con OpenAI (modelo obligatorio)
   MISMEM_CONSOLIDATION_MODEL            default deepseek-chat (OpenRouter: deepseek/deepseek-chat)
   MISMEM_CONSOLIDATION_MAX_TOKENS       default 8192
   MISMEM_CONSOLIDATION_TIMEOUT_MS       default 120000 (tope por llamada al LLM)
