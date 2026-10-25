@@ -530,6 +530,28 @@ describe("runConsolidation", () => {
     expect(summary.episodes_dropped_pareto_l0).toBe(3);
     expect(summary.memories_created).toBe(1);
   });
+
+  it("Pareto pre-filter: un hecho corto llega al LLM en vez de caer como ruido", async () => {
+    captureOld("corto", "ok", 48);
+    const fact = captureOld("corto", "usar pnpm, no npm", 48);
+
+    const distillFn = vi.fn(async (_cfg: unknown, _sys: string, user: string) =>
+      user.includes(fact) ? [{ gist: "Se usa pnpm en vez de npm", evidence_episode_ids: [fact] }] : [],
+    );
+    const summary = await runConsolidation(db, {
+      minEpisodesPerScope: 1,
+      paretoPrefilter: true,
+      llm: llmCfg,
+      distillFn,
+      log: () => {},
+    });
+
+    expect(distillFn).toHaveBeenCalledTimes(1);
+    expect(distillFn.mock.calls[0][2]).toContain("usar pnpm, no npm");
+    expect(summary.episodes_dropped_pareto_l0).toBe(1);
+    const row = db.prepare("SELECT m.gist FROM episodes e JOIN memories m ON m.id = e.consolidated_into WHERE e.id = ?").get(fact) as { gist: string };
+    expect(row.gist).toBe("Se usa pnpm en vez de npm");
+  });
 });
 
 describe("truncateEpisode", () => {

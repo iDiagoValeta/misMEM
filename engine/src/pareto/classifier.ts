@@ -13,6 +13,10 @@
  *   L2  importance ≥ 0.60   → alta prioridad
  *   L3  importance ≥ 0.85   → semilla de trait (crystallize candidate)
  */
+import { contentTerms } from "../terms.js";
+
+/** Palabras con contenido desde las que un texto corto deja de ser muletilla. */
+const MIN_FACT_TERMS = 3;
 
 export interface ParetoScores {
   density: number;
@@ -145,7 +149,23 @@ export function classify(text: string, opts: ClassifyOptions = {}): ParetoResult
   const length_norm = computeLengthNorm(text);
 
   // Trivial: muy corto y sin densidad → L0 directo (evita inflado por novelty=1).
-  if (text.trim().length < 40 && density === 0 && loss_proxy === 0) {
+  // Pero un hecho corto ya es un dato ("el deploy tarda 40 minutos", "usar pnpm, no
+  // npm"): ese va al LLM, que mandarlo cuesta casi nada y descartarlo acá lo borraba
+  // sin que nadie lo leyera.
+  // Un número suelto no es un hecho por sí mismo: "42", "2026" u "ok 2" son ruido como
+  // "dale". Sólo cuenta si lo acompaña una palabra sin dígitos que diga de qué es
+  // ("Node 24", "puerto 5000"). Por lo mismo, las tres palabras se cuentan sin números:
+  // "1 2 3" no es un hecho.
+  const hasFigure = /\p{N}/u.test(text);
+  const namedTerms = [...contentTerms(text)].filter((t) => !/\p{N}/u.test(t)).length;
+
+  if (
+    text.trim().length < 40 &&
+    density === 0 &&
+    loss_proxy === 0 &&
+    namedTerms < MIN_FACT_TERMS &&
+    !(hasFigure && namedTerms > 0)
+  ) {
     return {
       importance: 0,
       level: 0,
