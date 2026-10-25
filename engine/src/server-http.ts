@@ -12,6 +12,7 @@
  *   MISMEM_AUTH_PASS     pareja del anterior; con una sola de las dos no arranca
  *   MISMEM_DB            ruta SQLite (default ~/.mismem/mem.db)
  *   MISMEM_ALLOWED_HOSTS sin auth, nombres de Host aceptados además de loopback (coma)
+ *   MISMEM_HTTP_MAX_BODY_BYTES  tope del cuerpo de POST /mcp (default 4 MiB); más, 413
  *
  * Endpoints:
  *   GET  /healthz   →  200 ok (liveness)
@@ -25,6 +26,7 @@ import { timingSafeEqual } from "node:crypto";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 import { openDefaultDb } from "./db.js";
 import { hostAllowed, parseHostList } from "./http-host.js";
+import { BodyTooLargeError, InvalidJsonError, isJsonContentType, loadMaxBodyBytes, readJsonBody } from "./http-body.js";
 import { loadAuth } from "./http-guard.js";
 import { createServer } from "./server-core.js";
 import {
@@ -37,6 +39,7 @@ import {
 const PORT = Number(process.env.MISMEM_HTTP_PORT ?? 3200);
 const HOST = process.env.MISMEM_HTTP_HOST ?? "0.0.0.0";
 const ALLOWED_HOSTS = parseHostList(process.env.MISMEM_ALLOWED_HOSTS);
+const MAX_BODY_BYTES = loadMaxBodyBytes();
 
 let AUTH: ReturnType<typeof loadAuth>;
 try {
@@ -95,6 +98,49 @@ const httpServer = createHttpServer(async (req, res) => {
         send401(res);
         return;
       }
+      let parsedBody: unknown;
+      if (req.method === "POST") {
+        // Antes de leer un byte: el SDK tira 415 igual, pero sólo después de parsear.
+        if (!isJsonContentType(req.headers["content-type"])) {
+          res.statusCode = 415;
+          res.setHeader("content-type", "application/json");
+          res.end(
+            JSON.stringify({
+              jsonrpc: "2.0",
+              error: {
+                code: -32000,
+                message: "Unsupported Media Type: Content-Type must be application/json",
+              },
+              id: null,
+            }),
+          );
+          return;
+        }
+        try {
+          parsedBody = await readJsonBody(req, MAX_BODY_BYTES);
+        } catch (err) {
+          if (err instanceof BodyTooLargeError) {
+            res.statusCode = 413;
+            // Lo que quede sin leer no se drena: se cierra la conexión.
+            res.setHeader("connection", "close");
+            res.end("Payload Too Large");
+            return;
+          }
+          if (err instanceof InvalidJsonError) {
+            res.statusCode = 400;
+            res.setHeader("content-type", "application/json");
+            res.end(
+              JSON.stringify({
+                jsonrpc: "2.0",
+                error: { code: -32700, message: "Parse error" },
+                id: null,
+              }),
+            );
+            return;
+          }
+          throw err;
+        }
+      }
       // Stateless: cada request es independiente — server + transport per-request.
       // Coincide con el ejemplo oficial simpleStatelessStreamableHttp.ts del SDK.
       const mcpServer = createServer(db);
@@ -106,7 +152,7 @@ const httpServer = createHttpServer(async (req, res) => {
         void mcpServer.close();
       });
       await mcpServer.connect(transport);
-      await transport.handleRequest(req, res);
+      await transport.handleRequest(req, res, parsedBody);
       return;
     }
 
