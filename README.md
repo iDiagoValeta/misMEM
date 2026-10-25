@@ -49,6 +49,16 @@ Además, una **capa engram-compat** (`mem_save`, `mem_search`, `mem_context`, `m
 
 ## Quickstart
 
+### Linux: un script lo configura todo
+
+```bash
+git clone https://github.com/lucasmella-stack/misMEM.git && bash misMEM/scripts/install.sh
+```
+
+Instala misMEM desde el repo clonado (`--from-npm` usa el paquete publicado, que puede ir por detrás), pregunta dónde guardar la memoria y con qué proveedor consolidar (DeepSeek, OpenRouter, OpenAI, un servidor compatible o ninguno), guarda la clave en `~/.config/mismem/env` con permisos 600 y configura los clientes que encuentra: Claude Code (MCP y hooks de inyección y refuerzo), opencode, Claude Desktop, VS Code y Cursor. Si hay Ollama, ofrece el modelo de embeddings; si se quiere, deja la consolidación nocturna como timer de systemd. Los clientes llaman a `~/.local/bin/mismem-run`, así que ninguna clave queda en su configuración. Re-ejecutarlo actualiza sin duplicar y no pisa una configuración de misMEM hecha a mano. `--help` para el modo sin preguntas.
+
+### A mano, en cualquier sistema
+
 La forma más rápida — sin clonar nada, vía [npm](https://www.npmjs.com/package/@lucasmella/mismem). En el `mcp.json` de tu cliente (VS Code / Claude Code / Claude Desktop):
 
 ```json
