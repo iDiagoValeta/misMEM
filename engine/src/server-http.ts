@@ -26,7 +26,7 @@ import { timingSafeEqual } from "node:crypto";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 import { openDefaultDb } from "./db.js";
 import { hostAllowed, parseHostList } from "./http-host.js";
-import { BodyTooLargeError, InvalidJsonError, loadMaxBodyBytes, readJsonBody } from "./http-body.js";
+import { BodyTooLargeError, InvalidJsonError, isJsonContentType, loadMaxBodyBytes, readJsonBody } from "./http-body.js";
 import { loadAuth } from "./http-guard.js";
 import { createServer } from "./server-core.js";
 import {
@@ -100,6 +100,22 @@ const httpServer = createHttpServer(async (req, res) => {
       }
       let parsedBody: unknown;
       if (req.method === "POST") {
+        // Antes de leer un byte: el SDK tira 415 igual, pero sólo después de parsear.
+        if (!isJsonContentType(req.headers["content-type"])) {
+          res.statusCode = 415;
+          res.setHeader("content-type", "application/json");
+          res.end(
+            JSON.stringify({
+              jsonrpc: "2.0",
+              error: {
+                code: -32000,
+                message: "Unsupported Media Type: Content-Type must be application/json",
+              },
+              id: null,
+            }),
+          );
+          return;
+        }
         try {
           parsedBody = await readJsonBody(req, MAX_BODY_BYTES);
         } catch (err) {

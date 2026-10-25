@@ -23,6 +23,17 @@ export function loadMaxBodyBytes(env: NodeJS.ProcessEnv = process.env): number {
   return Number.isFinite(value) && value > 0 ? value : DEFAULT_MAX_BODY_BYTES;
 }
 
+/**
+ * El mismo criterio que el transporte del SDK (`content-type` que contenga
+ * `application/json`), adelantado: el SDK responde 415 después de leer el cuerpo entero, y
+ * así no se junta hasta el tope algo que se va a descartar. Idéntico, mayúsculas incluidas:
+ * más estricto rompería clientes que hoy funcionan, y más laxo los dejaría pasar acá para
+ * que el SDK los rechace igual.
+ */
+export function isJsonContentType(header: string | undefined): boolean {
+  return header !== undefined && header.includes("application/json");
+}
+
 export function readJsonBody(req: IncomingMessage, maxBytes: number): Promise<unknown> {
   // Con Content-Length el exceso se sabe antes de leer un byte.
   const declared = Number(req.headers["content-length"]);
@@ -53,7 +64,9 @@ export function readJsonBody(req: IncomingMessage, maxBytes: number): Promise<un
     const onEnd = (): void => {
       stop();
       try {
-        resolve(JSON.parse(Buffer.concat(chunks).toString("utf8")));
+        // `req.json()` del SDK decodifica UTF-8 y descarta el BOM; `JSON.parse` no lo
+        // tolera, así que se quita acá para no convertir en 400 un cuerpo que antes valía.
+        resolve(JSON.parse(Buffer.concat(chunks).toString("utf8").replace(/^\uFEFF/, "")));
       } catch (err) {
         reject(new InvalidJsonError((err as Error).message));
       }

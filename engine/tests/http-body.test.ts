@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { Readable } from "node:stream";
 import type { IncomingMessage } from "node:http";
-import { BodyTooLargeError, InvalidJsonError, readJsonBody } from "../src/http-body.js";
+import { BodyTooLargeError, InvalidJsonError, isJsonContentType, readJsonBody } from "../src/http-body.js";
 
 function request(chunks: string[], headers: Record<string, string> = {}): IncomingMessage {
   const stream = Readable.from(chunks.map((c) => Buffer.from(c))) as unknown as IncomingMessage;
@@ -45,5 +45,31 @@ describe("http-body: readJsonBody", () => {
     await expect(readJsonBody(request(["{no es json"]), 1024)).rejects.toBeInstanceOf(
       InvalidJsonError,
     );
+  });
+
+  it("un BOM UTF-8 delante del JSON no impide parsearlo", async () => {
+    // `req.json()` del SDK lo descarta; si acá diera 400, el tope habría roto clientes que antes iban.
+    const body = `\uFEFF${JSON.stringify({ jsonrpc: "2.0", id: 2, method: "tools/list" })}`;
+    await expect(readJsonBody(request([body]), 1024)).resolves.toEqual({
+      jsonrpc: "2.0",
+      id: 2,
+      method: "tools/list",
+    });
+  });
+});
+
+describe("http-body: isJsonContentType", () => {
+  it("acepta application/json, con o sin parámetros", () => {
+    expect(isJsonContentType("application/json")).toBe(true);
+    expect(isJsonContentType("application/json; charset=utf-8")).toBe(true);
+  });
+
+  it("distingue mayúsculas como el SDK, que daría 415 de todos modos", () => {
+    expect(isJsonContentType("Application/JSON")).toBe(false);
+  });
+
+  it("rechaza otro tipo de medio o la cabecera ausente", () => {
+    expect(isJsonContentType("text/plain")).toBe(false);
+    expect(isJsonContentType(undefined)).toBe(false);
   });
 });
