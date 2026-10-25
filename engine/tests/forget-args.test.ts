@@ -50,6 +50,25 @@ describe("parseForgetArgs", () => {
 
   it("un número que no es número corta", () => {
     expect(() => parseForgetArgs(["--salience-below", "abc"])).toThrow(/no es un número/);
-    expect(() => parseForgetArgs(["--before-days", ""])).toThrow(/no es un número/);
+    expect(() => parseForgetArgs(["--before-days", ""])).toThrow(/--before-days necesita un valor/);
+  });
+
+  it("un valor en blanco no vale como ámbito: Zod lo rechazaría después con exit 1", () => {
+    expect(() => parseForgetArgs(["--scope", ""])).toThrow(/--scope necesita un valor/);
+    expect(() => parseForgetArgs(["--scope", "   "])).toThrow(/--scope necesita un valor/);
+  });
+
+  it("--salience-below fuera de (0, 1] corta en el parser, no en el schema", () => {
+    expect(() => parseForgetArgs(["--salience-below", "2"])).toThrow(/--salience-below tiene que ser <= 1: 2/);
+  });
+
+  it("un --scope más largo que el schema corta en el parser", () => {
+    expect(() => parseForgetArgs(["--scope", "x".repeat(129)])).toThrow(/128 caracteres/);
+    expect(parseForgetArgs(["--scope", "x".repeat(128)]).scope).toHaveLength(128);
+  });
+
+  it("--salience-below acepta los extremos del schema", () => {
+    expect(parseForgetArgs(["--salience-below", "1"]).salienceBelow).toBe(1);
+    expect(parseForgetArgs(["--salience-below", "0.2"]).salienceBelow).toBe(0.2);
   });
 });
