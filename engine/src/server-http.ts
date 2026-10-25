@@ -11,6 +11,7 @@
  *   MISMEM_AUTH_USER     opcional: con MISMEM_AUTH_PASS, BasicAuth en /mcp, /viewer y /api
  *   MISMEM_AUTH_PASS     pareja del anterior; con una sola de las dos no arranca
  *   MISMEM_DB            ruta SQLite (default ~/.mismem/mem.db)
+ *   MISMEM_ALLOWED_HOSTS sin auth, nombres de Host aceptados además de loopback (coma)
  *
  * Endpoints:
  *   GET  /healthz   →  200 ok (liveness)
@@ -23,6 +24,7 @@ import type { IncomingMessage, ServerResponse } from "node:http";
 import { timingSafeEqual } from "node:crypto";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 import { openDefaultDb } from "./db.js";
+import { hostAllowed, parseHostList } from "./http-host.js";
 import { loadAuth } from "./http-guard.js";
 import { createServer } from "./server-core.js";
 import {
@@ -34,6 +36,7 @@ import {
 
 const PORT = Number(process.env.MISMEM_HTTP_PORT ?? 3200);
 const HOST = process.env.MISMEM_HTTP_HOST ?? "0.0.0.0";
+const ALLOWED_HOSTS = parseHostList(process.env.MISMEM_ALLOWED_HOSTS);
 
 let AUTH: ReturnType<typeof loadAuth>;
 try {
@@ -73,6 +76,11 @@ const db = openDefaultDb();
 
 const httpServer = createHttpServer(async (req, res) => {
   try {
+    if (!hostAllowed(req.headers.host, { auth: AUTH !== null, extra: ALLOWED_HOSTS })) {
+      res.statusCode = 403;
+      res.end("Forbidden host");
+      return;
+    }
     const url = new URL(req.url ?? "/", `http://${req.headers.host ?? "localhost"}`);
 
     if (url.pathname === "/healthz") {

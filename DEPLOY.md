@@ -311,6 +311,7 @@ Los defaults son los del código (`engine/src`).
 | `MISMEM_DB` | `~/.mismem/mem.db` (en la imagen: `/data/mem.db`) | Ruta SQLite |
 | `MISMEM_HTTP_PORT` | `3200` | Puerto HTTP |
 | `MISMEM_HTTP_HOST` | `0.0.0.0` | Bind address |
+| `MISMEM_ALLOWED_HOSTS` | — | Sin auth, el servidor sólo atiende `Host` de loopback (`localhost`, `127.0.0.1`, `[::1]`, `*.localhost`) y responde 403 al resto, contra DNS rebinding. Lista separada por comas para añadir otros nombres. Con auth no se filtra |
 | `MISMEM_AUTH_USER` / `MISMEM_AUTH_PASS` | — | BasicAuth nativa. Sin ninguna, **sin auth**; con una sola, el servidor no arranca |
 | `MISMEM_SALIENCE_HALF_LIFE_DAYS` | `90` | Días en que una memoria sin uso pierde la mitad de su saliencia |
 | `MISMEM_REINFORCE_ON_RECALL` | `on` | `off` deja de reforzar lo que el recall devuelve; la saliencia pasa a subir sólo con `reinforce`. Ver "Refuerzo por uso" |
