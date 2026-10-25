@@ -38,6 +38,18 @@ class UserStore {
     }
   });
 
+  it("un número suelto no escapa de L0", () => {
+    for (const text of ["1", "42", "2026", "ok 2", "1 2 3", "10 20 30"]) {
+      expect(classify(text).level).toBe(0);
+    }
+  });
+
+  it("un número con la palabra que lo explica sí escapa de L0", () => {
+    for (const text of ["Node 24", "puerto 5000"]) {
+      expect(classify(text).level).toBeGreaterThan(0);
+    }
+  });
+
   it("las muletillas cortas siguen siendo L0 sin pasar por el LLM", () => {
     for (const text of ["ok", "dale", "listo", "hola que tal", "ok dale"]) {
       expect(classify(text).level).toBe(0);
