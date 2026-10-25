@@ -193,24 +193,36 @@ function finalizeHits(
 }
 
 /**
- * Refuerza los recuerdos que una respuesta usó de verdad. Devuelve cuántos ids no existían:
- * si ese número sube, el que los manda está mirando una base distinta o inventando ids.
+ * Refuerza los recuerdos que una respuesta usó de verdad.
+ *
+ * Los rasgos se cuentan aparte en vez de caer en `unknown`: la inyección también los
+ * adelanta, así que mezclarlos dejaba esa alarma —la de "alguien manda ids inventados"—
+ * sonando desde el primer día. Un rasgo gana fuerza al cristalizar, no al usarse.
  */
 export function reinforce(
   db: DB,
   raw: unknown,
   options: { at?: number } = {},
-): { reinforced: number; unknown: number } {
+): { reinforced: number; traits: number; unknown: number } {
   const input = ReinforceInput.parse(raw);
   const ids = [...new Set(input.memory_ids)];
-  const known = (
-    db
-      .prepare(`SELECT id FROM memories WHERE id IN (${ids.map(() => "?").join(", ")})`)
-      .all(...ids) as Array<{ id: string }>
-  ).map((row) => row.id);
+  const marcadores = ids.map(() => "?").join(", ");
+  const existentes = (tabla: string): string[] =>
+    (
+      db.prepare(`SELECT id FROM ${tabla} WHERE id IN (${marcadores})`).all(...ids) as Array<{
+        id: string;
+      }>
+    ).map((row) => row.id);
+
+  const known = existentes("memories");
+  const traits = existentes("traits");
 
   reinforceMemories(db, known, { at: options.at, boost: input.boost });
-  return { reinforced: known.length, unknown: ids.length - known.length };
+  return {
+    reinforced: known.length,
+    traits: traits.length,
+    unknown: ids.length - known.length - traits.length,
+  };
 }
 
 export function recall(

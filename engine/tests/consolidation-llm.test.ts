@@ -13,6 +13,11 @@ const ENV_KEYS = [
   "MISMEM_CONSOLIDATION_MODEL",
   "MISMEM_CONSOLIDATION_MAX_TOKENS",
   "MISMEM_CONSOLIDATION_TIMEOUT_MS",
+  "MISMEM_LLM_PROVIDER",
+  "OPENAI_API_KEY",
+  "OPENAI_BASE_URL",
+  "MISMEM_LLM_BASE_URL",
+  "MISMEM_LLM_API_KEY",
 ] as const;
 const saved = Object.fromEntries(ENV_KEYS.map((k) => [k, process.env[k]]));
 
@@ -75,6 +80,54 @@ describe("timeout del LLM", () => {
     expect(loadLlmConfig().timeoutMs).toBe(30_000);
     setEnv({ OPENROUTER_API_KEY: dummy, MISMEM_CONSOLIDATION_TIMEOUT_MS: "abc" });
     expect(loadLlmConfig().timeoutMs).toBe(120_000);
+  });
+});
+
+describe("proveedores", () => {
+  const key = "x";
+
+  it("sin MISMEM_LLM_PROVIDER, el orden de siempre: DeepSeek, OpenRouter, OpenAI, compatible", () => {
+    setEnv({ OPENROUTER_API_KEY: key, OPENAI_API_KEY: key });
+    expect(loadLlmConfig().baseUrl).toBe("https://openrouter.ai/api/v1");
+    setEnv({ OPENAI_API_KEY: key, MISMEM_CONSOLIDATION_MODEL: "un-modelo" });
+    expect(loadLlmConfig().baseUrl).toBe("https://api.openai.com/v1");
+    setEnv({ MISMEM_LLM_BASE_URL: "http://127.0.0.1:11434/v1/", MISMEM_CONSOLIDATION_MODEL: "qwen3" });
+    expect(loadLlmConfig()).toMatchObject({ baseUrl: "http://127.0.0.1:11434/v1", apiKey: "", model: "qwen3" });
+  });
+
+  it("MISMEM_LLM_PROVIDER manda aunque haya otras claves", () => {
+    setEnv({ DEEPSEEK_API_KEY: key, OPENAI_API_KEY: key, MISMEM_LLM_PROVIDER: "openai", MISMEM_CONSOLIDATION_MODEL: "m" });
+    expect(loadLlmConfig().baseUrl).toBe("https://api.openai.com/v1");
+  });
+
+  it("con OpenAI o compatible el modelo es obligatorio", () => {
+    setEnv({ OPENAI_API_KEY: key });
+    expect(() => loadLlmConfig()).toThrow(/MISMEM_CONSOLIDATION_MODEL/);
+    setEnv({ MISMEM_LLM_BASE_URL: "http://localhost:8000/v1" });
+    expect(() => loadLlmConfig()).toThrow(/MISMEM_CONSOLIDATION_MODEL/);
+  });
+
+  it("un proveedor elegido sin su variable dice cuál falta", () => {
+    setEnv({ MISMEM_LLM_PROVIDER: "openai", MISMEM_CONSOLIDATION_MODEL: "m" });
+    expect(() => loadLlmConfig()).toThrow(/falta OPENAI_API_KEY/);
+    setEnv({ MISMEM_LLM_PROVIDER: "compatible", MISMEM_CONSOLIDATION_MODEL: "m" });
+    expect(() => loadLlmConfig()).toThrow(/falta MISMEM_LLM_BASE_URL/);
+    setEnv({ MISMEM_LLM_PROVIDER: "otra-cosa" });
+    expect(() => loadLlmConfig()).toThrow(/no existe/);
+  });
+
+  it("sin ninguno enumera las cuatro opciones", () => {
+    setEnv({});
+    expect(() => loadLlmConfig()).toThrow(/OPENAI_API_KEY.*MISMEM_LLM_BASE_URL/);
+  });
+
+  it("un servidor sin clave no recibe Authorization", async () => {
+    const fetchMock = vi.fn().mockResolvedValue(
+      new Response(JSON.stringify({ choices: [{ message: { content: '{"memories":[]}' } }] })),
+    );
+    vi.stubGlobal("fetch", fetchMock);
+    await distill({ apiKey: "", model: "m", baseUrl: "http://127.0.0.1:11434/v1" }, "sys", "user");
+    expect(fetchMock.mock.calls[0]![1].headers).not.toHaveProperty("Authorization");
   });
 });
 
