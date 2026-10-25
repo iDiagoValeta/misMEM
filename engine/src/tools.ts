@@ -51,34 +51,124 @@ const PREFIX_FROM_LENGTH = 5;
 const PREFIX_TRIM = 3;
 const PREFIX_MIN = 4;
 
-// Cuántas palabras tienen que coincidir en la consulta de rescate. Con una sola se colaría
-// cualquier recuerdo que comparta un verbo ("¿qué decidimos sobre kubernetes?" contra uno
-// de docker); con dos, una pregunta de dos palabras sigue exigiendo ambas.
-const RELAXED_MIN_MATCHES = 2;
-// Las parejas crecen con el cuadrado: 12 palabras son 66 parejas, de sobra para un prompt.
+// Cuántos términos informativos distintos tienen que coincidir. Con uno se colaría
+// cualquier recuerdo que comparta una palabra rara pero ajena; con dos, el candidato tiene
+// que hablar de lo mismo por dos sitios. Las palabras comunes no cuentan.
+const RELAXED_MIN_INFORMATIVE = 2;
+// En una pregunta larga, dos coincidencias no son prueba aunque sean raras: la proporción
+// sube el mínimo con el tamaño de la consulta (tres para diez palabras). Es el mismo 0.3
+// del intento anterior, pero contando sólo términos informativos: las palabras comunes ni
+// entran ni ordenan.
+const RELAXED_MIN_RATIO = 0.3;
+// Un término es raro cuando aparece en pocas memorias; los que salen en muchas no
+// distinguen una paráfrasis de una casualidad (la idea del IDF de bm25). El suelo de 3
+// documentos protege corpus pequeños, donde una fracción sola marcaría casi todo como
+// común; la fracción crece con la base para que "pocas" signifique lo mismo en una memoria
+// de 300 recuerdos que en una de 3.000. Medido con 311 memorias, 50 prompts con flexión y
+// 10 preguntas ajenas: 0,02 rescata 29/50, 0,05 rescata 41/50 y 0,10 ya trae 2 ajenas.
+// 0,05 deja el doble de margen hasta la primera ajena.
+const RELAXED_RARE_MIN_DOCS = 3;
+const RELAXED_RARE_FRACTION = 0.05;
+// Una consulta de una sola palabra no puede juntar dos coincidencias, así que se rescata
+// con la única informativa. Se exige cuerpo suficiente para que el prefijo identifique
+// algo: "deudas" sí, "red" no.
+const RELAXED_SINGLE_MIN_LETTERS = 5;
+// El rescate es un último recurso, no una segunda lista: tres recuerdos bastan para
+// recuperar la paráfrasis y no convierten la respuesta en un volcado.
+const RELAXED_MAX_RESULTS = 3;
+// Tope de palabras para que la consulta de rescate no crezca sin límite.
 const RELAXED_MAX_TERMS = 12;
 
+interface RelaxedTerm {
+  word: string;
+  /** Principio por el que se busca; null si la palabra es demasiado corta y va exacta. */
+  prefix: string | null;
+}
+
 /**
- * La consulta de rescate cuando la estricta no encontró nada: basta con que coincidan dos
- * de las palabras, y por raíz aproximada. Una pregunta entera casi nunca repite todas las
- * palabras de un recuerdo; el ranking de FTS5 sube lo que coincide en más términos.
+ * Las palabras del rescate, ya normalizadas y sin repetir. La raíz aproximada sale de los
+ * mismos constantes que la búsqueda por prefijo: quitar las últimas tres letras es donde
+ * cambian género, número y conjugación.
  */
-function relaxedFts(query: string): string {
-  const terms = [
-    ...new Set(
-      searchTerms(query).map((term) => {
-        const word = plain(term);
-        if (word.length < PREFIX_FROM_LENGTH) return quoteFts(word);
-        return `${quoteFts(word.slice(0, Math.max(PREFIX_MIN, word.length - PREFIX_TRIM)))}*`;
-      }),
-    ),
-  ].slice(0, RELAXED_MAX_TERMS);
-  if (terms.length < RELAXED_MIN_MATCHES) return terms[0] ?? '""';
-  const pairs: string[] = [];
-  for (let i = 0; i < terms.length; i++) {
-    for (let j = i + 1; j < terms.length; j++) pairs.push(`(${terms[i]} ${terms[j]})`);
+function relaxedTerms(query: string): RelaxedTerm[] {
+  const seen = new Set<string>();
+  const terms: RelaxedTerm[] = [];
+  for (const term of searchTerms(query)) {
+    const word = plain(term);
+    if (seen.has(word)) continue;
+    seen.add(word);
+    terms.push({
+      word,
+      prefix:
+        word.length < PREFIX_FROM_LENGTH
+          ? null
+          : word.slice(0, Math.max(PREFIX_MIN, word.length - PREFIX_TRIM)),
+    });
+    if (terms.length === RELAXED_MAX_TERMS) break;
   }
-  return pairs.join(" OR ");
+  return terms;
+}
+
+/**
+ * La consulta de rescate cuando la estricta no encontró nada: una sola expresión con OR de
+ * todas las palabras. FTS5 ya no decide si el recuerdo vale; sólo trae candidatos baratos.
+ */
+function relaxedFts(terms: RelaxedTerm[]): string {
+  const expressions = terms.map(({ word, prefix }) =>
+    prefix ? `${quoteFts(prefix)}*` : quoteFts(word),
+  );
+  return expressions.join(" OR ") || '""';
+}
+
+/**
+ * En cuántas memorias distintas aparece el término, con el mismo prefijo que usa el
+ * rescate. Se mide sobre `memories_fts` y no sobre la capa que se rescata: las memorias
+ * son el corpus consolidado donde se acumula el vocabulario genérico, mientras rasgos y
+ * episodios son dispersos y ahí casi todo parecería raro. Cuenta sin filtrar por scope
+ * porque el vocabulario es de la persona, no del proyecto, y así el umbral no cambia de
+ * una memoria pequeña a otra grande.
+ */
+function documentFrequency(db: DB, term: RelaxedTerm): number {
+  const q = term.prefix ? `${quoteFts(term.prefix)}*` : quoteFts(term.word);
+  const row = db
+    .prepare("SELECT count(*) AS n FROM memories_fts WHERE memories_fts MATCH ?")
+    .get(q) as { n: number };
+  return row.n;
+}
+
+/**
+ * Los términos que distinguen dentro de este corpus. Un término ausente (frecuencia 0)
+ * nunca va a coincidir, así que no entra: contarlo sólo subiría el mínimo de
+ * coincidencias sin aportar señal y rompería la excepción de la consulta de una palabra.
+ *
+ * Un término que sale en todas las memorias también entra: con el corpus diminuto de un
+ * test o de una instalación recién nacida, "todos los documentos" no es ruido sino el
+ * tema del que hablan, y el IDF no tiene resolución para distinguirlo. En un corpus
+ * grande, que una palabra ajena a la consulta aparezca en todas las memorias es
+ * improbable; si aparece, es el tema y merece contar.
+ */
+function informativeTerms(db: DB, terms: RelaxedTerm[]): RelaxedTerm[] {
+  const total = (db.prepare("SELECT count(*) AS n FROM memories_fts").get() as { n: number }).n;
+  const rare = Math.max(RELAXED_RARE_MIN_DOCS, Math.ceil(total * RELAXED_RARE_FRACTION));
+  return terms.filter((term) => {
+    const frequency = documentFrequency(db, term);
+    return frequency > 0 && (frequency <= rare || frequency === total);
+  });
+}
+
+/**
+ * Cuántos términos informativos distintos de la consulta aparecen en el texto, contando
+ * por el mismo prefijo con el que se buscó. Las palabras comunes no entran en la cuenta:
+ * coincidir en "sistema" en una pregunta sobre planetas no prueba nada.
+ */
+function countRelaxedMatches(text: string, terms: RelaxedTerm[]): number {
+  const tokens = plain(text)
+    .split(/[^\p{L}\p{N}_]+/u)
+    .filter(Boolean);
+  return terms.reduce((count, { word, prefix }) => {
+    const found = tokens.some((token) => (prefix ? token.startsWith(prefix) : token === word));
+    return found ? count + 1 : count;
+  }, 0);
 }
 
 export function capture(db: DB, raw: unknown): { id: string; deduped: boolean } {
@@ -136,6 +226,51 @@ interface EpisodeCandidate {
   created_at: number;
 }
 
+/** Lo mínimo para ordenar candidatos rescatados: texto, id y puesto de FTS5. */
+interface RankedCandidate {
+  id: string;
+  text: string;
+  fts_rank: number;
+}
+
+type TraitRow = TraitCandidate & { fts_rank: number };
+type EpisodeRow = EpisodeCandidate & { fts_rank: number };
+
+/**
+ * Deja sólo los candidatos del rescate que alcanzan el mínimo de términos informativos y
+ * los ordena por esas coincidencias, no por la saliencia ni por la antigüedad. El tope
+ * evita que el rescate se convierta en una segunda lista.
+ */
+function relaxRows<T extends RankedCandidate>(
+  rows: T[],
+  informative: RelaxedTerm[],
+  queryTerms: number,
+): T[] {
+  if (rows.length === 0 || informative.length === 0) return [];
+  const only = informative.length === 1 ? informative[0] : undefined;
+  // Una sola palabra no puede juntar dos coincidencias; si es corta, el prefijo
+  // identificaría demasiado y no se rescata.
+  const required =
+    queryTerms === 1
+      ? only && only.word.length >= RELAXED_SINGLE_MIN_LETTERS
+        ? 1
+        : 0
+      : Math.max(RELAXED_MIN_INFORMATIVE, Math.ceil(queryTerms * RELAXED_MIN_RATIO));
+  // Si no hay tantos términos informativos como exige la consulta, nadie puede llegar.
+  if (required === 0 || informative.length < required) return [];
+  return rows
+    .map((row) => ({ row, matches: countRelaxedMatches(row.text, informative) }))
+    .filter(({ matches }) => matches >= required)
+    .sort(
+      (a, b) =>
+        b.matches - a.matches ||
+        Number(a.row.fts_rank) - Number(b.row.fts_rank) ||
+        a.row.id.localeCompare(b.row.id),
+    )
+    .slice(0, RELAXED_MAX_RESULTS)
+    .map(({ row }) => row);
+}
+
 function lexicalCandidates(
   db: DB,
   input: ReturnType<typeof RecallInput.parse>,
@@ -144,24 +279,17 @@ function lexicalCandidates(
   traits: TraitCandidate[];
   memories: RecallHit[];
   episodes: EpisodeCandidate[];
+  /** Ids que sólo llegaron por el rescate; con embeddings deben pasar también el corte. */
+  relaxedMemoryIds: Set<string>;
 } {
   const strict = escapeFts(input.query);
-  const relaxed = relaxedFts(input.query);
-  // Por capa: que un rasgo coincida no tiene que impedir el rescate de las memorias.
-  const withFallback = <T>(run: (q: string) => T[]): T[] => {
-    const rows = run(strict);
-    return rows.length === 0 && relaxed !== strict ? run(relaxed) : rows;
-  };
   const scopeFilter = input.scope ? "AND t.scope = @scope" : "";
 
   const traitStmt = db.prepare(
-    `SELECT t.id, t.scope, t.name AS text, t.created_at
+    `SELECT t.id, t.scope, t.name AS text, t.created_at, rank AS fts_rank
      FROM traits_fts f JOIN traits t ON t.rowid = f.rowid
      WHERE traits_fts MATCH @q ${scopeFilter}
      ORDER BY rank, t.id LIMIT @limit`,
-  );
-  const traitRows = withFallback(
-    (q) => traitStmt.all({ q, scope: input.scope, limit: CANDIDATE_POOL_LIMIT }) as TraitCandidate[],
   );
 
   const memoryStmt = db.prepare(
@@ -172,22 +300,75 @@ function lexicalCandidates(
        AND ${excludeNoiseSql("m")}
      ORDER BY rank, m.salience DESC, m.id LIMIT @limit`,
   );
-  const memoryRows = withFallback(
-    (q) => memoryStmt.all({ q, scope: input.scope, limit: MEMORY_FTS_SCAN_LIMIT }) as MemoryCandidate[],
-  );
 
   const episodeStmt = db.prepare(
-    `SELECT e.id, e.scope, e.body AS text, e.created_at
+    `SELECT e.id, e.scope, e.body AS text, e.created_at, rank AS fts_rank
      FROM episodes_fts f JOIN episodes e ON e.rowid = f.rowid
      WHERE episodes_fts MATCH @q ${input.scope ? "AND e.scope = @scope" : ""}
        AND e.consolidated_into IS NULL
      ORDER BY e.created_at DESC, e.id LIMIT @limit`,
   );
-  const episodeRows = withFallback(
-    (q) => episodeStmt.all({ q, scope: input.scope, limit: CANDIDATE_POOL_LIMIT }) as EpisodeCandidate[],
-  );
 
-  const memories: RecallHit[] = memoryRows
+  const run = (q: string): {
+    traits: TraitRow[];
+    memories: MemoryCandidate[];
+    episodes: EpisodeRow[];
+  } => ({
+    traits: traitStmt.all({ q, scope: input.scope, limit: CANDIDATE_POOL_LIMIT }) as TraitRow[],
+    memories: memoryStmt.all({
+      q,
+      scope: input.scope,
+      limit: MEMORY_FTS_SCAN_LIMIT,
+    }) as MemoryCandidate[],
+    episodes: episodeStmt.all({ q, scope: input.scope, limit: CANDIDATE_POOL_LIMIT }) as EpisodeRow[],
+  });
+
+  // La estricta manda sobre la consulta entera: si encontró algo en cualquier capa, el
+  // resultado es el de siempre. El rescate sólo entra cuando no hubo ni un candidato, para
+  // que una paráfrasis no altere una búsqueda que ya funcionaba.
+  const strictRows = run(strict);
+  const strictEmpty =
+    strictRows.traits.length === 0 &&
+    strictRows.memories.length === 0 &&
+    strictRows.episodes.length === 0;
+  // Sólo se consulta la frecuencia cuando de verdad hace falta rescatar: son hasta doce
+  // cuentas sobre memories_fts que una búsqueda normal no debe pagar.
+  let rescuedTerms: RelaxedTerm[] | null = null;
+  let rescuedTermCount = 0;
+  let rows = strictRows;
+  if (strictEmpty) {
+    const terms = relaxedTerms(input.query);
+    const relaxed = relaxedFts(terms);
+    if (relaxed !== strict) {
+      rows = run(relaxed);
+      rescuedTerms = informativeTerms(db, terms);
+      rescuedTermCount = terms.length;
+    }
+  }
+  const rescued = rescuedTerms !== null;
+  const traitRows: TraitCandidate[] = (
+    rescuedTerms
+      ? relaxRows(rows.traits, rescuedTerms, rescuedTermCount)
+      : rows.traits
+  ).map(({ fts_rank: _ftsRank, ...row }) => row);
+  const episodeRows: EpisodeCandidate[] = (
+    rescuedTerms
+      ? relaxRows(rows.episodes, rescuedTerms, rescuedTermCount)
+      : rows.episodes
+  ).map(({ fts_rank: _ftsRank, ...row }) => row);
+
+  // El rescate ya viene ordenado por coincidencias; el estricto conserva el orden de siempre.
+  const orderedMemories =
+    rescuedTerms
+      ? relaxRows(rows.memories, rescuedTerms, rescuedTermCount)
+      : rows.memories.sort(
+          (a, b) =>
+            Number(a.fts_rank) - Number(b.fts_rank) ||
+            (b.salience ?? 0) - (a.salience ?? 0) ||
+            a.id.localeCompare(b.id),
+        );
+  const memories: RecallHit[] = orderedMemories
+    .slice(0, rescued ? RELAXED_MAX_RESULTS : CANDIDATE_POOL_LIMIT)
     .map((r) => ({
       layer: "memory" as const,
       id: r.id,
@@ -195,18 +376,14 @@ function lexicalCandidates(
       text: r.text,
       salience: effectiveSalience(r, at),
       created_at: r.created_at,
-      fts_rank: r.fts_rank,
-    }))
-    .sort(
-      (a, b) =>
-        Number(a.fts_rank) - Number(b.fts_rank) ||
-        (b.salience ?? 0) - (a.salience ?? 0) ||
-        a.id.localeCompare(b.id),
-    )
-    .slice(0, CANDIDATE_POOL_LIMIT)
-    .map(({ fts_rank: _ftsRank, ...hit }) => hit);
+    }));
 
-  return { traits: traitRows, memories, episodes: episodeRows };
+  return {
+    traits: traitRows,
+    memories,
+    episodes: episodeRows,
+    relaxedMemoryIds: rescued ? new Set(memories.map((hit) => hit.id)) : new Set<string>(),
+  };
 }
 
 function finalizeHits(
@@ -360,9 +537,17 @@ export async function recallHybrid(
         model: options.embeddingModel ?? (embedFn ? undefined : cfg.model),
       })
     : [];
-  const memories = queryVec
-    ? fuseMemories(lexical.memories, semantic, at)
-    : lexical.memories;
+  // Un recuerdo que sólo aparece por el rescate léxico tiene que pasar también el corte
+  // semántico: el rescate recupera paráfrasis, pero no debe devolver lo que el significado
+  // descartó. `semantic` ya viene filtrado por minScore.
+  let memories = lexical.memories;
+  if (queryVec) {
+    const semanticIds = new Set(semantic.map((hit) => hit.id));
+    const confirmed = lexical.memories.filter(
+      (hit) => !lexical.relaxedMemoryIds.has(hit.id) || semanticIds.has(hit.id),
+    );
+    memories = fuseMemories(confirmed, semantic, at);
+  }
   const hits: RecallHit[] = [
     ...lexical.traits.map((r) => ({ ...r, layer: "trait" as const })),
     ...memories,

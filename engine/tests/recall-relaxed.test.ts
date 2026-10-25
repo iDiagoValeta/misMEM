@@ -1,7 +1,8 @@
 import { describe, it, expect, beforeEach } from "vitest";
 import type { Database as DB } from "better-sqlite3";
 import { openDb } from "../src/db.js";
-import { capture, consolidate, recall } from "../src/tools.js";
+import { capture, consolidate, recall, recallHybrid } from "../src/tools.js";
+import { embedPendingMemories, type EmbedFn } from "../src/embeddings/index.js";
 
 let db: DB;
 
@@ -52,5 +53,74 @@ describe("recall léxico: frases normales", () => {
     const three = memory("pc", "las luces del teclado del portátil");
     const two = memory("pc", "luces del teclado externo");
     expect(memoryIds("cómo apago las luces del teclado de mi portátil")).toEqual([three, two]);
+  });
+
+  it("una pregunta ajena y larga con dos palabras comunes no rescata nada", () => {
+    memory("jardin", "el sistema tiene un riego automático para el jardín");
+    expect(
+      memoryIds("¿cuántos planetas del sistema solar tiene anillos y cuántas lunas rodean a Júpiter?"),
+    ).toEqual([]);
+  });
+
+  it("una palabra común no rescata si no la acompañan dos raras", () => {
+    // Ocho memorias de fondo hacen que "sistema" y "equipo" sean vocabulario común:
+    // cada una aparece en cuatro documentos, por encima del umbral de rareza.
+    for (const gist of [
+      "sistema de archivos del servidor",
+      "sistema de energía del portátil",
+      "sistema de notificaciones del móvil",
+      "equipo de fútbol del barrio",
+      "equipo de diseño de la oficina",
+      "equipo de música del salón",
+      "receta de masa madre",
+      "el clima de A Coruña",
+    ]) {
+      memory("pc", gist);
+    }
+    // "sistema" y "equipo" coinciden, pero no distinguen: son comunes.
+    memory("pc", "el sistema del equipo de riego");
+    // Una sola palabra rara tampoco basta.
+    memory("dev", "kubernetes en el cluster");
+    const two = memory("dev", "despliegue de kubernetes con traefik en el ingress");
+
+    expect(memoryIds("sistema equipo kubernetes traefik")).toEqual([two]);
+  });
+
+  it("el rescate devuelve como mucho tres recuerdos", () => {
+    for (const suffix of ["uno", "dos", "tres", "cuatro", "cinco"]) {
+      memory("dev", `configurar servidor nginx ${suffix}`);
+    }
+    expect(memoryIds("configurando servidores nginx")).toHaveLength(3);
+  });
+
+  it("con la búsqueda estricta llena, el rescate no añade nada", () => {
+    const exact = memory("dev", "deploy de florfitt con docker y traefik");
+    memory("dev", "florfitt usa docker a diario");
+    expect(memoryIds("florfitt docker traefik")).toEqual([exact]);
+  });
+});
+
+describe("recall híbrido: el rescate no salta el corte semántico", () => {
+  it("un recuerdo que sólo llega por palabras y no pasa el corte se descarta", async () => {
+    const lexico = memory("dev", "configurar servidor");
+    const semantico = memory("finanzas", "temas de finanzas");
+    const vecs = new Map<string, Float32Array>([
+      ["configurando servidores", Float32Array.from([1, 0])],
+      ["configurar servidor", Float32Array.from([0, 1])],
+      ["temas de finanzas", Float32Array.from([1, 0])],
+    ]);
+    const embed: EmbedFn = async (texts) =>
+      texts.map((text) => vecs.get(text) ?? Float32Array.from([0, 1]));
+    await embedPendingMemories(db, { embedFn: embed, model: "fake" });
+
+    const result = await recallHybrid(
+      db,
+      { query: "configurando servidores", limit: 5 },
+      embed,
+      { reinforce: false, embeddingModel: "fake" },
+    );
+
+    expect(result.hits.map((hit) => hit.id)).toEqual([semantico]);
+    expect(result.hits.map((hit) => hit.id)).not.toContain(lexico);
   });
 });
