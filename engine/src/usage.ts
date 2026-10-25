@@ -7,7 +7,7 @@
  * paráfrasis sin palabras compartidas no se detecta— pero falla hacia no reforzar,
  * que es el lado barato: un recuerdo útil que no suma saliencia sigue encontrándose.
  */
-import { INJECTION_ENTRY, INJECTION_HEADER } from "./inject.js";
+import { parseInjection } from "./inject.js";
 import { contentTerms } from "./terms.js";
 
 export interface RecalledMemory {
@@ -67,37 +67,10 @@ export function lastTurn(lines: readonly unknown[]): unknown[] {
   return [...lines];
 }
 
-/** Cada cadena del objeto, sin importar en qué campo viva. */
-function* allStrings(node: unknown): Generator<string> {
-  if (typeof node === "string") yield node;
-  else if (Array.isArray(node)) for (const v of node) yield* allStrings(v);
-  else if (node && typeof node === "object") for (const v of Object.values(node)) yield* allStrings(v);
-}
-
-/**
- * Lo que el hook de inyección adelantó. No llega como resultado de una herramienta sino
- * como contexto agregado, y el cliente lo guarda en un campo propio: por eso se busca la
- * marca en cualquier cadena de la línea en vez de en una ruta fija.
- */
-function injectedMemories(line: unknown): RecalledMemory[] {
-  const out: RecalledMemory[] = [];
-  for (const text of allStrings(line)) {
-    if (!text.includes(INJECTION_HEADER)) continue;
-    for (const row of text.split("\n")) {
-      const m = INJECTION_ENTRY.exec(row.trim());
-      const id = m?.[1];
-      const texto = m?.[3];
-      if (id && texto) out.push({ id, text: texto });
-    }
-  }
-  return out;
-}
-
-/** Los recuerdos que el modelo tuvo delante: los que pidió con `recall` y los inyectados. */
+/** Los recuerdos que `recall` devolvió dentro de estas líneas. */
 export function recalledMemories(lines: readonly unknown[]): RecalledMemory[] {
   const out = new Map<string, RecalledMemory>();
   for (const line of lines) {
-    for (const m of injectedMemories(line)) out.set(m.id, m);
     for (const block of blocksOf(line)) {
       if (block.type !== "tool_result") continue;
       const raw = block.content;
@@ -120,6 +93,28 @@ export function recalledMemories(lines: readonly unknown[]): RecalledMemory[] {
         if (hit.layer !== "memory" || !hit.id || !hit.text) continue;
         out.set(hit.id, { id: hit.id, text: hit.text });
       }
+    }
+  }
+  return [...out.values()];
+}
+
+/**
+ * Los recuerdos que el hook de inyección puso en el contexto dentro de estas líneas. Claude
+ * Code guarda su `additionalContext` como un adjunto `hook_additional_context`, no como un
+ * `tool_result`, así que `recalledMemories` no los ve y nunca se reforzaban.
+ */
+export function injectedMemories(lines: readonly unknown[]): RecalledMemory[] {
+  const out = new Map<string, RecalledMemory>();
+  for (const line of lines) {
+    const attachment = (
+      line as { type?: string; attachment?: { type?: string; content?: unknown } } | null
+    )?.attachment;
+    if (roleOf(line) !== "attachment" || attachment?.type !== "hook_additional_context") continue;
+    const content = attachment.content;
+    const texts = Array.isArray(content) ? content : [content];
+    for (const text of texts) {
+      if (typeof text !== "string") continue;
+      for (const { id, text: memoryText } of parseInjection(text)) out.set(id, { id, text: memoryText });
     }
   }
   return [...out.values()];
