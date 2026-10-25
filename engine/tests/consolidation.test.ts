@@ -140,11 +140,12 @@ describe("runConsolidation", () => {
     expect(mem.salience).toBe(0.9);
   });
 
-  it("crea memoria stub con salience baja cuando LLM dice sin se\u00f1al", async () => {
-    captureOld("noise", "ok", 48);
-    captureOld("noise", "dale", 48);
-    captureOld("noise", "listo", 48);
-
+  it("'sin se\u00f1al' suma un strike a toda la tanda en vez de mandarla a ruido a la primera", async () => {
+    const ids = [
+      captureOld("noise", "decidimos migrar el hosting a Hetzner", 48),
+      captureOld("noise", "dale", 48),
+      captureOld("noise", "listo", 48),
+    ];
     const distillFn = vi.fn().mockResolvedValue([]);
 
     const summary = await runConsolidation(db, {
@@ -155,9 +156,31 @@ describe("runConsolidation", () => {
       log: () => {},
     });
 
+    expect(summary.memories_created).toBe(0);
+    expect(summary.episodes_consolidated).toBe(0);
+    expect(summary.episodes_uncited_pending).toBe(3);
+    for (const id of ids) {
+      const row = db
+        .prepare("SELECT consolidated_into, uncited_count FROM episodes WHERE id = ?")
+        .get(id) as { consolidated_into: string | null; uncited_count: number };
+      expect(row).toEqual({ consolidated_into: null, uncited_count: 1 });
+    }
+  });
+
+  it("agotados los strikes por 'sin se\u00f1al', la tanda pasa a ruido con salience baja", async () => {
+    captureOld("noise", "ok", 48);
+    captureOld("noise", "dale", 48);
+    captureOld("noise", "listo", 48);
+    const distillFn = vi.fn().mockResolvedValue([]);
+    const opts = { minEpisodesPerScope: 1, paretoPrefilter: false, uncitedStrikes: 2, llm: llmCfg, distillFn, log: () => {} };
+
+    await runConsolidation(db, opts);
+    const summary = await runConsolidation(db, opts);
+
     expect(summary.memories_created).toBe(1);
     expect(summary.episodes_consolidated).toBe(3);
-    const mem = db.prepare("SELECT salience FROM memories LIMIT 1").get() as { salience: number };
+    const mem = db.prepare("SELECT gist, salience FROM memories LIMIT 1").get() as { gist: string; salience: number };
+    expect(mem.gist).toBe("[noise] 3 episodios sin citar en 2 tandas");
     expect(mem.salience).toBeLessThan(0.2);
   });
 
@@ -489,10 +512,12 @@ describe("runConsolidation", () => {
   });
 
   it("respeta el tope de llamadas por corrida y deja el resto para la próxima", async () => {
+    const ids: string[] = [];
     for (const scope of ["a", "b", "c"]) {
-      for (const n of [1, 2, 3]) captureOld(scope, `nota ${scope} ${n} sobre el despliegue`, 48);
+      for (const n of [1, 2, 3]) ids.push(captureOld(scope, `nota ${scope} ${n} sobre el despliegue`, 48));
     }
-    const distillFn = vi.fn().mockResolvedValue([]);
+    // Cita todo lo que le llega: cada llamada consolida su ámbito entero.
+    const distillFn = vi.fn().mockResolvedValue([{ gist: "despliegue", evidence_episode_ids: ids }]);
 
     const summary = await runConsolidation(db, {
       minEpisodesPerScope: 1,
