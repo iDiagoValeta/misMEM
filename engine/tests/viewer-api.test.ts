@@ -2,7 +2,14 @@ import { describe, it, expect, beforeEach } from "vitest";
 import type { Database as DB } from "better-sqlite3";
 import { openDb } from "../src/db.js";
 import { capture, consolidate, crystallize } from "../src/tools.js";
-import { handleGraph, handleMemories, handleMemory, handleScopes, handleTrait } from "../src/viewer-api.js";
+import {
+  handleGraph,
+  handleMemories,
+  handleMemory,
+  handleScopes,
+  handleTrait,
+  parseDetailPath,
+} from "../src/viewer-api.js";
 
 const DAY = 86_400_000;
 let db: DB;
@@ -47,6 +54,24 @@ function memoryFrom(scope: string, gist: string, bodies: string[]): { memoryId: 
   const { memory_id } = consolidate(db, { scope, gist, source_episode_ids: episodeIds });
   return { memoryId: memory_id, episodeIds };
 }
+
+describe("viewer-api: parseDetailPath", () => {
+  it("devuelve capa e id en una ruta de detalle y decodifica el id", () => {
+    expect(parseDetailPath("/api/memory/abc")).toEqual({ layer: "memory", id: "abc" });
+    expect(parseDetailPath("/api/memory/a%20b")).toEqual({ layer: "memory", id: "a b" });
+    expect(parseDetailPath("/api/trait/x")).toEqual({ layer: "trait", id: "x" });
+  });
+
+  it("un id mal codificado es un error del cliente, no del servidor", () => {
+    expect(parseDetailPath("/api/memory/%")).toBe("bad");
+    expect(parseDetailPath("/api/memory/%C3")).toBe("bad");
+  });
+
+  it("cualquier otra ruta no es de detalle", () => {
+    expect(parseDetailPath("/api/memory/")).toBeNull();
+    expect(parseDetailPath("/api/memory/a/b")).toBeNull();
+  });
+});
 
 describe("viewer-api: /api/scopes", () => {
   it("cuenta por capa y ámbito, sin marcadores de ruido entre las memorias", () => {

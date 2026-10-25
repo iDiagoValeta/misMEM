@@ -51,6 +51,24 @@ const GRAPH_MAX_TRAITS = 200;
 const GRAPH_MAX_EPISODES = 2000;
 const GRAPH_LABEL_CHARS = 120;
 
+export type DetailPath = { layer: "memory" | "trait"; id: string };
+
+/**
+ * Una ruta de detalle con el id mal codificado (% suelto o una secuencia UTF-8 a medias)
+ * es culpa de quien llama, no del servidor: devuelve "bad" para responder 400 en vez de
+ * dejar que decodeURIComponent lance URIError y el catch general lo disfrace de 500.
+ */
+export function parseDetailPath(pathname: string): DetailPath | "bad" | null {
+  const match = /^\/api\/(memory|trait)\/([^/]+)$/.exec(pathname);
+  if (!match) return null;
+  try {
+    const id = decodeURIComponent(match[2] ?? "");
+    return id ? { layer: match[1] as DetailPath["layer"], id } : "bad";
+  } catch {
+    return "bad";
+  }
+}
+
 /** Los arrays de ids viven como JSON en una columna de texto: uno roto no rompe la respuesta. */
 function parseIds(raw: string | null): string[] {
   try {
