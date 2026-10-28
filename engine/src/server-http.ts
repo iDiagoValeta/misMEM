@@ -22,13 +22,12 @@
  *   DELETE /mcp     →  cierra stream
  */
 import { createServer as createHttpServer } from "node:http";
-import type { IncomingMessage, ServerResponse } from "node:http";
-import { timingSafeEqual } from "node:crypto";
+import type { ServerResponse } from "node:http";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 import { openDefaultDb } from "./db.js";
 import { hostAllowed, parseHostList } from "./http-host.js";
 import { BodyTooLargeError, InvalidJsonError, isJsonContentType, loadMaxBodyBytes, readJsonBody } from "./http-body.js";
-import { bindHost, loadAuth } from "./http-guard.js";
+import { bindHost, checkBasicAuth, loadAuth } from "./http-guard.js";
 import { createServer } from "./server-core.js";
 import {
   handleStats,
@@ -68,25 +67,6 @@ try {
   process.exit(1);
 }
 
-function safeEqual(a: string, b: string): boolean {
-  const ab = Buffer.from(a, "utf8");
-  const bb = Buffer.from(b, "utf8");
-  if (ab.length !== bb.length) return false;
-  return timingSafeEqual(ab, bb);
-}
-
-function checkBasicAuth(req: IncomingMessage): boolean {
-  if (!AUTH) return true;
-  const header = req.headers.authorization;
-  if (!header?.startsWith("Basic ")) return false;
-  const decoded = Buffer.from(header.slice(6), "base64").toString("utf8");
-  const sep = decoded.indexOf(":");
-  if (sep < 0) return false;
-  const user = decoded.slice(0, sep);
-  const pass = decoded.slice(sep + 1);
-  return safeEqual(user, AUTH.user) && safeEqual(pass, AUTH.pass);
-}
-
 function send401(res: ServerResponse): void {
   res.statusCode = 401;
   res.setHeader("WWW-Authenticate", 'Basic realm="misMEM"');
@@ -116,7 +96,7 @@ const httpServer = createHttpServer(async (req, res) => {
     }
 
     if (url.pathname === "/mcp") {
-      if (!checkBasicAuth(req)) {
+      if (!checkBasicAuth(req.headers.authorization, AUTH)) {
         send401(res);
         return;
       }
@@ -185,7 +165,7 @@ const httpServer = createHttpServer(async (req, res) => {
       url.pathname === "/" ||
       url.pathname.startsWith("/api/")
     ) {
-      if (!checkBasicAuth(req)) {
+      if (!checkBasicAuth(req.headers.authorization, AUTH)) {
         send401(res);
         return;
       }
