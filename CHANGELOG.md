@@ -6,6 +6,11 @@
 
 - `MemoryView` y `TraitView` repetían el pie del diálogo de confirmación y la forma de sus props. Ambos viven ahora en `DetailParts.tsx` (`ConfirmDialog` y `DetailViewProps`), sin cambios visibles, y `pnpm dup` pasa a exigir umbral 0: ningún bloque copiado de 10 o más líneas.
 
+### `@vitejs/plugin-react` sube a 5.2.0
+
+- `@vitejs/plugin-react` pasa de 4.7.0 a 5.2.0, fijado exacto. `ui/vite.config.ts` llama a `react()`
+  sin opciones y la 5.x sólo deja de añadir `react`/`react-dom` a `resolve.dedupe`, que aquí sobra.
+
 ### Linter con Biome, y fuera las directivas de ESLint que no hacían nada
 
 - No había linter ni formateador. Ahora Biome 2 es el único, sólo como linter: `pnpm lint` y un step
