@@ -1,76 +1,160 @@
-# AGENTS.md — misMEM
+# AGENTS.md
 
-Convenciones para cualquier agente (Claude Code vía `CLAUDE.md`, Copilot, opencode) y para quien contribuya.
+Contrato de trabajo para cualquier agente (Claude Code a través de `CLAUDE.md`, que sólo importa este
+fichero; Copilot; opencode) y para quien contribuya. Si este fichero y el código discrepan, gana el código:
+se corrige el fichero.
 
-Sistema de memoria persistente con MCP (3 capas: episodes → memories → traits).
+## Qué es misMEM
 
-## Stack
-- **Engine**: Node 22, TypeScript strict ESM, better-sqlite3, MCP SDK, Zod, FTS5
-- **Tests**: Vitest. Correr `pnpm test` desde `engine/` antes de commitear
-- **Build**: `pnpm build` (tsc → `dist/`)
-- **Container**: `mismem-brain` (Alpine multi-arch), expone HTTP/SSE en `:3200`
-- **Deploy**: Docker en un VPS detrás de Traefik (ver `DEPLOY.md`)
+Memoria persistente para LLMs, expuesta como servidor MCP sobre una sola base SQLite que comparten todos los
+clientes. Tiene tres capas: `episodes` (texto literal y fechado), `memories` (resúmenes que destila una
+consolidación con LLM, con una saliencia que decae y se refuerza con el uso) y `traits` (patrones
+cristalizados). Seis herramientas canónicas (`capture`, `recall`, `reinforce`, `consolidate`,
+`crystallize`, `forget`) y alias `mem_*` de Engram. El resto de la forma del sistema:
+[`docs/architecture.md`](docs/architecture.md).
 
-## Convenciones de código
-- TypeScript estricto: nunca `any`, preferí tipos explícitos
-- Validar todo input externo con Zod (ver `engine/src/schema.ts`)
-- Funciones puras + DI para testabilidad (ej. `distillFn` en `consolidation/run.ts`)
-- ESM: imports con extensión `.js` aunque el archivo sea `.ts`
-- IDs: ULID (libreria `ulid`)
-- DB: better-sqlite3 sincrónico, todo dentro de `db.transaction(() => ...)`
-- Comentarios solo PARA QUÉ, nunca QUÉ
-- Identificadores, claves JSON y comentarios nuevos o reescritos en inglés (los comentarios en español que ya existen no se traducen en masa); mensajes de cara al usuario (errores, logs, ayuda del CLI, UI) en español; documentación en Markdown en español; commits en Conventional Commits en inglés
+Stack: TypeScript estricto, ESM, Node 22 o superior, `better-sqlite3` (WAL y FTS5), SDK de MCP, Zod y Vitest;
+la interfaz es React, Vite y Tailwind. Gestor de paquetes: pnpm, nunca npm.
 
-## Esquema (resumen)
-- `episodes(id, scope, body, created_at, consolidated_into, content_hash, uncited_count)` — verbatim, body NO `text`
-- `memories(id, scope, gist, details, source_episode_ids JSON, salience, created_at, last_accessed_at, salience_updated_at, use_count)`
-- `co_use(memory_a, memory_b, n, last_at)` — índice hebbiano: pares que se usaron en el mismo turno, sólo lo escribe `reinforce`
-- `memory_embeddings(memory_id, model, dims, vec BLOB, created_at)` — un vector por memoria
-- `traits(id, scope, name, evidence_memory_ids JSON, strength, polarity, created_at, updated_at)`
-- FTS5 virtual: `episodes_fts(body)`, `memories_fts(gist, details)`, `traits_fts(name)`
+## Dónde vive qué
 
-## MCP tools (en `engine/src/tools.ts`)
-- `capture(scope, body)` → inserta episode
-- `recall(query, scope?, limit?, reinforce?)` → traits>memories>episodes; en memories fusiona palabras (FTS5, todas las de la consulta menos las vacías) y significado (embeddings) con la relevancia antes que la saliencia; refuerza lo devuelto. Los marcadores de ruido (`[noise] …`, `[pareto:l0] …`) quedan afuera: ver `noise.ts`
-- `consolidate(scope, gist, details?, source_episode_ids[])` → crea memory + marca episodes
-- `reinforce(memory_ids[], boost?)` → sube la saliencia de los recuerdos que una respuesta usó de verdad; pensado con `MISMEM_REINFORCE_ON_RECALL=off` y el hook `mismem-used`
-- `crystallize(scope, name, evidence_memory_ids[], polarity?)` → crea trait
-- `forget(scope?, before_days?, memory_grace_days?, salience_below?, dry_run?)` → purga episodes consolidados + memories de baja salience (simula por defecto; `mismem-forget` borra por defecto)
+| Ruta | Qué posee | Se toca cuando |
+|---|---|---|
+| `engine/src/db.ts` | `SCHEMA`, migraciones aditivas (`migrate()`), apertura de la base con permisos `0600` | cambia una tabla, una columna o un índice |
+| `engine/src/schema.ts` | Inputs Zod de las herramientas y el tipo `RecallHit` | cambia lo que una herramienta acepta o devuelve |
+| `engine/src/tools.ts` | Las operaciones MCP: `capture`, `recall` y `recallHybrid`, `reinforce`, `consolidate`, `crystallize`, `forget` y la lista de episodios pendientes | cambia lo que hace una herramienta |
+| `engine/src/search.ts` | Ranking del recall: consulta FTS5, rescate y fusión RRF con la saliencia | cambia el ranking (pide `mismem-bench`) |
+| `engine/src/embeddings/` | `provider.ts` (configuración por entorno y cliente HTTP), `store.ts` (SQL de `memory_embeddings`, búsqueda y backfill), `vector.ts` (coseno) | cambia la capa semántica (pide `mismem-bench`) |
+| `engine/src/salience.ts` | Decay y refuerzo de la saliencia | cambia la fórmula de saliencia |
+| `engine/src/noise.ts`, `engine/src/terms.ts`, `engine/src/hash.ts` | Marcadores de ruido, tokenización compartida por la búsqueda y la medición de uso, hash del contenido (dedup de `capture`) | cambia uno de esos tres criterios |
+| `engine/src/relations.ts` | Lecturas que comparten el visor y la exportación a Obsidian (memorias parecidas por vector) | cambia cómo se relacionan las memorias |
+| `engine/src/server-core.ts` | Descriptores de las herramientas MCP y su despacho; lo usan `server.ts` (stdio) y `server-http.ts` | se añade o cambia una herramienta |
+| `engine/src/engram-compat.ts` | Los alias `mem_*` y su mapeo a las seis herramientas | cambia la compatibilidad con Engram |
+| `engine/src/server-http.ts` | Servidor HTTP: `/mcp`, `/healthz`, `/viewer` y `/api/*` | se añade una ruta; la lógica va a otro módulo |
+| `engine/src/http-guard.ts`, `engine/src/http-host.ts`, `engine/src/http-body.ts` | Dirección de enlace y BasicAuth, guarda de `Host`, lectura del cuerpo con tope | cambia qué petición se atiende |
+| `engine/src/viewer.ts`, `engine/src/viewer-api.ts`, `engine/src/viewer-actions.ts`, `engine/src/viewer-static.ts` | API de lectura del visor, sus escrituras por POST, y la interfaz compilada con su CSP | cambia lo que el visor muestra o puede hacer |
+| `engine/ui/` | La interfaz (React) en `ui/src`; se compila a `dist/ui`. `ui/src/components/ui/` es código de shadcn: Biome y knip lo tratan aparte | cambia lo que se ve |
+| `engine/src/consolidation/` | `run.ts` (la corrida), `llm.ts` (proveedores), `prompts.ts`, `job.ts` (corrida en segundo plano desde la interfaz) y su `README.md` | cambia cómo se destilan los episodios |
+| `engine/src/pareto/classifier.ts` | Prefiltro heurístico que descarta ruido antes del LLM | cambia qué se descarta sin LLM |
+| `engine/src/ingest/` | Importadores de ChatGPT y de VS Code, y el recorrido de ficheros | se importa un formato nuevo |
+| `engine/src/inject.ts`, `engine/src/usage.ts`, `engine/src/hook-client.ts`, `engine/src/hook-readiness.ts` | Lógica de los hooks: qué inyectar, qué se usó, cliente remoto y espera a que el servidor esté listo | cambia un hook |
+| `engine/src/obsidian.ts`, `engine/src/bench.ts` | Exportación como bóveda de Obsidian; medición del recall | cambia una de las dos |
+| `engine/src/*-cli.ts`, `engine/src/*-args.ts`, `engine/src/cli-args.ts`, `engine/src/env.ts` | Los binarios `mismem-*`, la lectura estricta de sus argumentos y la lectura de variables numéricas | cambia un CLI o un flag |
+| `engine/tests/` | Un `<área>.test.ts` por área; `fixtures/` (exports ficticios) y `support/` | cada cambio |
+| `scripts/` | `install.sh` (instalador de Linux), `mismem-hook.sh` (envoltorio de los hooks), `backup-mismem-from-server.ps1` (respaldo desde Windows) | cambia la instalación o el respaldo |
+| `engine/Dockerfile.mismem-brain`, `.github/` | La imagen, los workflows, las plantillas y las etiquetas | cambia el empaquetado o la CI |
 
-## Reglas de seguridad
-- **NUNCA** leer/editar `.env*`. Tampoco mostrar secrets en respuestas
-- **NUNCA** ejecutar `git push --force`, `git reset --hard`, `Remove-Item -Recurse` sin pedir
-- **NUNCA** modificar `engine/src/db.ts` (el `SCHEMA` y las migraciones aditivas) sin migration plan (rompe DB en producción)
-- Validar inputs en bordes (Zod en MCP handlers, ya hecho)
+Las tablas de la base, en `engine/src/db.ts`:
 
-## Flujo de trabajo típico
-1. Cambio en `engine/src/...`
-2. `pnpm typecheck` + `pnpm test` (todo verde)
-3. Commit con conventional: `feat:`, `fix:`, `test:`, `refactor:`, `chore:`
-4. Si toca producción: rebuild imagen, redeploy, smoke test contra el endpoint HTTPS
+| Tabla | Qué guarda |
+|---|---|
+| `episodes` | Texto literal en `body` (no `text`; el recall lo expone como `text`), con `consolidated_into`, `content_hash` y `uncited_count` |
+| `memories` | `gist` y `details`, `source_episode_ids` (JSON), `salience`, `use_count` y las marcas de tiempo del decay |
+| `traits` | `name` único por `scope`, `evidence_memory_ids` (JSON), `strength` y `polarity` |
+| `co_use` | Pares de memorias usadas en el mismo turno; sólo lo escribe `reinforce` |
+| `memory_embeddings` | Un vector (BLOB) por memoria y el modelo que lo generó |
+| `episodes_fts`, `memories_fts`, `traits_fts` | Índices FTS5 que mantienen disparadores |
 
-## Backups
-- `VACUUM INTO` dentro del contenedor (consistente con WAL) y copia afuera: cron en el servidor o `scripts/backup-mismem-from-server.ps1` desde Windows. Ver `DEPLOY.md`, "Tareas programadas"
-- La rotación tiene que durar más que los 30 días que tarda `forget` en borrar lo marcado como ruido
+## Comandos
 
-## Consolidación LLM (4 AM diario)
-- `mismem-consolidate` CLI → destila episodes pendientes con DeepSeek directo (`DEEPSEEK_API_KEY`) u OpenRouter
-- Ver `engine/src/consolidation/README.md` para detalles
-- Idempotente (`WHERE consolidated_into IS NULL`)
+Desde `engine/`, tras `pnpm install`. Antes de dar un cambio por hecho, lo mismo que corre CI en el job `test`:
 
-## Configuración
-- La única lista completa de variables de entorno es la tabla de `DEPLOY.md` ("referencia única"). Si agregás o cambiás una variable, se actualiza ahí y sólo ahí; el resto de los documentos enlaza
-- `mismem-bench` mide el recall con un banco privado; correlo antes y después de tocar `tools.ts`, `search.ts` o `embeddings/`. Informa posición del acierto (MRR, 1ª, entre las 3), recuerdos devueltos por pregunta y `noiseHits` (marcadores que se escaparon: tiene que ser 0)
+```bash
+pnpm typecheck && pnpm test && pnpm knip && pnpm dup && pnpm lint && pnpm build
+```
 
-## Anti-patterns
-- `any` en TypeScript
-- Comparar contra `text` (no existe; el campo es `body`)
-- Pasar `null` donde Zod espera `string|undefined`
-- Acceder a `db` fuera de transacción para writes múltiples
-- Hardcodear scope (siempre parámetro)
+- Un cambio en `scripts/` se comprueba además con `bash -n scripts/*.sh` y `shellcheck --severity=error scripts/*.sh`.
+- Un test suelto: `pnpm test tests/<área>.test.ts`.
+- Desarrollo: `pnpm dev` (MCP por stdio), `pnpm dev:http` (servidor en `:3200`, sin interfaz compilada) y
+  `pnpm dev:ui` (la interfaz, con `/api` hacia el servidor de `MISMEM_DEV_API`, por defecto `:3200`).
+- Medir el recall, tras `pnpm build`: `node dist/bench-cli.js --bank <banco.jsonl> --db <base.db>`.
+  Informa MRR, la posición del acierto, los recuerdos devueltos por pregunta y `noiseHits`, que tiene que ser 0.
+  El banco es privado y sale de la propia memoria: no se sube a ningún sitio.
 
-## Engram protocol (memoria persistente)
-Este repo se usa con su propio MCP server (mismem). Cuando un agente trabaje aquí:
-- Tras decisiones/bugfixes/discoveries: invocar `mem_save` (scope: `mismem`)
-- Al inicio de sesión sobre temas previos: `mem_search` antes de responder
-- Al cerrar sesión: `mem_session_summary` obligatorio
+## Reglas duras
+
+| Regla | Por qué |
+|---|---|
+| Nunca leer ni editar `.env*`, ni mostrar un secreto en una respuesta, un log o un issue | Ahí viven las claves de los proveedores y las credenciales del servidor; `.env.example` sólo lleva marcadores |
+| Sin `git push --force` ni reescribir la historia sin permiso expreso | Se mergea con merge commit y la historia publicada conserva el porqué de cada commit |
+| El esquema cambia sólo con migraciones aditivas en `migrate()` de `engine/src/db.ts`: se añade, nunca se borra ni se reescribe; cada paso comprueba el estado y se puede repetir. Con su test y su línea en el CHANGELOG | La base de cada persona ya existe y se abre con el código nuevo: un error rompe datos reales. `CODEOWNERS` pide revisión de los dos responsables |
+| Un cambio en el ranking o en los embeddings (`tools.ts`, `search.ts`, `embeddings/`) se mide con `mismem-bench` antes y después, y las cifras van en el PR (etiqueta `needs-bench`) | Un ranking que parece mejor sin medir suele mover la respuesta buena hacia abajo; `mismem-bench` no corre en CI |
+| Dependencias con versión exacta (sin `^` ni `~`) y publicada hace 14 días o más. Un script de instalación nuevo se lee, y sólo entonces se aprueba, uno a uno, en `allowBuilds` de `engine/pnpm-workspace.yaml` (hoy `better-sqlite3` y `esbuild`) | Cadena de suministro: lo recién publicado es lo que más se compromete, y un `postinstall` ejecuta código al instalar |
+| Los hooks `mismem-inject` y `mismem-used` nunca fallan ni bloquean un prompt: tope de tiempo, errores a stderr, salida sin error, y ante la duda no hacen nada | Corren en cada turno del cliente; un hook roto cuesta más que un recuerdo sin inyectar |
+| `engine/src/server-http.ts` escucha al importarse: su lógica va a módulos que se puedan importar y probar (`http-guard.ts`, `http-host.ts`, `http-body.ts`) | Un test no puede importarlo sin abrir un puerto; el test del servidor lo lanza como proceso hijo |
+| Datos de usuario nunca en tests, fixtures, capturas, documentación, issues ni logs | La memoria es personal. Los tests usan `openDb(":memory:")` o un directorio temporal propio y jamás tocan `~/.mismem` |
+| Las herramientas de la propia memoria (`capture`, `recall`) son para las notas del agente: nunca guardan secretos ni datos de terceros | Lo capturado queda en una base que se respalda, se consolida con un LLM externo y se lee desde el visor |
+
+## Convenciones que el código no deja ver
+
+- **Idioma**: identificadores, claves JSON, comentarios nuevos o reescritos y commits (Conventional
+  Commits) en inglés. Mensajes de cara al usuario (errores, logs, ayuda de los CLI, interfaz) y Markdown en
+  español neutro (formas impersonales, ni voseo ni vosotros). Los comentarios en español que ya existen no se traducen en masa.
+- **Comentarios**: dicen el porqué (la restricción, el motivo, lo que se descartó), nunca el qué. Sin código
+  comentado. Una supresión de Biome lleva su motivo; un `TODO` lleva su issue.
+- **Tipos y módulos**: sin `any`. Los imports relativos a `engine/src` llevan extensión `.js`, también
+  en los tests; la interfaz no la lleva y usa el alias `@/`. Ids con `ulid`. Los writes múltiples, dentro de
+  `db.transaction`.
+- **Zod en cada borde**: herramientas MCP (`schema.ts`), cuerpos POST del visor y respuestas del LLM. Un
+  argumento de CLI se valida en su `*-args.ts`.
+- **Funciones puras con dependencias inyectadas**: el reloj entra como `at`, el embedder como `embedFn`, el LLM
+  como `distillFn`. Así un test no necesita red ni reloj real.
+- **Variables numéricas** de entorno: se leen con `engine/src/env.ts`, que trata como "sin definir" lo vacío,
+  lo no numérico y lo no positivo.
+- **Un CLI con flags** son dos ficheros, `<cli>-cli.ts` (lo ejecuta) y `<cli>-args.ts` (lee los argumentos
+  sin tocar la base). Un argumento desconocido corta con `argumento desconocido: <x>` y código 64
+  (`EXIT_USAGE`); un fallo sale por stderr con el prefijo `ERROR:`. Excepciones: `inject-cli.ts` y
+  `used-cli.ts` son hooks y leen sus argumentos en línea ignorando lo que no entienden; `obsidian-cli.ts`
+  los lee estrictos, también en línea. Un binario nuevo se declara en `bin` y se llama `mismem-<cosa>`.
+- **Tests**: `engine/tests/<área>.test.ts`, fixtures ficticios en `engine/tests/fixtures/`. Un cambio de
+  comportamiento lleva un test que falla sin el cambio, y un assert nunca se debilita para que algo pase.
+- **Formato**: Biome sólo como linter; se imita el formato del fichero (dos espacios, comillas dobles, punto
+  y coma).
+- **Variables de entorno**: la lista completa es la tabla de `DEPLOY.md`. Se añade o se cambia allí y sólo allí.
+- **CHANGELOG**: cada PR añade su entrada bajo `## Sin publicar`, con sus tests y su documentación.
+
+## Trampas de este repositorio
+
+- **La CSP del visor** (`engine/src/viewer-static.ts`) no admite scripts en línea ni fuentes de otro origen:
+  la tipografía sale del paquete (`@fontsource-variable/jetbrains-mono`) y el tema se aplica en
+  `engine/ui/src/main.tsx` antes del primer render, no desde `index.html`.
+- **La interfaz hay que compilarla**: sin `dist/ui` (por ejemplo con `pnpm dev:http`), `/viewer` responde 503.
+- **La base pasa a `0600`** (y sus `-wal` y `-shm`) en cada `openDb`, salvo `:memory:` y las URI `file:`.
+  Un sistema de ficheros que no admite `chmod` no impide abrirla.
+- **`SCHEMA` y `migrate()`**: `SCHEMA` sólo crea lo que falta. Lo que ya existe cambia en `migrate()`, y los
+  disparadores `memories_au` y `traits_au` viven únicamente allí.
+- **La consolidación es idempotente** porque sólo mira `consolidated_into IS NULL`. Una consulta nueva de
+  episodios pendientes usa esa misma condición, como `pendingEpisodes` en `tools.ts`.
+- **`recall` refuerza lo que devuelve** salvo con `reinforce: false` o `MISMEM_REINFORCE_ON_RECALL=off`.
+  Una búsqueda que nadie pidió (el hook de inyección, el visor, el bench) pasa `reinforce: false`; sólo
+  `reinforce` escribe `use_count` y `co_use`.
+- **Los marcadores de ruido** (`[noise] ...`, `[pareto:l0] ...`) no compiten en el recall ni gastan un
+  embedding: toda consulta de memorias que alimenta una búsqueda o una lista usa `excludeNoiseSql`.
+  `forget` y el visor sí los ven.
+- **Los alias `mem_*`** (`engine/src/engram-compat.ts`) tienen que seguir funcionando: hay clientes que
+  vienen de Engram y no se reconfiguran.
+- **Dos sitios para cada herramienta**: los `inputSchema` de `server-core.ts` se escriben a mano y reflejan
+  los de `schema.ts`; `engine/tests/tool-schemas.test.ts` falla si se separan.
+- **Borrar desde el visor** está apagado salvo con `MISMEM_VIEWER_ALLOW_DELETE=1`, y aun así va en dos
+  pasos con un token de 60 s.
+- **`pnpm dup` tiene umbral 0** (`--min-lines 10`, sobre `src` y `ui/src`): un bloque copiado de diez líneas
+  o más falla; se extrae, no se pega.
+- **Escuchar en loopback es el valor por defecto** (`bindHost`). La imagen Docker fija
+  `MISMEM_HTTP_HOST=0.0.0.0` a propósito, porque en un contenedor loopback no se alcanza; no se quita ni se
+  cambia el valor por defecto del código. Con sólo una de `MISMEM_AUTH_USER` y `MISMEM_AUTH_PASS`, el
+  servidor no arranca.
+
+## Dónde está documentado
+
+| Para | Dónde |
+|---|---|
+| Entorno, flujo de ramas, estándar de issue y de PR, etiquetas, releases | [`CONTRIBUTING.md`](CONTRIBUTING.md) |
+| Ramas, commits, comentarios, estilo, tests, seguridad y releases, cada norma comprobable | [`docs/standards/`](docs/standards/README.md) |
+| Las capas, las herramientas, el almacenamiento y los componentes | [`docs/architecture.md`](docs/architecture.md) |
+| Cómo busca `recall` y cómo se mide | [`docs/recall.md`](docs/recall.md) |
+| Los hooks del cliente y qué sale de la máquina | [`docs/hooks.md`](docs/hooks.md) |
+| La consolidación con LLM | [`engine/src/consolidation/README.md`](engine/src/consolidation/README.md) |
+| Operación, respaldos y la tabla única de variables de entorno | [`DEPLOY.md`](DEPLOY.md) |
+| Qué cambió en cada versión y por qué | [`CHANGELOG.md`](CHANGELOG.md) |
+| Reportar una vulnerabilidad | [`SECURITY.md`](SECURITY.md) |
+| Qué documento es para quién y qué no se documenta | [`docs/README.md`](docs/README.md) |

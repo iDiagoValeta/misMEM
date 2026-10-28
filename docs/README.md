@@ -11,7 +11,7 @@ Qué documento es para quién. Antes de crear uno nuevo, comprobar que no cabe e
 | [`docs/hooks.md`](hooks.md) | Quien conecta un cliente | Los hooks de inyección y de refuerzo, y qué sale de la máquina |
 | [`CONTRIBUTING.md`](../CONTRIBUTING.md) | Quien va a contribuir | Entorno, flujo, estándar de issue y de PR, etiquetas, releases |
 | [`docs/standards/`](standards/README.md) | Quien contribuye | Ramas, commits, comentarios, estilo, tests, seguridad y releases, cada norma comprobable |
-| [`AGENTS.md`](../AGENTS.md) | Agentes y personas que trabajan en el código | Contrato de trabajo: stack, convenciones, esquema, reglas de seguridad (`CLAUDE.md` lo importa y debe seguir siendo un puntero) |
+| [`AGENTS.md`](../AGENTS.md) | Agentes y personas que trabajan en el código | Contrato de trabajo de los agentes: mapa del código, comandos, reglas duras, convenciones y trampas (`CLAUDE.md` lo importa y debe seguir siendo un puntero) |
 | [`CHANGELOG.md`](../CHANGELOG.md) | Quien actualiza una versión | Qué cambió en cada versión y por qué; la historia vive aquí y en ningún otro sitio |
 | [`SECURITY.md`](../SECURITY.md) | Quien encuentra una vulnerabilidad | Cómo reportarla en privado y qué cuenta como tal |
 | [`engine/README.md`](../engine/README.md) | Quien ve el paquete en npm | Qué es y cómo se conecta; viaja dentro del tarball |
