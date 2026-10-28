@@ -44,7 +44,7 @@ const GEMMA_ENV = {
 };
 
 describe("loadEmbeddingConfig", () => {
-  it("sin configurar sigue siendo Ollama con nomic, sin prefijos y corte 0,5", () => {
+  it("sin configurar sigue siendo Ollama con nomic, sin prefijos y corte 0,65", () => {
     setEnv({});
     const cfg = loadEmbeddingConfig();
     expect(cfg.provider).toBe("ollama");
@@ -52,7 +52,7 @@ describe("loadEmbeddingConfig", () => {
     expect(cfg.model).toBe("nomic-embed-text");
     expect(cfg.queryPrefix).toBe("");
     expect(cfg.docPrefix).toBe("");
-    expect(cfg.minScore).toBe(0.5);
+    expect(cfg.minScore).toBe(0.65);
   });
 
   it("MISMEM_OLLAMA_URL sigue valiendo para Ollama", () => {
@@ -65,8 +65,32 @@ describe("loadEmbeddingConfig", () => {
     expect(loadEmbeddingConfig().minScore).toBe(0);
   });
 
-  it.each(["alto", ""])("un corte que no es un número (%j) vuelve al default", (value) => {
+  it.each(["alto", ""])("un corte que no es un número (%j) vuelve al default del modelo", (value) => {
     setEnv({ MISMEM_EMBEDDING_MIN_SCORE: value });
+    expect(loadEmbeddingConfig().minScore).toBe(0.65);
+    setEnv({ MISMEM_EMBEDDING_MIN_SCORE: value, MISMEM_EMBEDDING_MODEL: "embeddinggemma-2" });
+    expect(loadEmbeddingConfig().minScore).toBe(0.5);
+  });
+
+  it.each(["nomic-embed-text", "nomic-embed-text:latest"])(
+    "con %s y sin corte elegido, el default es 0,65",
+    (model) => {
+      setEnv({ MISMEM_EMBEDDING_MODEL: model });
+      expect(loadEmbeddingConfig().minScore).toBe(0.65);
+    },
+  );
+
+  it("un corte explícito gana al default de nomic", () => {
+    setEnv({ MISMEM_EMBEDDING_MODEL: "nomic-embed-text", MISMEM_EMBEDDING_MIN_SCORE: "0.5" });
+    expect(loadEmbeddingConfig().minScore).toBe(0.5);
+    setEnv({ MISMEM_EMBEDDING_MODEL: "nomic-embed-text", MISMEM_EMBEDDING_MIN_SCORE: "0" });
+    expect(loadEmbeddingConfig().minScore).toBe(0);
+  });
+
+  it("los demás modelos conservan el default de 0,5", () => {
+    setEnv({ MISMEM_EMBEDDING_MODEL: "embeddinggemma-2" });
+    expect(loadEmbeddingConfig().minScore).toBe(0.5);
+    setEnv({ MISMEM_EMBEDDING_MODEL: "mxbai-embed-large" });
     expect(loadEmbeddingConfig().minScore).toBe(0.5);
   });
 

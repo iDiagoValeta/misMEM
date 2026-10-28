@@ -177,7 +177,7 @@ Y en `mismem-brain` (sumándolo a la red `internal`):
       MISMEM_EMBEDDING_MODEL: embeddinggemma-2
       MISMEM_EMBEDDING_QUERY_PREFIX: "task: search result | query: "
       MISMEM_EMBEDDING_DOC_PREFIX: "title: none | text: "
-      MISMEM_EMBEDDING_MIN_SCORE: "0.68"
+      MISMEM_EMBEDDING_MIN_SCORE: "0.65"
 ```
 
 El modelo (310 MB) se baja una vez de
@@ -399,7 +399,7 @@ modelo y la URL base se proponen como respuesta por defecto, y `MISMEM_INSTALL_A
 | `MISMEM_OLLAMA_URL` | — | Nombre anterior de la URL; sólo vale para `ollama` |
 | `MISMEM_EMBEDDING_MODEL` | `nomic-embed-text` | Modelo. Cambiarlo reindexa solo |
 | `MISMEM_EMBEDDING_QUERY_PREFIX` / `_DOC_PREFIX` | vacío | Prefijos que algunos modelos piden para consulta y documento. Cambiarlos exige `mismem-embed --force` |
-| `MISMEM_EMBEDDING_MIN_SCORE` | `0.5` | Parecido mínimo (coseno) para que una memoria cuente. Depende del modelo: 0,68 para EmbeddingGemma 2; `0` trae todo |
+| `MISMEM_EMBEDDING_MIN_SCORE` | `0.65` con `nomic-embed-text`; `0.5` con cualquier otro modelo | Parecido mínimo (coseno) para que una memoria cuente. Depende del modelo: 0,65 para EmbeddingGemma 2 (con 0,68 sale casi igual); `0` trae todo. Un valor explícito gana siempre al default |
 | `MISMEM_EMBEDDING_MAX_CHARS` | `4000` | Tope del texto de cada memoria al indexar. Cambiarlo exige `--force` |
 | `MISMEM_EMBEDDING_TIMEOUT_MS` | `3000` | Espera por consulta (el reindexado usa 120 s) |
 

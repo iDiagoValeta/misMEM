@@ -2,6 +2,26 @@
 
 ## Sin publicar
 
+### Embeddings: mejores valores por defecto para quien instala misMEM (#72)
+
+- Con `nomic-embed-text` el corte semántico de 0,5 no cortaba nada: las 10 preguntas ajenas de la
+  medición traían 5 recuerdos cada una, así que el hook de inyección añadía recuerdos sin relación a
+  cada prompt. Sin `MISMEM_EMBEDDING_MIN_SCORE`, el corte por defecto ahora depende del modelo: 0,65
+  para `nomic-embed-text` (también con etiqueta, p. ej. `:latest`) y 0,5 para el resto. Con 0,65 las
+  preguntas ajenas bajan a 0 recuerdos sin perder aciertos. Un valor explícito, incluido `0`, sigue
+  ganando siempre.
+- `scripts/install.sh`: si hay `llama-server`, ofrece EmbeddingGemma 2 como opción recomendada.
+  Con memorias en castellano encontró 34 de 50 paráfrasis frente a 4 de 50 de `nomic-embed-text`
+  (medición de la issue). Baja el GGUF (296 MB) sólo si el usuario dice que sí, deja `llama-server`
+  como servicio de systemd de usuario (`mismem-embed`, en CPU; `--embeddings-gpu` o la pregunta
+  interactiva lo pasan a la GPU) y escribe en `~/.config/mismem/env` el proveedor, los prefijos y el
+  corte 0,65. `nomic-embed-text` por Ollama queda como alternativa ligera. Con `--yes` el modelo no
+  cambia salvo que se pida con `--embeddings gemma`; re-ejecutarlo conserva el que hubiera y no duplica
+  el servicio.
+- README y `DEPLOY.md` dicen claro que con memorias que no estén en inglés la opción es EmbeddingGemma 2,
+  que con `nomic-embed-text` el corte es 0,65 y no hay que esperar paráfrasis, y que el corte de
+  EmbeddingGemma 2 recomendado pasa de 0,68 a 0,65 (misma efectividad medida, con más recuerdos por
+  pregunta).
 ### Un estándar de contribución escrito, y comprobado
 
 - Contribuir no tenía forma: ni formularios de issue, ni plantillas de PR, ni normas escritas, y el

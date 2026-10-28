@@ -14,6 +14,9 @@
 # Sin preguntas (--yes), se leen MISMEM_INSTALL_DB, MISMEM_INSTALL_PROVIDER
 # (deepseek|openrouter|openai|compatible|none), MISMEM_INSTALL_API_KEY,
 # MISMEM_INSTALL_MODEL, MISMEM_INSTALL_BASE_URL y MISMEM_INSTALL_HOOKS (yes|no).
+# Con llama-server en el PATH, --embeddings gemma monta EmbeddingGemma 2 (baja el modelo si
+# falta; MISMEM_INSTALL_GEMMA_GGUF apunta a un GGUF que ya tengas). Sin esa opción, --yes
+# conserva el modelo de embeddings que hubiera y, si no hay ninguno, nomic-embed-text.
 # La clave nunca va por argumento: quedaría en el historial y en `ps`.
 #
 # Re-ejecutarlo actualiza en vez de duplicar.
@@ -31,6 +34,9 @@ Uso: install.sh [opciones]
   --clients LISTA      claude-code,opencode,claude-desktop,vscode,cursor | all | none
                        (por defecto, los que se detectan en la máquina)
   --timer / --no-timer Consolidación nocturna con systemd de usuario (por defecto pregunta)
+  --embeddings MODELO  gemma | nomic: modelo de embeddings. gemma (EmbeddingGemma 2, multilingüe)
+                       necesita llama-server en el PATH; nomic usa Ollama
+  --embeddings-gpu     EmbeddingGemma 2 en la GPU en vez de en la CPU
   --help               Esta ayuda
 EOF
 }
@@ -42,6 +48,8 @@ FROM_SOURCE=0
 ASSUME_YES=0
 CLIENTS=""
 TIMER=""
+EMBED_FLAG=""
+GEMMA_GPU=""
 while [ $# -gt 0 ]; do
   case "$1" in
     --from-source) FROM_SOURCE=1 ;;
@@ -52,6 +60,12 @@ while [ $# -gt 0 ]; do
       CLIENTS="$2"
       shift
       ;;
+    --embeddings)
+      [ $# -ge 2 ] || { echo "--embeddings necesita gemma o nomic" >&2; exit 64; }
+      case "$2" in gemma | nomic) EMBED_FLAG="$2" ;; *) echo "--embeddings: gemma o nomic, no '$2'" >&2; exit 64 ;; esac
+      shift
+      ;;
+    --embeddings-gpu) GEMMA_GPU=yes ;;
     --timer) TIMER=yes ;;
     --no-timer) TIMER=no ;;
     --help | -h) usage; exit 0 ;;
@@ -114,6 +128,7 @@ CONF_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/mismem"
 BIN_DIR="$HOME/.local/bin"
 ENV_FILE="$CONF_DIR/env"
 RUN="$BIN_DIR/mismem-run"
+UNIT_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/systemd/user"
 
 # ---------------------------------------------------------------- 1. instalar
 
@@ -214,22 +229,143 @@ fi
 
 # ---------------------------------------------------------------- 3. embeddings
 
+# EmbeddingGemma 2 detrás de llama-server. Con memorias que no estén en inglés encuentra muchas más
+# paráfrasis que nomic-embed-text (34 de 50 frente a 4 en las mediciones de la issue #72). Corre en CPU
+# salvo que se pida la GPU: en CPU no gasta VRAM y una consulta tarda unos 15 ms.
+GEMMA_PORT=8080
+GEMMA_URL="http://127.0.0.1:$GEMMA_PORT"
+GEMMA_FILE="embeddinggemma-2-Q8_0.gguf"
+GEMMA_GGUF="${MISMEM_INSTALL_GEMMA_GGUF:-$DATA_DIR/models/$GEMMA_FILE}"
+GEMMA_UNIT="$UNIT_DIR/mismem-embed.service"
+
+# El /health de llama-server da 503 mientras carga el modelo: -f lo cuenta como "no responde".
+embed_answers() { curl -fsS -m 3 "$1/health" >/dev/null 2>&1; }
+
+has_user_systemd() { command -v systemctl >/dev/null 2>&1 && systemctl --user show-environment >/dev/null 2>&1; }
+
+# setup_gemma: deja listos el modelo y el servidor. Devuelve 1 si no se pudo o no se quiso bajar el modelo.
+setup_gemma() {
+  local llama cmd device="--device none" gpu_default=n ours=""
+  llama="$(command -v llama-server || true)"
+  has_user_systemd && systemctl --user is-active --quiet mismem-embed.service && ours=1
+  if [ -z "$ours" ] && embed_answers "$GEMMA_URL"; then
+    say "  Ya hay un servidor de embeddings en $GEMMA_URL: lo uso tal cual. Que sirva EmbeddingGemma 2 es cosa tuya."
+    return 0
+  fi
+  if [ -z "$llama" ]; then
+    warn "llama-server no está en el PATH y nada responde en $GEMMA_URL: dejo EmbeddingGemma 2 configurado, pero sin servidor."
+    return 0
+  fi
+
+  if [ ! -f "$GEMMA_GGUF" ]; then
+    confirm "  ¿Bajar EmbeddingGemma 2 (296 MB) de Hugging Face, ggml-org/embeddinggemma-2-GGUF?" y || return 1
+    mkdir -p "$(dirname "$GEMMA_GGUF")"
+    # A un .part y luego mv: una descarga cortada no se queda como si fuera el modelo.
+    if ! curl -fL --progress-bar -o "$GEMMA_GGUF.part" \
+      "https://huggingface.co/ggml-org/embeddinggemma-2-GGUF/resolve/main/$GEMMA_FILE"; then
+      rm -f "$GEMMA_GGUF.part"
+      warn "La descarga falló."
+      return 1
+    fi
+    mv "$GEMMA_GGUF.part" "$GEMMA_GGUF"
+  fi
+  say "  Modelo: $GEMMA_GGUF"
+
+  # Al re-ejecutar, lo que había (GPU o CPU) es el defecto: no se cambia sin que se pida.
+  grep -qs -- '-ngl' "$GEMMA_UNIT" && gpu_default=y
+  if [ "$GEMMA_GPU" = yes ] || { [ -z "$GEMMA_GPU" ] && confirm "  ¿Usar la GPU para EmbeddingGemma 2? (más rápido al indexar; unos 500 MiB de VRAM)" "$gpu_default"; }; then
+    device="-ngl 99"
+  fi
+  # -c/-b/-ub a 2048: un documento largo no cabe en el lote por defecto y el servidor lo rechazaría.
+  cmd="\"$llama\" -m \"$GEMMA_GGUF\" --embedding --host 127.0.0.1 --port $GEMMA_PORT -c 2048 -b 2048 -ub 2048 $device"
+
+  if has_user_systemd && confirm "  ¿Dejar llama-server arrancado con un servicio de systemd de usuario?" y; then
+    mkdir -p "$UNIT_DIR"
+    cat >"$GEMMA_UNIT" <<EOF
+[Unit]
+Description=misMEM: servidor de embeddings (EmbeddingGemma 2)
+
+[Service]
+ExecStart=$cmd
+Restart=on-failure
+
+[Install]
+WantedBy=default.target
+EOF
+    systemctl --user daemon-reload
+    systemctl --user enable mismem-embed.service >/dev/null 2>&1
+    # restart y no start: al re-ejecutar, el servicio ya corriendo recoge el modelo y el dispositivo nuevos.
+    systemctl --user restart mismem-embed.service
+    for _ in $(seq 1 30); do embed_answers "$GEMMA_URL" && break; sleep 1; done
+    say "  Servicio mismem-embed (systemd de usuario) en $GEMMA_URL."
+  else
+    say "  Arráncalo tú cuando quieras buscar por significado:"
+    say "    $cmd"
+  fi
+  return 0
+}
+
 step "Búsqueda semántica"
 OLLAMA_URL="${MISMEM_OLLAMA_URL:-http://127.0.0.1:11434}"
 EMBEDDINGS_OFF=""
-if curl -fsS -m 3 "$OLLAMA_URL/api/tags" >/dev/null 2>&1; then
-  if curl -fsS -m 3 "$OLLAMA_URL/api/tags" | grep -q '"nomic-embed-text'; then
-    say "  Ollama responde y ya tiene nomic-embed-text."
-  elif command -v ollama >/dev/null 2>&1 && confirm "  Ollama responde. ¿Bajar nomic-embed-text (unos 270 MB) para buscar por significado?" y; then
-    ollama pull nomic-embed-text
-  else
-    say "  Sin el modelo de embeddings la búsqueda es sólo por palabras."
+PREV_EMBED="$(prev MISMEM_EMBEDDING_MODEL)"
+CAN_GEMMA=""
+{ command -v llama-server >/dev/null 2>&1 || embed_answers "$GEMMA_URL"; } && CAN_GEMMA=1
+
+# Sin opción, lo que hubiera se conserva: re-ejecutar no cambia el modelo (reindexar es caro).
+EMBED_CHOICE=nomic
+[ "$PREV_EMBED" = embeddinggemma-2 ] && EMBED_CHOICE=gemma
+if [ -n "$EMBED_FLAG" ]; then
+  EMBED_CHOICE="$EMBED_FLAG"
+  if [ "$EMBED_CHOICE" = gemma ] && [ -z "$CAN_GEMMA" ]; then
+    say "--embeddings gemma necesita llama-server en el PATH (o un servidor de embeddings en $GEMMA_URL)."
+    exit 1
+  fi
+elif [ "$ASSUME_YES" != 1 ] && { [ -n "$CAN_GEMMA" ] || [ "$EMBED_CHOICE" = gemma ]; }; then
+  default_choice=1
+  [ -n "$PREV_EMBED" ] && [ "$PREV_EMBED" != embeddinggemma-2 ] && default_choice=2
+  say "  Modelo de embeddings para buscar por significado:"
+  say "  1) EmbeddingGemma 2 (recomendado): multilingüe, 296 MB, corre en CPU con llama-server"
+  say "  2) nomic-embed-text: ligero, por Ollama; pensado para inglés, con otro idioma casi no encuentra paráfrasis"
+  case "$(ask "  Modelo" "$default_choice")" in
+    1 | gemma | embeddinggemma-2) EMBED_CHOICE=gemma ;;
+    *) EMBED_CHOICE=nomic ;;
+  esac
+fi
+
+if [ "$EMBED_CHOICE" = gemma ] && ! setup_gemma; then
+  say "  Sigo con nomic-embed-text."
+  EMBED_CHOICE=nomic
+fi
+
+if [ "$EMBED_CHOICE" = gemma ]; then
+  # Sin servidor cada búsqueda esperaría el timeout del embedder para nada.
+  if ! embed_answers "$GEMMA_URL"; then
+    EMBEDDINGS_OFF=1
+    warn "Nada responde en $GEMMA_URL: la búsqueda queda sólo por palabras hasta que arranques llama-server y vuelvas a ejecutar esto."
   fi
 else
-  # Sin Ollama cada búsqueda esperaría el timeout del embedder para nada.
-  EMBEDDINGS_OFF=1
-  say "  Ollama no responde en $OLLAMA_URL: la búsqueda queda sólo por palabras."
-  say "  Para activarla: instala Ollama, 'ollama pull nomic-embed-text' y vuelve a ejecutar esto."
+  [ -n "$CAN_GEMMA" ] || say "  Si tus memorias no están en inglés, EmbeddingGemma 2 funciona mucho mejor: instala llama.cpp (llama-server) y vuelve a ejecutar esto."
+  if curl -fsS -m 3 "$OLLAMA_URL/api/tags" >/dev/null 2>&1; then
+    if curl -fsS -m 3 "$OLLAMA_URL/api/tags" | grep -q '"nomic-embed-text'; then
+      say "  Ollama responde y ya tiene nomic-embed-text."
+    elif command -v ollama >/dev/null 2>&1 && confirm "  Ollama responde. ¿Bajar nomic-embed-text (unos 270 MB) para buscar por significado?" y; then
+      ollama pull nomic-embed-text
+    else
+      say "  Sin el modelo de embeddings la búsqueda es sólo por palabras."
+    fi
+  else
+    # Sin Ollama cada búsqueda esperaría el timeout del embedder para nada.
+    EMBEDDINGS_OFF=1
+    say "  Ollama no responde en $OLLAMA_URL: la búsqueda queda sólo por palabras."
+    say "  Para activarla: instala Ollama, 'ollama pull nomic-embed-text' y vuelve a ejecutar esto."
+  fi
+fi
+
+NEW_EMBED=nomic-embed-text
+[ "$EMBED_CHOICE" = gemma ] && NEW_EMBED=embeddinggemma-2
+if [ -n "$PREV_EMBED" ] && [ "$PREV_EMBED" != "$NEW_EMBED" ]; then
+  say "  Cambia el modelo de embeddings: las memorias se reindexan solas en el siguiente backfill; para hacerlo ya: $RUN mismem-embed"
 fi
 
 # ---------------------------------------------------------------- 4. env y lanzador
@@ -242,8 +378,18 @@ mkdir -p "$CONF_DIR" "$BIN_DIR" "$(dirname "$DB")"
   {
     say "# Generado por scripts/install.sh de misMEM. Lo lee $RUN."
     printf 'MISMEM_DB=%q\n' "$DB"
-    printf 'MISMEM_OLLAMA_URL=%q\n' "$OLLAMA_URL"
-    printf 'MISMEM_EMBEDDING_MODEL=%q\n' "nomic-embed-text"
+    if [ "$EMBED_CHOICE" = gemma ]; then
+      # Prefijos y corte son los medidos para este modelo (issue #72, README).
+      printf 'MISMEM_EMBEDDING_PROVIDER=openai\n'
+      printf 'MISMEM_EMBEDDING_URL=%q\n' "$GEMMA_URL"
+      printf 'MISMEM_EMBEDDING_MODEL=embeddinggemma-2\n'
+      printf 'MISMEM_EMBEDDING_QUERY_PREFIX=%q\n' "task: search result | query: "
+      printf 'MISMEM_EMBEDDING_DOC_PREFIX=%q\n' "title: none | text: "
+      printf 'MISMEM_EMBEDDING_MIN_SCORE=0.65\n'
+    else
+      printf 'MISMEM_OLLAMA_URL=%q\n' "$OLLAMA_URL"
+      printf 'MISMEM_EMBEDDING_MODEL=%q\n' "nomic-embed-text"
+    fi
     [ -n "$EMBEDDINGS_OFF" ] && printf 'MISMEM_EMBEDDINGS=off\n'
     if [ "$PROVIDER" != none ]; then
       printf 'MISMEM_LLM_PROVIDER=%q\n' "$PROVIDER"
@@ -410,7 +556,6 @@ if [ "$PROVIDER" != none ] && [ "$TIMER" != no ] && command -v systemctl >/dev/n
     confirm "¿Consolidar cada noche a las 4:00 con un timer de systemd de usuario?" n && TIMER=yes || TIMER=no
   fi
   if [ "$TIMER" = yes ]; then
-    UNIT_DIR="${XDG_CONFIG_HOME:-$HOME/.config}/systemd/user"
     mkdir -p "$UNIT_DIR"
     cat >"$UNIT_DIR/mismem-consolidate.service" <<EOF
 [Unit]

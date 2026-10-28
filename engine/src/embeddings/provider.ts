@@ -25,6 +25,9 @@ export interface EmbeddingConfig {
 }
 
 const DEFAULT_MIN_SCORE = 0.5;
+// nomic-embed-text scores unrelated texts high: at 0.5 the inject hook adds noise to every prompt.
+// Measured in issue #72: 0.65 leaves off-topic queries with 0 memories and loses no hits.
+const NOMIC_MIN_SCORE = 0.65;
 const OLLAMA_DEFAULT_URL = "http://127.0.0.1:11434";
 // El puerto por defecto de llama-server: con el proveedor openai, el de Ollama respondería 404 en silencio.
 const OPENAI_DEFAULT_URL = "http://127.0.0.1:8080";
@@ -36,17 +39,20 @@ export function loadEmbeddingConfig(): EmbeddingConfig {
   // Number("") es 0: sin la variable no hay corte elegido, y 0 sí es una elección válida (traer todo).
   const minScore = Number(process.env.MISMEM_EMBEDDING_MIN_SCORE || Number.NaN);
   const maxChars = Number(process.env.MISMEM_EMBEDDING_MAX_CHARS);
+  const model = process.env.MISMEM_EMBEDDING_MODEL ?? "nomic-embed-text";
+  // startsWith: Ollama accepts tags (`nomic-embed-text:latest`) and it is the same model.
+  const defaultMinScore = model.startsWith("nomic-embed-text") ? NOMIC_MIN_SCORE : DEFAULT_MIN_SCORE;
   return {
     enabled: (process.env.MISMEM_EMBEDDINGS ?? "auto") !== "off",
     provider,
     url:
       process.env.MISMEM_EMBEDDING_URL ??
       (provider === "openai" ? OPENAI_DEFAULT_URL : (process.env.MISMEM_OLLAMA_URL ?? OLLAMA_DEFAULT_URL)),
-    model: process.env.MISMEM_EMBEDDING_MODEL ?? "nomic-embed-text",
+    model,
     timeoutMs: Number(process.env.MISMEM_EMBEDDING_TIMEOUT_MS) || 3000,
     queryPrefix: process.env.MISMEM_EMBEDDING_QUERY_PREFIX ?? "",
     docPrefix: process.env.MISMEM_EMBEDDING_DOC_PREFIX ?? "",
-    minScore: Number.isFinite(minScore) && minScore >= 0 ? minScore : DEFAULT_MIN_SCORE,
+    minScore: Number.isFinite(minScore) && minScore >= 0 ? minScore : defaultMinScore,
     maxChars: Number.isFinite(maxChars) && maxChars > 0 ? maxChars : DEFAULT_MAX_CHARS,
   };
 }
