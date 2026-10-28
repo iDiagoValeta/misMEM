@@ -26,4 +26,4 @@ for (const candidate of candidates) {
 - **Sin `TODO` ni `FIXME` sueltos**: o llevan el issue (`TODO(#123): ...`) o se abre el issue y se quita
   el comentario. Comprobar: `grep -rnE "TODO|FIXME" engine/src engine/ui/src engine/tests`.
 - **Los mensajes de cara al usuario no son comentarios**: errores, logs, ayuda de los CLI y la interfaz
-  van en español ([Estilo de código](code-style.md)).
+  van en español ([`AGENTS.md`](../../AGENTS.md#convenciones-que-el-código-no-deja-ver)).
