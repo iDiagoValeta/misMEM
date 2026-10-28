@@ -1,7 +1,7 @@
 version: 2
 
-# Same shape as the owner's other repos: weekly on Monday, minor and patch grouped so a
-# review is one CI run, majors on their own because they are the ones that need reading.
+# Same shape as the owner's other repos: weekly on Monday. npm groups minor and patch so a
+# review is one CI run and keeps majors apart; action bumps all travel in one PR.
 updates:
   - package-ecosystem: npm
     directory: /engine

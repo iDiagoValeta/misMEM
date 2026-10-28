@@ -93,8 +93,8 @@ jobs:
       - run: pipx run zizmor==1.31.1 --min-severity medium .github/workflows
 
   secret-scan:
-    # A leaked credential is only expensive once it ships, so scan the whole tree on
-    # every push and PR: this is the last point where rotating it is still cheap.
+    # A leaked credential is only expensive once it ships, so scan every commit on each PR
+    # and push to main: a key added in one commit and deleted in the next still counts.
     runs-on: ubuntu-latest
     name: secret-scan
     timeout-minutes: 10
@@ -103,4 +103,5 @@ jobs:
         with:
           # No later step pushes, so the token does not need to stay in .git/config.
           persist-credentials: false
-      - run: docker run --rm -v "$PWD:/repo" zricethezav/gitleaks:v8.30.1@sha256:c00b6bd0aeb3071cbcb79009cb16a60dd9e0a7c60e2be9ab65d25e6bc8abbb7f dir /repo --redact --no-banner
+          fetch-depth: 0
+      - run: docker run --rm -v "$PWD:/repo" zricethezav/gitleaks:v8.30.1@sha256:c00b6bd0aeb3071cbcb79009cb16a60dd9e0a7c60e2be9ab65d25e6bc8abbb7f git /repo --redact --no-banner

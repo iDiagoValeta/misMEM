@@ -25,7 +25,7 @@ Cuenta como vulnerabilidad cualquier forma de:
   y `MISMEM_AUTH_PASS`, la guarda de `Host` o el bind a loopback por defecto. Incluye leer
   `/mcp`, `/viewer` o las rutas del visor sin credenciales, o inyectar cabeceras para lograrlo.
 - **Leer, escribir o borrar la DB sin permiso**, o hacer que el servidor la escriba donde otro
-  usuario pueda leerla. Ese fichero es toda la memoria y nace en `0600`.
+  usuario pueda leerla. Ese fichero es toda la memoria y se restringe a `0600` al abrirlo, si el sistema de ficheros lo permite.
 - **Ejecutar código o SQL** a partir de input externo: consultas de `recall`, cuerpos de
   `capture`, rutas del visor, importación de exports.
 - **Filtrar memoria a un tercero** por logs, errores, telemetría o cualquier salida que
