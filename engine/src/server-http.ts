@@ -62,7 +62,6 @@ let AUTH: ReturnType<typeof loadAuth>;
 try {
   AUTH = loadAuth();
 } catch (err) {
-  // eslint-disable-next-line no-console
   console.error(`[mismem-http] ${(err as Error).message}`);
   process.exit(1);
 }
@@ -236,7 +235,6 @@ const httpServer = createHttpServer(async (req, res) => {
     res.end("No encontrado");
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
-    // eslint-disable-next-line no-console
     console.error("[mcp]", err);
     if (!res.headersSent) {
       res.statusCode = 500;
@@ -249,7 +247,6 @@ const httpServer = createHttpServer(async (req, res) => {
 });
 
 httpServer.listen(PORT, HOST, () => {
-  // eslint-disable-next-line no-console
   console.log(
     `misMEM HTTP escuchando en http://${HOST}:${PORT} (mcp=/mcp viewer=/viewer)`,
   );

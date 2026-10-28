@@ -85,6 +85,7 @@ export function safeName(text: string, max = 60): string {
   const clean = text
     // Los caracteres de control (incluidos \n\r\t y \0) rompen la escritura, la sincronización
     // y algunos backups: un NUL en el nombre hace fallar el export entero.
+    // biome-ignore lint/suspicious/noControlCharactersInRegex: stripping control characters is the point of this regex.
     .replace(/[\\/:*?"<>|#^[\]\u0000-\u001f\u007f]+/g, " ")
     .replace(/\s+/g, " ")
     .trim();

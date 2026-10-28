@@ -1,5 +1,6 @@
 import { readdir, stat, readFile } from "node:fs/promises";
 import { join, relative, extname, basename } from "node:path";
+import type { Dirent } from "node:fs";
 import type { Database as DB } from "better-sqlite3";
 import { capture } from "../tools.js";
 
@@ -57,7 +58,7 @@ export async function walkAndIngest(opts: WalkOptions): Promise<WalkStats> {
   };
 
   async function walk(dir: string): Promise<void> {
-    let entries;
+    let entries: Dirent[];
     try {
       entries = await readdir(dir, { withFileTypes: true });
     } catch (e) {

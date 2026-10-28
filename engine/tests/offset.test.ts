@@ -18,20 +18,21 @@ beforeEach(() => {
   }
 });
 
-function read(fn: (res: ServerResponse) => void): any {
+function read<T>(fn: (res: ServerResponse) => void): T {
   let body = "";
   const res = { statusCode: 200, setHeader() {}, end(p?: string) { body = p ?? ""; } };
   fn(res as unknown as ServerResponse);
-  return JSON.parse(body);
+  return JSON.parse(body) as T;
 }
 
 const recentRows = (offset: string): number =>
-  read((res) => handleRecent(db, res, new URL(`http://x/api/recent?layer=episode&pending=1&limit=2&offset=${offset}`))).rows
-    .length;
+  read<{ rows: unknown[] }>((res) =>
+    handleRecent(db, res, new URL(`http://x/api/recent?layer=episode&pending=1&limit=2&offset=${offset}`)),
+  ).rows.length;
 const memoryIds = (offset: string): string[] =>
-  read((res) => handleMemories(db, res, new URL(`http://x/api/memories?limit=2&offset=${offset}`))).memories.map(
-    (m: { id: string }) => m.id,
-  );
+  read<{ memories: Array<{ id: string }> }>((res) =>
+    handleMemories(db, res, new URL(`http://x/api/memories?limit=2&offset=${offset}`)),
+  ).memories.map((m) => m.id);
 
 describe("parseOffset", () => {
   it.each([

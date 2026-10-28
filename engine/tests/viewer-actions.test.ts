@@ -158,7 +158,14 @@ describe("handleAction", () => {
     allowDelete = true;
   });
 
-  async function act(path: string, body: unknown = {}): Promise<{ handled: boolean; status: number; body: any }> {
+  interface ActionBody {
+    impact?: unknown;
+    confirm_token?: string;
+    error?: string;
+    expires_in?: number;
+  }
+
+  async function act(path: string, body: unknown = {}): Promise<{ handled: boolean; status: number; body: ActionBody }> {
     const res: MockResponse = {
       statusCode: 200,
       body: "",
@@ -172,7 +179,7 @@ describe("handleAction", () => {
       allowDelete,
       confirmations,
     });
-    return { handled, status: res.statusCode, body: res.body ? JSON.parse(res.body) : undefined };
+    return { handled, status: res.statusCode, body: res.body ? (JSON.parse(res.body) as ActionBody) : {} };
   }
 
   it("despacha cada ruta y da 404 a un id que no existe", async () => {
@@ -247,7 +254,12 @@ describe("handleAction", () => {
 
   it("consolidate validates the scope with the shared Scope rules", async () => {
     const started: Array<string | undefined> = [];
-    const job = { start: (scope?: string) => (started.push(scope), { running: true }) } as unknown as ConsolidationJob;
+    const job = {
+      start: (scope?: string) => {
+        started.push(scope);
+        return { running: true };
+      },
+    } as unknown as ConsolidationJob;
     const run = async (body: unknown): Promise<number> => {
       const res = { statusCode: 200, setHeader() {}, end() {} };
       await handleAction(db, res as unknown as ServerResponse, "/api/consolidate", body, { job });

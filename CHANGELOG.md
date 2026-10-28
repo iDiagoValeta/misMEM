@@ -2,6 +2,30 @@
 
 ## Sin publicar
 
+### Linter con Biome, y fuera las directivas de ESLint que no hacían nada
+
+- No había linter ni formateador. Ahora Biome 2 es el único, sólo como linter: `pnpm lint` y un step
+  de CI justo después de `pnpm dup`. El formato no se toca a propósito. `biome.json` limita el
+  análisis a `src/`, `ui/src/` y `tests/` en TypeScript, y deja fuera `ui/src/components/ui`, que es
+  shadcn vendorizado, además de CSS, JSON y fixtures.
+- Las cinco directivas de supresión de ESLint no desactivaban nada: cuatro `no-console` en
+  `server-http.ts` y `used-cli.ts`, y un `no-explicit-any` en `viewer-api.test.ts`. Ese `any`
+  escondía dos huecos: el mock no implementa `ServerResponse` y el cuerpo de la respuesta no tenía
+  tipo. Ahora el mock se ensancha una sola vez al pasarlo al handler y el cuerpo tiene `ApiBody`.
+- Reglas recomendadas desactivadas, todas por patrones deliberados del repo: `noNonNullAssertion`
+  (los guardas y los tests afirman con `!` justo después de comprobar longitud o nulidad; reescribir
+  los 24 usos serían cambios cosméticos), `useSemanticElements` (los roles `search`, `group` y
+  `meter` son ARIA válido sobre elementos con estilos; cambiarlos por `fieldset`, `meter` o
+  `search` cambiaría el marcado y el CSS sin arreglar nada) y `noAutofocus` (el formulario de
+  edición enfoca el campo al abrirse). `useExhaustiveDependencies` sigue activa pero no avisa de
+  dependencias de más: `GraphView` repite `size.width` a propósito para reaplicar el estado cuando
+  el canvas termina de montarse. `biome.json` es JSON estricto y Biome no acepta comentarios ahí,
+  así que el porqué queda en esta entrada.
+- Los errores que sí eran defectos, arreglados: ocho `let` sin tipo en los CLI y el `entries` de
+  `walk.ts`, tres `return` que devolvían un `void` en `viewer-static.ts`, la comprobación de
+  `content-type` sin cadena opcional en `http-body.ts`, un `break` con etiqueta que no hacía nada en
+  `consolidation/run.ts`, los `any` de los tests y las claves por índice de los esqueletos de carga.
+
 ### Errores, claves y ayudas en el idioma del producto
 
 - Los errores que ven un cliente MCP o el viewer salían en inglés (`Unknown tool`, `not found`,

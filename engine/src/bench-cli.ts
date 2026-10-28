@@ -44,7 +44,7 @@ const positions = (score: Score): string =>
     .join(" ") || "ninguna";
 
 async function main(): Promise<void> {
-  let args;
+  let args: ReturnType<typeof parseBenchArgs>;
   try {
     args = parseBenchArgs(process.argv.slice(2));
   } catch (err) {

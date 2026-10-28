@@ -148,9 +148,14 @@ export function Consolidate({ open, scope, scopes, onClose }: Props) {
               </p>
             )}
             {scope && (
-              <label className="flex items-center justify-between gap-3">
+              <label htmlFor="consolidate-only-scope" className="flex items-center justify-between gap-3">
                 <span>Sólo el ámbito {scope}</span>
-                <Switch checked={onlyScope} onCheckedChange={setOnlyScope} aria-label={`Sólo el ámbito ${scope}`} />
+                <Switch
+                  id="consolidate-only-scope"
+                  checked={onlyScope}
+                  onCheckedChange={setOnlyScope}
+                  aria-label={`Sólo el ámbito ${scope}`}
+                />
               </label>
             )}
           </div>

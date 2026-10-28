@@ -76,7 +76,6 @@ async function main(): Promise<void> {
   const used = usedMemoryIds(memories, assistantReply(turn), opts);
 
   if (dryRun) {
-    // eslint-disable-next-line no-console
     console.log(
       JSON.stringify({ recalled: memories.length, used: used.length, memory_ids: used }, null, 2),
     );

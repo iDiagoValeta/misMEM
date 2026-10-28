@@ -1,4 +1,5 @@
 import { describe, it, expect, beforeEach } from "vitest";
+import type { ServerResponse } from "node:http";
 import type { Database as DB } from "better-sqlite3";
 import { openDb } from "../src/db.js";
 import { capture, consolidate, crystallize } from "../src/tools.js";
@@ -42,11 +43,25 @@ function mockRes(): MockResponse {
   };
 }
 
-// eslint-disable-next-line @typescript-eslint/no-explicit-any
-function call(fn: (res: any) => void): { status: number; body: any } {
+interface ApiBody {
+  total?: number;
+  memories?: Array<{ id: string; stored_salience?: number; salience?: number }>;
+  scopes?: unknown;
+  memory?: { id?: string; text?: string };
+  episodes?: Array<{ id?: string; text?: string; missing?: boolean; linked_here?: boolean }>;
+  trait?: { id?: string; text?: string; strength?: number };
+  evidence?: Array<{ id?: string; text?: string; missing?: boolean }>;
+  traits?: Array<{ id: string }>;
+  nodes?: Array<{ id: string; layer: string }>;
+  links?: Array<{ source: string; target: string; kind: string }>;
+  truncated?: { memories: boolean; traits: boolean; episodes: boolean };
+}
+
+function call(fn: (res: ServerResponse) => void): { status: number; body: ApiBody } {
   const res = mockRes();
-  fn(res);
-  return { status: res.statusCode, body: JSON.parse(res.body) };
+  // mockRes only implements the fields the handlers touch, so it is widened once here.
+  fn(res as unknown as ServerResponse);
+  return { status: res.statusCode, body: JSON.parse(res.body) as ApiBody };
 }
 
 const url = (path: string): URL => new URL(`http://x${path}`);
@@ -100,9 +115,9 @@ describe("viewer-api: /api/memories", () => {
     db.prepare("UPDATE memories SET salience = 0.9, salience_updated_at = ? WHERE id = ?").run(now - DAY, fresh);
 
     const { body } = call((res) => handleMemories(db, res, url("/api/memories"), now));
-    expect(body.memories.map((m: { id: string }) => m.id)).toEqual([fresh, old]);
-    expect(body.memories[1].stored_salience).toBe(1);
-    expect(body.memories[1].salience).toBeLessThan(0.1);
+    expect(body.memories?.map((m) => m.id)).toEqual([fresh, old]);
+    expect(body.memories?.[1]?.stored_salience).toBe(1);
+    expect(body.memories?.[1]?.salience).toBeLessThan(0.1);
   });
 
   it("cuenta fuentes, episodios que quedan y rasgos que la citan", () => {
@@ -111,7 +126,7 @@ describe("viewer-api: /api/memories", () => {
     crystallize(db, { scope: "a", name: "rasgo", evidence_memory_ids: [memoryId] });
 
     const { body } = call((res) => handleMemories(db, res, url("/api/memories")));
-    expect(body.memories[0]).toMatchObject({ id: memoryId, sources: 2, episodes_left: 1, traits: 1, noise: false });
+    expect(body.memories?.[0]).toMatchObject({ id: memoryId, sources: 2, episodes_left: 1, traits: 1, noise: false });
   });
 
   it("filtra por ámbito, esconde el ruido salvo noise=1 y pagina", () => {
@@ -135,19 +150,19 @@ describe("viewer-api: /api/memory/:id", () => {
     const { status, body } = call((res) => handleMemory(db, res, memoryId));
     expect(status).toBe(200);
     expect(body.memory).toMatchObject({ id: memoryId, text: "la memoria" });
-    expect(body.episodes.map((e: { id: string; text: string }) => [e.id, e.text])).toEqual([
+    expect(body.episodes?.map((e) => [e.id, e.text])).toEqual([
       [episodeIds[0], "primero"],
       [episodeIds[1], "segundo"],
     ]);
-    expect(body.traits.map((t: { id: string }) => t.id)).toEqual([trait.trait_id]);
+    expect(body.traits?.map((t) => t.id)).toEqual([trait.trait_id]);
   });
 
   it("un episodio que forget ya borró queda marcado, no desaparece", () => {
     const { memoryId, episodeIds } = memoryFrom("a", "la memoria", ["primero", "segundo"]);
     db.prepare("DELETE FROM episodes WHERE id = ?").run(episodeIds[0]);
     const { body } = call((res) => handleMemory(db, res, memoryId));
-    expect(body.episodes[0]).toEqual({ id: episodeIds[0], missing: true });
-    expect(body.episodes[1]).toMatchObject({ id: episodeIds[1], linked_here: true });
+    expect(body.episodes?.[0]).toEqual({ id: episodeIds[0], missing: true });
+    expect(body.episodes?.[1]).toMatchObject({ id: episodeIds[1], linked_here: true });
   });
 
   it("un id que no existe es 404", () => {
@@ -162,8 +177,8 @@ describe("viewer-api: /api/trait/:id", () => {
 
     const { body } = call((res) => handleTrait(db, res, trait.trait_id));
     expect(body.trait).toMatchObject({ id: trait.trait_id, text: "rasgo", strength: 2 });
-    expect(body.evidence[0]).toMatchObject({ id: memoryId, text: "evidencia" });
-    expect(body.evidence[1]).toEqual({ id: "BORRADA", missing: true });
+    expect(body.evidence?.[0]).toMatchObject({ id: memoryId, text: "evidencia" });
+    expect(body.evidence?.[1]).toEqual({ id: "BORRADA", missing: true });
     expect(call((res) => handleTrait(db, res, "NOPE")).status).toBe(404);
   });
 });
@@ -175,7 +190,7 @@ describe("viewer-api: /api/graph", () => {
     const trait = crystallize(db, { scope: "a", name: "rasgo", evidence_memory_ids: [memoryId] });
 
     const plain = call((res) => handleGraph(db, res, url("/api/graph"))).body;
-    expect(plain.nodes.map((n: { id: string; layer: string }) => [n.id, n.layer])).toEqual([
+    expect(plain.nodes?.map((n: { id: string; layer: string }) => [n.id, n.layer])).toEqual([
       [memoryId, "memory"],
       [trait.trait_id, "trait"],
     ]);
@@ -183,7 +198,7 @@ describe("viewer-api: /api/graph", () => {
 
     const full = call((res) => handleGraph(db, res, url("/api/graph?episodes=1"))).body;
     expect(full.links).toContainEqual({ source: episodeIds[0], target: memoryId, kind: "origin" });
-    expect(full.nodes.some((n: { layer: string }) => n.layer === "episode")).toBe(true);
+    expect(full.nodes?.some((n: { layer: string }) => n.layer === "episode")).toBe(true);
   });
 
   it("truncated no da falso positivo con exactamente el tope", () => {
@@ -267,8 +282,8 @@ describe("viewer-api: aristas por parecido", () => {
     withVector("uno", vec(1, 0));
     withVector("dos", vec(1, 0));
     const plain = call((res) => handleGraph(db, res, url("/api/graph"))).body;
-    expect(plain.links.some((l: { kind: string }) => l.kind === "related")).toBe(false);
+    expect(plain.links?.some((l: { kind: string }) => l.kind === "related")).toBe(false);
     const related = call((res) => handleGraph(db, res, url("/api/graph?related=1"))).body;
-    expect(related.links.filter((l: { kind: string }) => l.kind === "related")).toHaveLength(1);
+    expect(related.links?.filter((l: { kind: string }) => l.kind === "related")).toHaveLength(1);
   });
 });

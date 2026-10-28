@@ -45,6 +45,8 @@ jobs:
       # Copied blocks of 10+ lines in src/ and ui/src may not grow past 0.2%, today's level:
       # the two left are in Detail.tsx, which #88 splits; then the threshold drops to 0.
       - run: pnpm dup
+      # Biome lints src/, ui/src/ and tests/; formatting stays manual (see biome.json).
+      - run: pnpm lint
       - run: pnpm build
 
   scripts:

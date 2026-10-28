@@ -45,7 +45,7 @@ Variables:
 }
 
 async function main(): Promise<void> {
-  let opts;
+  let opts: ReturnType<typeof parseConsolidateArgs>;
   try {
     opts = parseConsolidateArgs(process.argv.slice(2));
   } catch (err) {

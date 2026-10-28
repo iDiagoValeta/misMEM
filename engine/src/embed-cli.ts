@@ -31,7 +31,7 @@ function help(): void {
 }
 
 async function main(): Promise<void> {
-  let args;
+  let args: ReturnType<typeof parseEmbedArgs>;
   try {
     args = parseEmbedArgs(process.argv.slice(2));
   } catch (err) {

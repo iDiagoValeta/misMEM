@@ -419,9 +419,10 @@ function CrystallizeDialog({
           </DialogDescription>
         </DialogHeader>
         <form className="flex flex-col gap-3" onSubmit={submit}>
-          <label className="flex flex-col gap-1 text-xs text-ink-muted">
+          <label htmlFor="trait-name" className="flex flex-col gap-1 text-xs text-ink-muted">
             <span>Nombre</span>
             <Input
+              id="trait-name"
               value={name}
               onChange={(event) => setName(event.target.value)}
               required
