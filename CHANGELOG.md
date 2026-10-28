@@ -20,6 +20,13 @@
   `-32700`), las acciones y endpoints desconocidos y los 404, también los del viewer. Los códigos de
   estado, los identificadores y los nombres de tools no cambian.
 
+### Una conversación de ChatGPT sin texto no se importa
+
+- `ingestChatGPTExport` decidía si saltarse una conversación mirando la cadena ya montada, y
+  `flattenConversation` siempre emite la cabecera `# título` y `Created:`. Una conversación con
+  todos los mensajes vacíos o de sistema se importaba como un episodio con sólo título y fecha.
+  Ahora la decisión se toma sobre los mensajes con texto y esa conversación cuenta como `skipped`.
+
 ### Una sola versión, y comprobada
 
 - La versión estaba escrita a mano en `engine/package.json`, `server.json` (dos campos) y

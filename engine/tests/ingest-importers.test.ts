@@ -32,8 +32,19 @@ describe("ingestChatGPTExport", () => {
     // The assistant message with no parts must not leave an empty section behind.
     expect(body.match(/## assistant/g)).toHaveLength(1);
 
-    // 1 imported conversation (6 mapping nodes); skipped: the one without mapping and the unparsable file.
-    expect(stats).toEqual({ conversations: 1, messages: 6, skipped: 2 });
+    // 1 imported conversation (6 mapping nodes); skipped: the one without mapping, the unparsable
+    // file and conversations-empty.json.
+    expect(stats).toEqual({ conversations: 1, messages: 6, skipped: 3 });
+  });
+
+  it("skips a conversation whose messages carry no text", async () => {
+    const stats = await ingestChatGPTExport(db, join(FIXTURES, "chatgpt-export"));
+
+    const eps = episodes();
+    expect(eps).toHaveLength(1);
+    expect(eps.map((e) => e.scope)).not.toContain("chatgpt/conv-empty");
+    // The title and date alone are not memory; the conversation must count as skipped.
+    expect(stats.skipped).toBe(3);
   });
 
   it("is idempotent: importing the same export twice adds nothing", async () => {
