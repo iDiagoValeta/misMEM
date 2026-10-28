@@ -2,35 +2,22 @@
 import { useEffect, useState, type FormEvent } from "react";
 import { useQuery, useQueryClient } from "@tanstack/react-query";
 import { toast } from "sonner";
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
 import { Button } from "@/components/ui/button";
 import { actions, api, isMissing, type ForgetChallenge, type MemoryDetail } from "../api";
-import type { Selection } from "../App";
 import { ago, exact, percent } from "../format";
 import { errorMessage } from "../lib/errors";
 import { inkPercent } from "../lib/ink";
-import { DetailFailure, DetailLoading, SectionTitle, tint, truncate } from "./DetailParts";
+import {
+  ConfirmDialog,
+  DetailFailure,
+  DetailLoading,
+  SectionTitle,
+  tint,
+  truncate,
+  type DetailViewProps,
+} from "./DetailParts";
 
-export function MemoryView({
-  id,
-  onSelect,
-  onChanged,
-  onAnnounce,
-}: {
-  id: string;
-  onSelect: (selection: Selection) => void;
-  onChanged: (next?: Selection | null) => void;
-  onAnnounce: (text: string) => void;
-}) {
+export function MemoryView({ id, onSelect, onChanged, onAnnounce }: DetailViewProps) {
   const queryClient = useQueryClient();
   const query = useQuery({ queryKey: ["memory", id], queryFn: ({ signal }) => api.memory(id, signal) });
   const [editing, setEditing] = useState(false);
@@ -232,52 +219,30 @@ export function MemoryView({
         )}
       </section>
 
-      <AlertDialog
+      <ConfirmDialog
         open={confirm !== null}
-        onOpenChange={(open) => {
-          if (!open) {
-            setConfirm(null);
-            setChallenge(undefined);
-            setActionError(undefined);
-          }
+        title={confirm === "forget" ? "Olvidar esta memoria" : "Deshacer la consolidación"}
+        description={
+          confirm === "forget"
+            ? challenge
+              ? forgetText(challenge.impact.episodes ?? 0, challenge.impact.traits_citing ?? 0)
+              : actionError
+                ? "No se puede olvidar esta memoria ahora."
+                : "Mirando qué se perdería…"
+            : unconsolidateText(linked)
+        }
+        confirmLabel={confirm === "forget" ? "Olvidar" : "Deshacer consolidación"}
+        variant={confirm === "forget" ? "destructive" : "default"}
+        busy={busy}
+        blocked={confirm === "forget" && !challenge}
+        error={actionError}
+        onDismiss={() => {
+          setConfirm(null);
+          setChallenge(undefined);
+          setActionError(undefined);
         }}
-      >
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>
-              {confirm === "forget" ? "Olvidar esta memoria" : "Deshacer la consolidación"}
-            </AlertDialogTitle>
-            <AlertDialogDescription>
-              {confirm === "forget"
-                ? challenge
-                  ? forgetText(challenge.impact.episodes ?? 0, challenge.impact.traits_citing ?? 0)
-                  : actionError
-                    ? "No se puede olvidar esta memoria ahora."
-                    : "Mirando qué se perdería…"
-                : unconsolidateText(linked)}
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          {actionError && (
-            <p role="alert" className="text-sm text-danger">
-              No se pudo: {actionError}
-            </p>
-          )}
-          <AlertDialogFooter>
-            <AlertDialogCancel disabled={busy}>Cancelar</AlertDialogCancel>
-            <AlertDialogAction
-              variant={confirm === "forget" ? "destructive" : "default"}
-              disabled={busy || (confirm === "forget" && !challenge)}
-              onClick={(event) => {
-                // La confirmación no se cierra sola: si la escritura falla, se lee el error aquí.
-                event.preventDefault();
-                void runAction(confirm ?? "forget");
-              }}
-            >
-              {busy ? "Un momento…" : confirm === "forget" ? "Olvidar" : "Deshacer consolidación"}
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+        onConfirm={() => void runAction(confirm ?? "forget")}
+      />
     </>
   );
 }

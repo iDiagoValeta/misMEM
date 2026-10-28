@@ -25,6 +25,9 @@
 - Sobre copia de producción: migración en 18 ms, `integrity_check` y `foreign_key_check` ok, 3.805
   memorias y 216 rasgos intactos, y las seis aristas existentes dan fuerza 0 porque el contador nace
   ahora. Es correcto: son turnos que nadie midió, y 0 dice "no sé" en vez de inventar un número.
+### Un solo diálogo de confirmación en el detalle
+
+- `MemoryView` y `TraitView` repetían el pie del diálogo de confirmación y la forma de sus props. Ambos viven ahora en `DetailParts.tsx` (`ConfirmDialog` y `DetailViewProps`), sin cambios visibles, y `pnpm dup` pasa a exigir umbral 0: ningún bloque copiado de 10 o más líneas.
 
 ### `@vitejs/plugin-react` sube a 5.2.0
 
