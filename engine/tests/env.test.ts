@@ -39,6 +39,11 @@ describe("env number parsing", () => {
     expect(envPositiveNumber(NAME, 1)).toBe(6);
   });
 
+  it("reads the env it is given, so callers holding their own map stay testable", () => {
+    expect(envPositiveNumber(NAME, 42, { [NAME]: "9" })).toBe(9);
+    expect(envOptionalPositiveNumber(NAME, { [NAME]: "-9" })).toBeUndefined();
+  });
+
   it("salience half-life uses it: a valid value changes the decay, an invalid one keeps 90 days", () => {
     const DAY = 86_400_000;
     process.env.MISMEM_SALIENCE_HALF_LIFE_DAYS = "10";

@@ -27,7 +27,7 @@ import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/
 import { openDefaultDb } from "./db.js";
 import { hostAllowed, parseHostList } from "./http-host.js";
 import { BodyTooLargeError, InvalidJsonError, isJsonContentType, loadMaxBodyBytes, readJsonBody } from "./http-body.js";
-import { bindHost, checkBasicAuth, loadAuth } from "./http-guard.js";
+import { bindHost, checkBasicAuth, httpPort, loadAuth } from "./http-guard.js";
 import { createServer } from "./server-core.js";
 import {
   handleStats,
@@ -53,7 +53,7 @@ import {
 } from "./viewer-actions.js";
 import { ConsolidationJob } from "./consolidation/job.js";
 
-const PORT = Number(process.env.MISMEM_HTTP_PORT ?? 3200);
+const PORT = httpPort();
 const HOST = bindHost();
 const ALLOWED_HOSTS = parseHostList(process.env.MISMEM_ALLOWED_HOSTS);
 const MAX_BODY_BYTES = loadMaxBodyBytes();
