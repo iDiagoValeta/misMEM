@@ -35,7 +35,7 @@ export interface WalkStats {
 function shouldIngest(path: string): boolean {
   const ext = extname(path).toLowerCase();
   if (TEXT_EXT.has(ext)) return true;
-  // Accept known config dotfiles without extension
+  // These carry project config, but their names have no extension TEXT_EXT can match.
   const name = basename(path).toLowerCase();
   return ["dockerfile", ".gitignore", ".npmrc", ".editorconfig", ".env.example"].includes(name);
 }

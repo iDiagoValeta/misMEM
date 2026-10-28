@@ -5,7 +5,7 @@
  *   POST /api/memory/:id/unconsolidate  la memoria se borra y sus episodios vuelven a pendientes
  *   POST /api/memory/:id/forget         la memoria y sus episodios se borran (en dos pasos)
  *   POST /api/trait/:id/forget          el rasgo se borra (en dos pasos)
- *   POST /api/crystallize               {scope, name, polarity?, memory_ids}
+ *   POST /api/crystallize               {scope, name, polarity?, evidence_memory_ids}
  *   POST /api/consolidate               {scope?}: arranca una corrida en segundo plano
  *
  * Hasta acá toda la API del viewer era GET y la seguridad se apoyaba en eso. Una escritura

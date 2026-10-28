@@ -494,13 +494,6 @@ function finalizeHits(
 }
 
 /**
- * Refuerza los recuerdos que una respuesta usó de verdad.
- *
- * Los rasgos se cuentan aparte en vez de caer en `unknown`: la inyección también los
- * adelanta, así que mezclarlos dejaba esa alarma —la de "alguien manda ids inventados"—
- * sonando desde el primer día. Un rasgo gana fuerza al cristalizar, no al usarse.
- */
-/**
  * Índice hebbiano: cuenta el uso de cada recuerdo y el co-uso de cada par que
  * se usó en el mismo turno. Vive acá y no en `reinforceMemories` porque a esa
  * la llama también el camino de recall, donde aparecer no es haberse usado.
@@ -525,6 +518,13 @@ function registrarUso(db: DB, memoryIds: readonly string[], at: number): void {
   })();
 }
 
+/**
+ * Refuerza los recuerdos que una respuesta usó de verdad.
+ *
+ * Los rasgos se cuentan aparte en vez de caer en `unknown`: la inyección también los
+ * adelanta, así que mezclarlos dejaba esa alarma —la de "alguien manda ids inventados"—
+ * sonando desde el primer día. Un rasgo gana fuerza al cristalizar, no al usarse.
+ */
 export function reinforce(
   db: DB,
   raw: unknown,

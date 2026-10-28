@@ -1,15 +1,16 @@
 /**
  * Engram-compatibility layer.
  *
- * Expone alias `mem_*` (Engram MCP tools) que mapean a las 5 canónicas
- * de misMEM (capture/recall/consolidate/crystallize/forget). Permite
+ * Expone alias `mem_*` (Engram MCP tools) que mapean a las 6 canónicas
+ * de misMEM (capture/recall/reinforce/consolidate/crystallize/forget). Permite
  * que clientes existentes (agentes, CLAUDE.md, mcp.json) sigan
  * funcionando sin cambios al migrar de Engram a misMEM.
  *
  * Mapeo:
  *   mem_save             → capture
  *   mem_search           → recall
- *   mem_context          → recall sobre los más recientes
+ *   mem_context          → SELECT directo de los episodios sin consolidar más
+ *                          recientes; no llama a recall ni ordena por relevancia
  *   mem_get_observation  → SELECT por id en episodes/memories/traits
  *   mem_session_summary  → capture (scope=session)
  *   mem_save_prompt      → capture (scope=prompts)
@@ -36,7 +37,7 @@ export const ENGRAM_TOOLS: EngramToolDef[] = [
   {
     name: "mem_save",
     description:
-      "[engram-compat] Save a memory. Maps to capture(). Use 'scope' or fallback to 'project'/'personal'.",
+      "[engram-compat] Save a memory. Maps to capture() with scope 'engram-compat' unless 'scope' is given.",
     inputSchema: {
       type: "object",
       required: ["title", "content"],
@@ -48,7 +49,7 @@ export const ENGRAM_TOOLS: EngramToolDef[] = [
           description:
             "bugfix | decision | architecture | discovery | pattern | config | preference",
         },
-        scope: { type: "string", description: "project (default) | personal" },
+        scope: { type: "string", description: "engram-compat (default) | any other scope name" },
         topic_key: { type: "string" },
       },
     },
@@ -70,7 +71,7 @@ export const ENGRAM_TOOLS: EngramToolDef[] = [
   {
     name: "mem_context",
     description:
-      "[engram-compat] Recent session context. Returns latest N episodes (any scope or filtered).",
+      "[engram-compat] Recent session context. Direct SELECT of the latest unconsolidated episodes (any scope or filtered); no recall, no ranking.",
     inputSchema: {
       type: "object",
       properties: {

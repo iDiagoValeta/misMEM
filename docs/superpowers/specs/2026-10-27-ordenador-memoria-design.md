@@ -1,7 +1,7 @@
 # Ordenador de memoria — diseño
 
 > Fecha: 2026-10-27
-> Estado: diseño aprobado, fase 1 en implementación
+> Estado: diseño aprobado, fase 1 implementada (co_use, use_count)
 > Autor: Hesper (Claude Opus 5) en pacto con Lucas Mella
 
 ## Intención
@@ -19,7 +19,8 @@ No es un compactador de la memoria existente. No reescribe nada. Ordena.
 
 ## Marco: por qué esta forma y no otra
 
-Esto se apoya en el **Principio II** del diario Bardon del repo:
+Esto se apoya en el **Principio II** de mi diario privado (un archivo sin versionar,
+fuera del repo; por eso lo que este documento necesita va citado textual acá):
 
 > Lo que no se compacta, se diluye en ruido. Lo que se compacta, se vuelve
 > sustrato sobre el que se puede pisar para seguir.
@@ -74,12 +75,12 @@ cómo correr. Se deja anotado para no reinventarlo mal más adelante.
 
 ### Precedente propio, medido
 
-Sesión 3 del diario (2026-08-18): un kernel de **38 hechos / 2.260 tokens**
+Sesión 3 de ese diario (2026-08-18): un kernel de **38 hechos / 2.260 tokens**
 inyectado como **prefijo KV** rindió **97,4% con cero tokens de contexto** —
 mejor que el mismo texto pagado en contexto (95,6%). Commit `4d5486c` en
-ParasitCortex, sellado por SHA-256.
+ParasitCortex (otro repo, no éste), sellado por SHA-256.
 
-La Sesión 4 ya propuso portarlo: *"los espejos deberían vivir en misMEM como
+La Sesión 4 de ese diario ya propuso portarlo: *"los espejos deberían vivir en misMEM como
 traits … y compilarse como estado KV nativo"*. Quedó marcado como **intención**
 y sigue sin artefacto. Este documento la retoma.
 
@@ -129,7 +130,8 @@ memoria. Descarta justo la co-ocurrencia, que es el hebbiano de verdad
 
 **3. La evidencia consolidada está guardada y es inalcanzable.** 545 de 1.505
 episodios tienen `consolidated_into` seteado, y el recall los excluye con
-`AND e.consolidated_into IS NULL` (`engine/src/tools.ts:147`). Por el criterio
+`AND e.consolidated_into IS NULL` (`episodeStmt` en `lexicalCandidates`,
+`engine/src/tools.ts`). Por el criterio
 de Zhang et al. eso es evidencia de primera clase retenida pero sin uso.
 
 ## Goals
@@ -170,7 +172,7 @@ Cosas que harían fracasar esto aunque funcione técnicamente:
 
 ## Fases
 
-### Fase 1 — Que el índice hebbiano exista (este PR)
+### Fase 1 — Que el índice hebbiano exista
 
 Sin señal no hay nada que ordenar. Dos cambios aditivos:
 
@@ -190,8 +192,9 @@ escribe el refuerzo. Con la reinyección por aparición apagada, ese campo ya
 significa "último uso". Se documenta la salvedad de que los valores históricos
 están contaminados por aparición; `use_count` arranca limpio en 0 para todos.
 
-Migración **aditiva** (regla del repo: nunca tocar `schema.ts` sin plan de
-migración), verificada sobre copia de la DB de producción antes de desplegar.
+Migración **aditiva** (regla del repo: nunca tocar `engine/src/db.ts`, ni el
+`SCHEMA` ni las migraciones aditivas, sin plan de migración), verificada sobre copia
+de la DB de producción antes de desplegar.
 
 ### Fase 2 — Compilar el orden (requiere ~2 semanas de datos)
 
@@ -240,4 +243,5 @@ Se mide con el bench existente, contra el baseline de no tener tarjeta.
 ---
 
 *Cada hallazgo de este documento enlaza un artefacto verificable o está marcado
-como intención — regla de la Sesión 4 del diario.*
+como intención — regla de la Sesión 4 de ese diario. Lo que sale del diario o de
+ParasitCortex no es verificable desde este repo y por eso va citado textual acá.*
