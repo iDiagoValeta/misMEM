@@ -31,7 +31,10 @@ refuerza las memorias devueltas, pero con `reinforce: false` o
 `MISMEM_REINFORCE_ON_RECALL=off` no lo hace, y entonces la salience sigue el uso
 en vez de la aparición. La salience tiene una vida media de 90 días por defecto;
 `forget` aplica el decay antes de evaluar la purga.
-El viewer usa el mismo ranking sin refuerzo, por lo que es realmente read-only.
+El viewer lee con el mismo ranking y sin refuerzo: su camino de lectura es de
+sólo lectura, pero `viewer-actions.ts` expone POST para corregir, deshacer una
+consolidación, cristalizar y consolidar. Olvidar una memoria o un rasgo sólo
+existe con `MISMEM_VIEWER_ALLOW_DELETE=1`.
 
 `reinforce` es además el único que escribe el índice hebbiano: `memories.use_count`
 y `co_use(memory_a, memory_b, n, last_at)`, los pares de recuerdos usados en el
@@ -39,7 +42,7 @@ mismo turno.
 
 ## Scope
 
-Un servidor por proyecto. Cada `scope` es un namespace lógico dentro del mismo .db. No hay cross-scope leakage en queries scoped.
+Un servidor y una SQLite para todo: varios clientes y proyectos comparten el mismo territorio, particionado por el `scope` jerárquico. Cada `scope` es un namespace lógico dentro del mismo .db. No hay cross-scope leakage en queries scoped.
 
 ## Dev
 
@@ -52,7 +55,20 @@ pnpm build
 
 ## Uso vía MCP (VS Code / Claude Code)
 
-`mcp.json`:
+Con el paquete publicado no hace falta clonar el repo:
+
+```json
+{
+  "mcpServers": {
+    "mismem": {
+      "command": "npx",
+      "args": ["-y", "@lucasmella/mismem"]
+    }
+  }
+}
+```
+
+Con un checkout, en cambio, `mcp.json` apunta al `dist` compilado:
 
 ```json
 {
@@ -74,7 +90,7 @@ Default DB: `~/.mismem/mem.db` (configurable con `MISMEM_DB`). Todas las variabl
 - [x] Fase 1: ingesta de exports (ChatGPT, transcripts VS Code) como semilla
 - [x] Fase 2: servidor Streamable HTTP + capa engram-compat + deploy en VPS
 - [x] Fase 3: consolidación LLM (episodes → memories, DeepSeek, OpenRouter, OpenAI o servidor compatible) + pre-filtro Pareto
-- [x] Fase 4: viewer read-only (`/viewer`) + CLIs (`mismem-stats`, `mismem-forget`, `mismem-migrate-engram`)
+- [x] Fase 4: viewer (`/viewer`, lectura) + acciones desde la interfaz (corregir, deshacer, olvidar y cristalizar) + CLIs (`mismem-stats`, `mismem-forget`, `mismem-migrate-engram`)
 - [x] Fase 5: dedup por content-hash + embeddings opcionales (Ollama o servidor compatible con OpenAI, coseno en JS, `mismem-embed`)
 - [x] Fase 6: decay idempotente + ranking híbrido consistente + reindexado seguro
 - [x] Fase 7: relevancia antes que saliencia, EmbeddingGemma 2 con prefijos y corte, `mismem-bench`
