@@ -1,0 +1,30 @@
+name: Documentación
+description: Un documento está mal, falta o contradice el código
+labels: ["documentation"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Convenciones: [CONTRIBUTING.md](https://github.com/lucasmella-stack/misMEM/blob/main/CONTRIBUTING.md).
+        Si el documento y el código discrepan, gana el código (docs/README.md): indicar los dos.
+  - type: textarea
+    id: doc_says
+    attributes:
+      label: Qué dice el documento
+      description: Fichero y sección, citado o enlazado.
+    validations:
+      required: true
+  - type: textarea
+    id: code_does
+    attributes:
+      label: Qué hace el código
+      description: Fichero y símbolo, o el comando ejecutado y su salida.
+    validations:
+      required: true
+  - type: textarea
+    id: closure
+    attributes:
+      label: Criterio de cierre
+      description: El documento y el código coinciden y, donde sea barato, un test lo fija.
+    validations:
+      required: true

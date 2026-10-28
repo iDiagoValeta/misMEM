@@ -2,29 +2,35 @@
 
 ## Sin publicar
 
-### El conectoma se puede mirar
+### Un estándar de contribución escrito, y comprobado
 
-- `/api/graph?co_use=1` suma una segunda capa lateral. La que ya había, `?related=1`, une memorias
-  **parecidas**: sale de lo que cada una dice. Esta sale de lo que **pasó**: qué recuerdos usó junto
-  un mismo turno. Las dos juntas valen más que cada una —parecidas que nunca se usan juntas son
-  candidatas a que una reemplace a la otra— pero eso es otra entrada.
-- El peso **no** es el conteo crudo, es NPMI. Un recuerdo que se usa en todos los turnos co-ocurre
-  con todo, así que por conteo sería el centro del grafo sin orientar a nada: el mismo error de la
-  saliencia midiendo recencia. Con NPMI, 0 es "indistinguible del azar" y 1 "nunca aparecen
-  separados". Hay un test que construye el caso y falla si el ranking se ordena por grado;
-  comprobado mutando el comparador.
-- Hacía falta un denominador y no existía: la tabla `meta` guarda el total de turnos de uso medido,
-  y se suma dentro de la misma transacción que los conteos de `co_use` para que no pueda quedar
-  desfasado. Migración aditiva.
-- Con pocos datos la fuerza es ruido por construcción —dos recuerdos usados una sola vez, esa vez
-  juntos, dan 1—, así que cada arista viaja con su `n`, `?co_use_min_n=k` filtra por soporte y el
-  resumen informa el tamaño de la muestra. Los costados de la interfaz tienen que poder decir "esto
-  todavía no significa nada" en vez de pintar ruido.
-- Sin el parámetro la respuesta no cambia: las aristas verticales no reciben campos nuevos y hay un
-  test que compara las dos respuestas.
-- Sobre copia de producción: migración en 18 ms, `integrity_check` y `foreign_key_check` ok, 3.805
-  memorias y 216 rasgos intactos, y las seis aristas existentes dan fuerza 0 porque el contador nace
-  ahora. Es correcto: son turnos que nadie midió, y 0 dice "no sé" en vez de inventar un número.
+- Contribuir no tenía forma: ni formularios de issue, ni plantillas de PR, ni normas escritas, y el
+  README mezclaba la presentación con material de referencia y con la historia de cada iteración. Ahora
+  `CONTRIBUTING.md` es la puerta de entrada (entorno, flujo trunk-based, estándar de issue y de PR,
+  etiquetas, releases) y `docs/standards/` fija ramas, commits, comentarios, estilo, tests, seguridad y
+  releases, cada norma con su forma de comprobarla. `docs/README.md` dice qué documento es para quién y
+  qué no se documenta.
+- `.github/` gana cuatro formularios de issue (error, mejora, documentación y medición de recall, cada
+  uno con su criterio de cierre), los issues en blanco desactivados con un enlace al reporte privado de
+  vulnerabilidades, una plantilla de PR por defecto y tres más (`release`, `dependency`, `documentation`),
+  `release.yml` para agrupar las notas por etiqueta y `CODEOWNERS`.
+- Las etiquetas que citan los formularios, las plantillas, `release.yml` y `CONTRIBUTING.md` se declaran
+  en `.github/labels.json`. `engine/tests/contribution-standard.test.ts` falla si alguno cita una que no
+  existe, o si un tipo se queda sin formulario ni excepción razonada; el workflow `labels.yml` compara
+  ese fichero con las etiquetas que tiene GitHub.
+- Dependabot deja de proponer saltos de versión mayor de `node` en el Dockerfile: los majors se mueven a
+  mano a una LTS.
+- El README pasa a ser una guía: qué es, un diagrama del sistema, el Quickstart primero y un mapa de la
+  documentación. Lo que era referencia se mueve sin perder nada: el comportamiento del recall y la
+  búsqueda por significado a `docs/recall.md`, los hooks a `docs/hooks.md`, y las capas, los componentes,
+  la saliencia y el índice hebbiano a `docs/architecture.md`. El roadmap por fases de `engine/README.md`
+  desaparece (la historia es este fichero) y la consolidación deja de repetir el despliegue de `DEPLOY.md`.
+
+### zod 4
+
+- zod pasa de 3.25.76 a 4.6.7 (versión exacta): `.int()` rechaza enteros fuera del rango seguro de JS (y el `inputSchema` de `forget` lo anuncia), los límites de longitud cuentan *code points* en vez de unidades UTF-16 y cambian los textos de `ZodError`; `tests/tool-schemas.test.ts` compara con `z.toJSONSchema` en vez de leer internos de zod 3.
+
+
 ### Un solo diálogo de confirmación en el detalle
 
 - `MemoryView` y `TraitView` repetían el pie del diálogo de confirmación y la forma de sus props. Ambos viven ahora en `DetailParts.tsx` (`ConfirmDialog` y `DetailViewProps`), sin cambios visibles, y `pnpm dup` pasa a exigir umbral 0: ningún bloque copiado de 10 o más líneas.
@@ -252,6 +258,30 @@
   contra DNS rebinding.
 - `MISMEM_HTTP_MAX_BODY_BYTES`: `POST /mcp` corta el cuerpo en 4 MiB con 413 sin juntarlo en
   memoria, y un `Content-Type` que no es JSON responde 415 antes de leer.
+
+### El conectoma se puede mirar
+
+- `/api/graph?co_use=1` suma una segunda capa lateral. La que ya había, `?related=1`, une memorias
+  **parecidas**: sale de lo que cada una dice. Esta sale de lo que **pasó**: qué recuerdos usó junto
+  un mismo turno. Las dos juntas valen más que cada una —parecidas que nunca se usan juntas son
+  candidatas a que una reemplace a la otra— pero eso es otra entrada.
+- El peso **no** es el conteo crudo, es NPMI. Un recuerdo que se usa en todos los turnos co-ocurre
+  con todo, así que por conteo sería el centro del grafo sin orientar a nada: el mismo error de la
+  saliencia midiendo recencia. Con NPMI, 0 es "indistinguible del azar" y 1 "nunca aparecen
+  separados". Hay un test que construye el caso y falla si el ranking se ordena por grado;
+  comprobado mutando el comparador.
+- Hacía falta un denominador y no existía: la tabla `meta` guarda el total de turnos de uso medido,
+  y se suma dentro de la misma transacción que los conteos de `co_use` para que no pueda quedar
+  desfasado. Migración aditiva.
+- Con pocos datos la fuerza es ruido por construcción —dos recuerdos usados una sola vez, esa vez
+  juntos, dan 1—, así que cada arista viaja con su `n`, `?co_use_min_n=k` filtra por soporte y el
+  resumen informa el tamaño de la muestra. Los costados de la interfaz tienen que poder decir "esto
+  todavía no significa nada" en vez de pintar ruido.
+- Sin el parámetro la respuesta no cambia: las aristas verticales no reciben campos nuevos y hay un
+  test que compara las dos respuestas.
+- Sobre copia de producción: migración en 18 ms, `integrity_check` y `foreign_key_check` ok, 3.805
+  memorias y 216 rasgos intactos, y las seis aristas existentes dan fuerza 0 porque el contador nace
+  ahora. Es correcto: son turnos que nadie midió, y 0 dice "no sé" en vez de inventar un número.
 
 ## 0.5.0 — 2026-10-23
 

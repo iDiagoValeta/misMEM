@@ -112,7 +112,7 @@ export const CANONICAL_TOOLS = [
       type: "object",
       properties: {
         scope: { type: "string", minLength: 1, maxLength: 128 },
-        before_days: { type: "integer", minimum: 1, default: 30 },
+        before_days: { type: "integer", minimum: 1, maximum: Number.MAX_SAFE_INTEGER, default: 30 },
         salience_below: {
           type: "number",
           minimum: 0,
@@ -122,6 +122,7 @@ export const CANONICAL_TOOLS = [
         memory_grace_days: {
           type: "integer",
           minimum: 0,
+          maximum: Number.MAX_SAFE_INTEGER,
           default: 30,
         },
         dry_run: { type: "boolean", default: true },
