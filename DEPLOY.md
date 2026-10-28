@@ -318,7 +318,7 @@ Los defaults son los del código (`engine/src`).
 |-----|---------|-------------|
 | `MISMEM_DB` | `~/.mismem/mem.db` (en la imagen: `/data/mem.db`) | Ruta SQLite |
 | `MISMEM_HTTP_PORT` | `3200` | Puerto HTTP |
-| `MISMEM_HTTP_HOST` | `0.0.0.0` | Bind address |
+| `MISMEM_HTTP_HOST` | `127.0.0.1` | Bind address. Por defecto sólo loopback; los contenedores fijan `0.0.0.0` a propósito (Dockerfile y ejemplo de compose), y con esa dirección conviene definir `MISMEM_AUTH_*` |
 | `MISMEM_ALLOWED_HOSTS` | — | Sin auth, el servidor sólo atiende `Host` de loopback (`localhost`, `127.0.0.1`, `[::1]`, `*.localhost`) y responde 403 al resto, contra DNS rebinding. Lista separada por comas para añadir otros nombres. Con auth no se filtra |
 | `MISMEM_HTTP_MAX_BODY_BYTES` | `4194304` (4 MiB) | Tope del cuerpo de `POST /mcp`; más grande responde 413 sin juntarlo en memoria |
 | `MISMEM_VIEWER_ALLOW_DELETE` | apagado | `1` deja que la interfaz olvide memorias y rasgos, siempre en dos pasos con confirmación. Apagado, esos dos POST responden 403; corregir, deshacer una consolidación y cristalizar no dependen de él |

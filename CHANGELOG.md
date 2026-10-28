@@ -2,6 +2,17 @@
 
 ## Sin publicar
 
+### `mismem-http` escucha sólo en loopback por defecto
+
+- Sin `MISMEM_AUTH_*`, el servidor escuchaba en `0.0.0.0` y la guarda de `Host` sólo frena el
+  DNS rebinding del navegador: cualquier cliente de la LAN puede mandar `Host: localhost`. Ahora el
+  valor por defecto de `MISMEM_HTTP_HOST` es `127.0.0.1`. Para mantener el comportamiento anterior,
+  `MISMEM_HTTP_HOST=0.0.0.0` junto con `MISMEM_AUTH_USER` y `MISMEM_AUTH_PASS`. Los contenedores no
+  cambian: el Dockerfile y el ejemplo de compose ya fijan `0.0.0.0`.
+- El fichero SQLite, con toda la memoria, se creaba con el umask por defecto. Ahora queda en `0600`
+  (y sus `-wal` y `-shm`), y el directorio, si lo crea mismem, en `0700`. Un directorio que ya existía
+  no se toca.
+
 ### El índice hebbiano empieza a existir
 
 - `reinforce` recibía los `memory_ids` **juntos** —sabe que esos recuerdos se usaron en el mismo

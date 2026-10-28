@@ -7,7 +7,7 @@
  *
  * Env vars:
  *   MISMEM_HTTP_PORT     (default 3200)
- *   MISMEM_HTTP_HOST     (default 0.0.0.0)
+ *   MISMEM_HTTP_HOST     (default 127.0.0.1; containers set 0.0.0.0)
  *   MISMEM_AUTH_USER     opcional: con MISMEM_AUTH_PASS, BasicAuth en /mcp, /viewer y /api
  *   MISMEM_AUTH_PASS     pareja del anterior; con una sola de las dos no arranca
  *   MISMEM_DB            ruta SQLite (default ~/.mismem/mem.db)
@@ -28,7 +28,7 @@ import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/
 import { openDefaultDb } from "./db.js";
 import { hostAllowed, parseHostList } from "./http-host.js";
 import { BodyTooLargeError, InvalidJsonError, isJsonContentType, loadMaxBodyBytes, readJsonBody } from "./http-body.js";
-import { loadAuth } from "./http-guard.js";
+import { bindHost, loadAuth } from "./http-guard.js";
 import { createServer } from "./server-core.js";
 import {
   handleStats,
@@ -55,7 +55,7 @@ import {
 import { ConsolidationJob } from "./consolidation/job.js";
 
 const PORT = Number(process.env.MISMEM_HTTP_PORT ?? 3200);
-const HOST = process.env.MISMEM_HTTP_HOST ?? "0.0.0.0";
+const HOST = bindHost();
 const ALLOWED_HOSTS = parseHostList(process.env.MISMEM_ALLOWED_HOSTS);
 const MAX_BODY_BYTES = loadMaxBodyBytes();
 
