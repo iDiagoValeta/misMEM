@@ -112,7 +112,7 @@ Y en `mcp.json`: `"command": "node", "args": ["<ruta-al-repo>/misMEM/engine/dist
 - **`engine/src/viewer.ts`**, **`viewer-api.ts`** — su API de sólo lectura: `/api/{stats,recent,search,scopes,memories,graph}` y `/api/{memory,trait}/:id`. La salience que devuelven es la efectiva, con el decay aplicado a hoy, la misma que usa el recall.
 - **`engine/src/viewer-actions.ts`** — lo que la interfaz puede cambiar, sólo por POST JSON desde el propio origen: corregir una memoria, deshacer su consolidación, cristalizar y lanzar una consolidación. Olvidar una memoria (con sus episodios) o un rasgo no tiene vuelta atrás y está apagado salvo con `MISMEM_VIEWER_ALLOW_DELETE=1`; aun así va en dos pasos: el primer POST devuelve qué se perdería y un token de 60 s, y borra el segundo, el que lo trae.
 - **Consolidación LLM** — cron nocturno que destila episodios en memorias con DeepSeek, OpenRouter, OpenAI o cualquier servidor compatible, con pre-filtro Pareto para descartar ruido. Ver [engine/src/consolidation/README.md](engine/src/consolidation/README.md).
-- **CLIs** — `mismem-ingest` (exports de ChatGPT / transcripts de VS Code), `mismem-consolidate`, `mismem-forget`, `mismem-stats`, `mismem-embed`, `mismem-migrate-engram`, `mismem-bench` (mide el recall con un banco de preguntas propio, sin reforzar), `mismem-obsidian` (escribe la memoria como bóveda de Obsidian en `<bóveda>/misMEM/`: una nota por memoria, rasgo y ámbito, enlazadas por origen y por parecido; re-exportar sólo borra las notas cuyo frontmatter sigue declarando el id del manifiesto, y se niega si la base no tiene nada que exportar o el manifiesto no se puede leer) y los dos hooks, `mismem-inject` y `mismem-used`.
+- **CLIs** — `mismem-http` (el mismo servidor HTTP que `pnpm start:http`), `mismem-ingest` (exports de ChatGPT / transcripts de VS Code), `mismem-consolidate`, `mismem-forget`, `mismem-stats`, `mismem-embed`, `mismem-migrate-engram`, `mismem-bench` (mide el recall con un banco de preguntas propio, sin reforzar), `mismem-obsidian` (escribe la memoria como bóveda de Obsidian en `<bóveda>/misMEM/`: una nota por memoria, rasgo y ámbito, enlazadas por origen y por parecido; re-exportar sólo borra las notas cuyo frontmatter sigue declarando el id del manifiesto, y se niega si la base no tiene nada que exportar o el manifiesto no se puede leer) y los dos hooks, `mismem-inject` y `mismem-used`.
 
 ## Stack
 
@@ -144,7 +144,11 @@ default es Ollama (`ollama pull nomic-embed-text`). Los vectores se guardan
 como BLOB en la misma SQLite y la búsqueda es coseno en JS, sin extensiones
 nativas. Si el servidor no responde, todo degrada silenciosamente a FTS5 puro,
 que exige que estén **todas** las palabras de la consulta (sin contar las vacías:
-"qué", "sobre", "the"…). La semántica cubre deliberadamente
+"qué", "sobre", "the"…). Si esa consulta estricta no devuelve nada y no hay capa
+semántica, `recall` reintenta con una consulta OR y conserva sólo los candidatos
+que comparten al menos dos términos informativos (con una sola palabra basta una; en consultas
+largas, el 30 % de sus palabras), hasta 3 por capa. El rescate alcanza a rasgos, episodios y
+memorias, y no altera una búsqueda que ya encontró algo. La semántica cubre deliberadamente
 solo `memories`; `episodes` y `traits` conservan búsqueda FTS5. Backfill y
 reindexado: `mismem-embed` (`--status`, `--force`).
 

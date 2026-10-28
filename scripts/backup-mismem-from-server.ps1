@@ -1,6 +1,6 @@
 # Daily backup of misMEM SQLite DB from a remote server -> local.
 # Uses VACUUM INTO for a consistent snapshot (safe with WAL).
-# Keeps last 14 daily backups.
+# Keeps last 30 daily backups (covers forget's 30-day window).
 #
 # Usage: .\backup-mismem-from-server.ps1 [-SshHost myserver] [-HostVolumeDir /var/lib/docker/volumes/mismem-data/_data]
 
@@ -23,7 +23,7 @@ $ContainerTmp  = "/data/.backup-tmp.db"
 $HostTmp       = "$HostVolumeDir/.backup-tmp.db"
 $Stamp         = Get-Date -Format 'yyyyMMdd-HHmmss'
 $LocalFile     = Join-Path $BackupDir "mem-$Stamp.db"
-$RetainCount   = 14
+$RetainCount   = 30
 
 if (-not (Test-Path $BackupDir)) {
     New-Item -ItemType Directory -Force -Path $BackupDir | Out-Null

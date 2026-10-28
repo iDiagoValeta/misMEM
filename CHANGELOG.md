@@ -78,6 +78,45 @@
   que a esta altura es buena parte de lo que hace a misMEM instalable y auditable por alguien que
   no sea su autor.
 
+### La memoria se puede exportar como bóveda de Obsidian
+
+- `mismem-obsidian` escribe la memoria como bóveda en `<bóveda>/misMEM/`: una nota por memoria,
+  rasgo y ámbito, enlazadas por origen y por parecido.
+- Re-exportar sólo borra las notas cuyo frontmatter sigue declarando el id del manifiesto, y se
+  niega si la base no tiene nada que exportar o el manifiesto no se puede leer: así una bóveda
+  migrada a mano no se vacía por error.
+
+### La interfaz deja de ser de sólo lectura
+
+- UI React con shadcn y TanStack Query: listas, detalle, grafo 2D con filtros y búsqueda dentro
+  del grafo.
+- `viewer-actions.ts` expone POST desde el propio origen para corregir una memoria, deshacer su
+  consolidación, cristalizar y lanzar una consolidación.
+- Olvidar una memoria (con sus episodios) o un rasgo exige `MISMEM_VIEWER_ALLOW_DELETE=1` y dos
+  pasos: el primero devuelve qué se perdería y un token de 60 s, y borra el segundo.
+
+### La búsqueda léxica rescata paráfrasis
+
+- Sin capa semántica, una consulta estricta (todas las palabras) que no encontraba nada dejaba
+  fuera la paráfrasis que sí estaba. Ahora `recall` reintenta con una consulta OR y conserva sólo
+  los candidatos que comparten al menos dos términos informativos (una con una consulta de una
+  palabra, el 30 % en las largas), con un tope de 3 por capa (rasgos, episodios y memorias).
+- El rescate sólo entra cuando la estricta no devolvió nada y no hay vectores comparables que
+  puntuar, para no alterar una búsqueda que ya funcionaba.
+
+### Instalación en Linux con un solo script
+
+- `scripts/install.sh` instala y configura misMEM: elige dónde vive la DB y con qué proveedor
+  consolidar, guarda la clave en `~/.config/mismem/env` con permisos 600 y deja los clientes
+  llamando a `~/.local/bin/mismem-run`, sin credenciales en su configuración.
+
+### El servidor HTTP se protege sin auth
+
+- `MISMEM_ALLOWED_HOSTS`: sin auth, sólo se atienden `Host` de loopback y el resto responde 403,
+  contra DNS rebinding.
+- `MISMEM_HTTP_MAX_BODY_BYTES`: `POST /mcp` corta el cuerpo en 4 MiB con 413 sin juntarlo en
+  memoria, y un `Content-Type` que no es JSON responde 415 antes de leer.
+
 ## 0.5.0 — 2026-10-23
 
 ### Que el LLM ignore un episodio ya no lo condena a la primera

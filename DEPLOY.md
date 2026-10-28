@@ -17,7 +17,7 @@ Cliente MCP (VS Code / Claude Code / Claude Desktop / agente)
  mismem-brain :3200  ──  SQLite en volumen `mismem-data`
         │
         ├──▶ servidor de embeddings (opcional, red interna): Ollama o llama-server
-        └──▶ LLM de consolidación (opcional, sale a internet): DeepSeek u OpenRouter
+        └──▶ LLM de consolidación (opcional): DeepSeek, OpenRouter, OpenAI o un servidor compatible
 ```
 
 - Transporte: **Streamable HTTP** (stateless: server+transport por request).
@@ -212,8 +212,15 @@ docker start mismem-brain
 docker logs --tail 20 mismem-brain
 ```
 
-Alternativa: exportar desde otra fuente a JSONL e ingestar con
-`node dist/ingest-cli.js` (soporta exports de ChatGPT y transcripts de VS Code).
+Alternativa: ingestar un export de ChatGPT (el directorio con los
+`conversations-*.json`) o los transcripts de VS Code dentro del contenedor:
+
+```bash
+docker cp <export-root> mismem-brain:/tmp/chatgpt
+docker exec mismem-brain node dist/ingest-cli.js chatgpt /tmp/chatgpt
+docker cp <user-dir> mismem-brain:/tmp/vscode
+docker exec mismem-brain node dist/ingest-cli.js vscode /tmp/vscode
+```
 
 ---
 
@@ -301,10 +308,11 @@ El banco es privado: no lo subas a ningún repo.
 - La base vive en el volumen del servidor y no sale de ahí.
 - El servidor de embeddings recibe el texto de cada memoria y de cada consulta:
   por eso va en la red interna.
-- **La consolidación manda episodios textuales a un tercero** (DeepSeek, u
-  OpenRouter y el proveedor que haya detrás): hasta 60.000 caracteres por
-  llamada, con el nombre del ámbito. Es opcional: sin `DEEPSEEK_API_KEY` ni
-  `OPENROUTER_API_KEY` no corre.
+- **La consolidación manda episodios textuales a un proveedor externo**
+  (DeepSeek, OpenRouter u OpenAI) o al servidor compatible que configures:
+  hasta 60.000 caracteres por llamada, con el nombre del ámbito. Es opcional:
+  sin `DEEPSEEK_API_KEY`, `OPENROUTER_API_KEY`, `OPENAI_API_KEY` ni
+  `MISMEM_LLM_BASE_URL` no corre.
 
 ---
 
@@ -349,6 +357,20 @@ Los defaults son los del código (`engine/src`).
 | `MISMEM_HOOK_TIMEOUT_MS` | `2500` | Espera por la búsqueda; si vence, no inyecta nada |
 
 `MISMEM_HOOK_URL` y `MISMEM_HOOK_AUTH` las comparten los dos hooks.
+
+**Envoltorio de los hooks (`scripts/mismem-hook.sh`)**
+
+| Var | Default | Descripción |
+|-----|---------|-------------|
+| `MISMEM_HOOK_CONFIG` | `~/.claude.json` | Config MCP del cliente de donde saca la URL y el `Authorization`. Acepta config global o por proyecto |
+| `MISMEM_HOOK_SERVER` | `mismem` | Nombre del servidor MCP dentro de esa config |
+| `MISMEM_DIST` | `<repo>/engine/dist` | Binarios que invoca el envoltorio |
+
+**Interfaz en desarrollo (`pnpm dev:ui`)**
+
+| Var | Default | Descripción |
+|-----|---------|-------------|
+| `MISMEM_DEV_API` | `http://127.0.0.1:3200` | Destino del proxy `/api` de Vite mientras la interfaz corre fuera de `server-http` |
 
 **Búsqueda por significado**
 
@@ -402,9 +424,9 @@ Los defaults son los del código (`engine/src`).
 ## Refuerzo por uso (hook del cliente)
 
 Por defecto, `recall` refuerza todo lo que devuelve. Eso premia al recuerdo que aparece
-siempre y no sirve nunca: medido sobre 573 recuerdos devueltos en turnos reales, la
-mediana de solapamiento entre el recuerdo y la respuesta es **0,07**. La enorme mayoría
-de lo que se refuerza no se usó.
+siempre y no sirve nunca: en la medición de la 0.5.0, sobre 573 recuerdos devueltos en turnos
+reales de Claude Code, la mediana de solapamiento entre el recuerdo y la respuesta es
+**0,07**. La enorme mayoría de lo que se refuerza no se usó.
 
 Con el hook `Stop` de Claude Code, la saliencia pasa a seguir el uso real:
 
@@ -438,7 +460,8 @@ Mirá primero qué reforzaría, sin escribir nada:
 mismem-used --transcript ~/.claude/projects/<proyecto>/<sesión>.jsonl --dry-run
 ```
 
-**Con los umbrales por defecto cuenta como usado el 9 % de lo devuelto.** Es la señal que
+**Con los umbrales por defecto cuenta como usado el 9 % de lo devuelto (en la misma
+medición, sobre esos 573 casos).** Es la señal que
 se busca, pero cambia el balance con el olvido: si casi nada se refuerza, el decaimiento
 manda y `forget` empieza a borrar memorias que antes se salvaban por aparecer. Conviene
 dejar `MISMEM_REINFORCE_ON_RECALL=on` unos días, mirar los `--dry-run`, y recién después
