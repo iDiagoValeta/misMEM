@@ -682,9 +682,11 @@ function TraitView({
           <AlertDialogHeader>
             <AlertDialogTitle>Olvidar este rasgo</AlertDialogTitle>
             <AlertDialogDescription>
-              {challenge || !actionError
+              {challenge
                 ? "Se borra el rasgo. Las memorias que lo sostienen no se tocan. No se puede deshacer."
-                : "No se puede olvidar este rasgo ahora."}
+                : actionError
+                  ? "No se puede olvidar este rasgo ahora."
+                  : "Mirando qué se perdería…"}
             </AlertDialogDescription>
           </AlertDialogHeader>
           {actionError && (
