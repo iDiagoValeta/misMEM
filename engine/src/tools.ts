@@ -325,14 +325,25 @@ export function forget(
   const cutoff = at - input.before_days * 86_400_000;
   const memoryCutoff = at - input.memory_grace_days * 86_400_000;
   const scopeWhere = input.scope ? "AND scope = @scope" : "";
+  const memoryScopeWhere = input.scope ? "AND m.scope = @scope" : "";
+  // A memory is only forgettable once every episode still linked to it is past
+  // before_days: forgetting it deletes those episodes too (ON DELETE SET NULL
+  // would otherwise re-queue them for consolidation), so one newer episode keeps
+  // the whole memory alive.
   const memoryRows = db
     .prepare(
-      `SELECT id, salience, created_at, last_accessed_at, salience_updated_at
-       FROM memories
-       WHERE created_at <= @memoryCutoff ${scopeWhere}`,
+      `SELECT m.id, m.salience, m.created_at, m.last_accessed_at, m.salience_updated_at
+       FROM memories m
+       WHERE m.created_at <= @memoryCutoff ${memoryScopeWhere}
+         AND NOT EXISTS (
+           SELECT 1 FROM episodes e
+           WHERE e.consolidated_into = m.id
+             AND e.created_at >= @cutoff
+         )`,
     )
     .all({
       memoryCutoff,
+      cutoff,
       scope: input.scope,
     }) as Array<SalienceRow & { id: string }>;
   const memoryIds = memoryRows

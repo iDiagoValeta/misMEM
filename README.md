@@ -175,8 +175,8 @@ defaults, están en [DEPLOY.md](./DEPLOY.md#variables-de-entorno-referencia-úni
 Las memories pierden la mitad de su salience cada 90 días sin refuerzo
 (configurable con `MISMEM_SALIENCE_HALF_LIFE_DAYS`). `recall` aplica el decay
 pendiente y después suma el refuerzo Hebbiano. `forget` elimina memories bajo
-el umbral solo después de su período de gracia; `--dry-run` calcula el
-resultado sin modificar la DB.
+el umbral solo después de su período de gracia y de que todos sus episodios
+superen `before_days`; `--dry-run` calcula el resultado sin modificar la DB.
 
 ### El índice hebbiano
 
