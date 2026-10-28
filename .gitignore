@@ -25,6 +25,7 @@ engine/dist/bin/
 *.db
 *.db-shm
 *.db-wal
+*.db-journal
 .mismem/
 
 # Engram dumps (contain personal observations)

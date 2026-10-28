@@ -91,3 +91,16 @@ jobs:
           persist-credentials: false
       - run: docker run --rm -v "$PWD:/repo" -w /repo rhysd/actionlint:1.7.7@sha256:887a259a5a534f3c4f36cb02dca341673c6089431057242cdc931e9f133147e9 -color
       - run: pipx run zizmor==1.31.1 --min-severity medium .github/workflows
+
+  secret-scan:
+    # A leaked credential is only expensive once it ships, so scan the whole tree on
+    # every push and PR: this is the last point where rotating it is still cheap.
+    runs-on: ubuntu-latest
+    name: secret-scan
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          # No later step pushes, so the token does not need to stay in .git/config.
+          persist-credentials: false
+      - run: docker run --rm -v "$PWD:/repo" zricethezav/gitleaks:v8.30.1@sha256:c00b6bd0aeb3071cbcb79009cb16a60dd9e0a7c60e2be9ab65d25e6bc8abbb7f dir /repo --redact --no-banner
