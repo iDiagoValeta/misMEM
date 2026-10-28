@@ -44,7 +44,8 @@
     "mismem-embed": "./dist/embed-cli.js",
     "mismem-bench": "./dist/bench-cli.js",
     "mismem-used": "./dist/used-cli.js",
-    "mismem-inject": "./dist/inject-cli.js"
+    "mismem-inject": "./dist/inject-cli.js",
+    "mismem-obsidian": "./dist/obsidian-cli.js"
   },
   "scripts": {
     "build": "tsc && vite build --config ui/vite.config.ts",
