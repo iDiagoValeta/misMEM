@@ -26,6 +26,10 @@
   memorias y 216 rasgos intactos, y las seis aristas existentes dan fuerza 0 porque el contador nace
   ahora. Es correcto: son turnos que nadie midió, y 0 dice "no sé" en vez de inventar un número.
 
+### `@vitejs/plugin-react` sube a 5.2.0
+
+- `@vitejs/plugin-react` pasa de 4.7.0 a 5.2.0, fijado exacto. `ui/vite.config.ts` llama a `react()`
+  sin opciones y la 5.x sólo deja de añadir `react`/`react-dom` a `resolve.dedupe`, que aquí sobra.
 
 ### Linter con Biome, y fuera las directivas de ESLint que no hacían nada
 
