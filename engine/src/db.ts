@@ -43,9 +43,22 @@ CREATE TABLE IF NOT EXISTS memories (
   salience            REAL NOT NULL DEFAULT 1.0,
   created_at          INTEGER NOT NULL,
   last_accessed_at    INTEGER,
-  salience_updated_at INTEGER
+  salience_updated_at INTEGER,
+  use_count           INTEGER NOT NULL DEFAULT 0
 );
 CREATE INDEX IF NOT EXISTS idx_memories_scope ON memories(scope, salience);
+
+-- Índice hebbiano: qué recuerdos se usaron juntos en un mismo turno.
+-- Sólo lo escribe el uso medido (reinforce), nunca la aparición en un recall.
+CREATE TABLE IF NOT EXISTS co_use (
+  memory_a TEXT NOT NULL REFERENCES memories(id) ON DELETE CASCADE,
+  memory_b TEXT NOT NULL REFERENCES memories(id) ON DELETE CASCADE,
+  n        INTEGER NOT NULL DEFAULT 0,
+  last_at  INTEGER NOT NULL,
+  PRIMARY KEY (memory_a, memory_b),
+  CHECK (memory_a < memory_b)
+);
+CREATE INDEX IF NOT EXISTS idx_co_use_b ON co_use(memory_b, n);
 
 CREATE TABLE IF NOT EXISTS traits (
   id                   TEXT PRIMARY KEY,
@@ -146,6 +159,9 @@ function migrate(db: DB): void {
   }>;
   if (!memoryCols.some((c) => c.name === "salience_updated_at")) {
     db.exec("ALTER TABLE memories ADD COLUMN salience_updated_at INTEGER");
+  }
+  if (!memoryCols.some((c) => c.name === "use_count")) {
+    db.exec("ALTER TABLE memories ADD COLUMN use_count INTEGER NOT NULL DEFAULT 0");
   }
 
   // Legacy triggers reindexaban FTS ante cualquier UPDATE, incluso cuando
