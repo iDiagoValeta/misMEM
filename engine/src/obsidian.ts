@@ -23,7 +23,7 @@ import { dirname, join, resolve, sep } from "node:path";
 import type { Database as DB } from "better-sqlite3";
 import { excludeNoiseSql } from "./noise.js";
 import { effectiveSalience, type SalienceRow } from "./salience.js";
-import { relatedLinks } from "./viewer-api.js";
+import { parseIds, relatedLinks } from "./relations.js";
 
 export const EXPORT_ROOT = "misMEM";
 const MANIFEST = ".mismem-export.json";
@@ -107,15 +107,6 @@ const yaml = (value: string): string => JSON.stringify(value);
 const text = (value: string): string => value.replace(/[<[\]]/g, (c) => `\\${c}`);
 /** Una etiqueta de Obsidian no admite espacios. */
 const tag = (value: string): string => value.replace(/\s+/g, "-");
-
-function parseIds(raw: string | null): string[] {
-  try {
-    const value: unknown = JSON.parse(raw ?? "[]");
-    return Array.isArray(value) ? value.filter((v): v is string => typeof v === "string") : [];
-  } catch {
-    return [];
-  }
-}
 
 export function exportObsidian(db: DB, opts: ExportOptions): ExportStats {
   const at = opts.at ?? Date.now();

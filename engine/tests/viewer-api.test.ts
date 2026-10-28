@@ -3,7 +3,7 @@ import type { ServerResponse } from "node:http";
 import type { Database as DB } from "better-sqlite3";
 import { openDb } from "../src/db.js";
 import { capture, consolidate, crystallize, reinforce } from "../src/tools.js";
-import { saveMemoryEmbedding } from "../src/embeddings/index.js";
+import { saveMemoryEmbedding } from "../src/embeddings/store.js";
 import {
   handleGraph,
   handleMemories,
@@ -11,8 +11,8 @@ import {
   handleScopes,
   handleTrait,
   parseDetailPath,
-  relatedLinks,
 } from "../src/viewer-api.js";
+import { relatedLinks } from "../src/relations.js";
 
 const DAY = 86_400_000;
 let db: DB;
@@ -319,7 +319,7 @@ describe("viewer-api: aristas por co-uso", () => {
 
     const body = call((res) => handleGraph(db, res, url("/api/graph"))).body;
 
-    expect(body.links!.some((l: { kind: string }) => l.kind === "co_use")).toBe(false);
+    expect(body.links!.some((l) => l.kind === "co_use")).toBe(false);
     expect(body.connectome).toBeUndefined();
     expect(body.nodes!.every((n) => n.co_use === undefined)).toBe(true);
   });
@@ -338,12 +338,12 @@ describe("viewer-api: aristas por co-uso", () => {
     expect(typeof fuerte!.strength).toBe("number");
   });
 
-  it("las verticales salen igual con y sin la capa", () => {
+  it("las verticales y las de parecido salen igual con y sin la capa", () => {
     const { a } = tresUsadas();
     crystallize(db, { scope: "a", name: "rasgo", evidence_memory_ids: [a] });
 
-    const sin = call((res) => handleGraph(db, res, url("/api/graph"))).body.links;
-    const con = call((res) => handleGraph(db, res, url("/api/graph?co_use=1"))).body.links;
+    const sin = call((res) => handleGraph(db, res, url("/api/graph?related=1"))).body.links;
+    const con = call((res) => handleGraph(db, res, url("/api/graph?related=1&co_use=1"))).body.links;
 
     expect(con!.filter((l) => l.kind !== "co_use")).toEqual(sin);
   });

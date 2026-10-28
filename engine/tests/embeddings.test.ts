@@ -6,8 +6,8 @@ import {
   saveMemoryEmbedding,
   semanticSearchMemories,
   embedPendingMemories,
-  type EmbedFn,
-} from "../src/embeddings/index.js";
+} from "../src/embeddings/store.js";
+import type { EmbedFn } from "../src/embeddings/provider.js";
 
 let db: DB;
 

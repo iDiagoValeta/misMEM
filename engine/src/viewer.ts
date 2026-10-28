@@ -16,7 +16,7 @@
 import type { ServerResponse } from "node:http";
 import type { Database as DB } from "better-sqlite3";
 import { countPendingEpisodes, pendingEpisodes, recallHybrid } from "./tools.js";
-import type { EmbedFn } from "./embeddings/index.js";
+import type { EmbedFn } from "./embeddings/provider.js";
 import { Layer } from "./schema.js";
 
 // One source for the layer names: the Zod enum that validates them.

@@ -21,7 +21,7 @@
  */
 import type { Database as DB } from "better-sqlite3";
 import { capture, pendingEpisodes, recallHybrid } from "./tools.js";
-import type { EmbedFn } from "./embeddings/index.js";
+import type { EmbedFn } from "./embeddings/provider.js";
 
 export interface EngramToolDef {
   name: string;

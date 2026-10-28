@@ -1,7 +1,8 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { openDb } from "../src/db.js";
 import { capture, consolidate, recallHybrid } from "../src/tools.js";
-import { embedPendingMemories, embedTexts, loadEmbeddingConfig } from "../src/embeddings/index.js";
+import { embedPendingMemories } from "../src/embeddings/store.js";
+import { embedTexts, loadEmbeddingConfig } from "../src/embeddings/provider.js";
 
 const ENV_KEYS = [
   "MISMEM_EMBEDDINGS",
