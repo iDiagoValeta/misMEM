@@ -8,6 +8,7 @@
  */
 import { existsSync } from "node:fs";
 import { parseArgs } from "node:util";
+import Database from "better-sqlite3";
 import { defaultDbPath, openDb } from "./db.js";
 import { EXPORT_ROOT, exportObsidian } from "./obsidian.js";
 
@@ -32,6 +33,19 @@ Env:
 
 // EX_USAGE, como el resto de CLIs que validan sus flags.
 const EXIT_USAGE = 64;
+
+function isMismemDb(path: string): boolean {
+  try {
+    const probe = new Database(path, { readonly: true, fileMustExist: true });
+    try {
+      return probe.prepare("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'memories'").get() !== undefined;
+    } finally {
+      probe.close();
+    }
+  } catch {
+    return false;
+  }
+}
 
 function main(): void {
   let values;
@@ -66,6 +80,12 @@ function main(): void {
   // la bóveda. Mejor negarse, también en --dry-run, que no debe escribir nada.
   if (!existsSync(dbPath)) {
     console.error(`[obsidian] la base de datos no existe: ${dbPath}\n\n${HELP}`);
+    process.exit(1);
+  }
+  // openDb migra el esquema y pasa el journal a WAL: apuntado a un SQLite que no es de misMEM,
+  // lo modificaría aunque el export se negara después. Se mira antes en sólo lectura.
+  if (!isMismemDb(dbPath)) {
+    console.error(`[obsidian] no es una base de misMEM (no tiene la tabla memories): ${dbPath}`);
     process.exit(1);
   }
   const db = openDb(dbPath);

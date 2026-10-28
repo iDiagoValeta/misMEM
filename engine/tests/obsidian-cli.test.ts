@@ -4,6 +4,7 @@ import { existsSync, mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { fileURLToPath } from "node:url";
+import Database from "better-sqlite3";
 import { openDb } from "../src/db.js";
 import { capture, consolidate } from "../src/tools.js";
 
@@ -32,6 +33,22 @@ describe("mismem-obsidian", () => {
     expect(result.stderr).toContain("no existe");
     expect(existsSync(dbPath)).toBe(false);
     expect(existsSync(vault)).toBe(false);
+  });
+
+  it("no toca un SQLite que no es de misMEM", () => {
+    const dbPath = join(dir, "otra.db");
+    const other = new Database(dbPath);
+    other.exec("CREATE TABLE notas (texto TEXT)");
+    other.close();
+    const result = run(["--out", join(dir, "vault")], dbPath);
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain("no es una base de misMEM");
+    const after = new Database(dbPath, { readonly: true });
+    const tables = after.prepare("SELECT name FROM sqlite_master WHERE type = 'table'").all();
+    const journal = after.pragma("journal_mode", { simple: true });
+    after.close();
+    expect(tables).toEqual([{ name: "notas" }]);
+    expect(journal).toBe("delete");
   });
 
   it("exporta con una base existente", () => {
