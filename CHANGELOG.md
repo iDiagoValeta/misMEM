@@ -94,8 +94,7 @@
 - Migración aditiva, verificada sobre copia de la DB de producción: 15 ms, `integrity_check` y
   `foreign_key_check` ok, 3.738 memorias y 216 rasgos intactos. Los pares se van por cascada
   cuando el recuerdo se borra.
-- Para qué: es la fase 1 del ordenador de memoria, diseñado en
-  [docs/superpowers/specs/2026-10-27-ordenador-memoria-design.md](docs/superpowers/specs/2026-10-27-ordenador-memoria-design.md).
+- Para qué: es la fase 1 del ordenador de memoria.
 
 ### El refuerzo por uso ve lo que la inyección adelantó
 
