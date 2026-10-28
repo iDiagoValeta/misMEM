@@ -14,7 +14,8 @@
  * formulario o un fetch desde otra web. La auth y el filtro de Host de server-http siguen
  * delante, y el filtro de Host es el que cubre el DNS rebinding.
  *
- * Los dos forget son lo único sin vuelta atrás, y borran también la evidencia, así que piden
+ * Los dos forget no tienen vuelta atrás y el de memoria borra también la evidencia, sus
+ * episodios (deshacer la consolidación borra el resumen, pero los episodios vuelven), así que piden
  * más: sólo existen con MISMEM_VIEWER_ALLOW_DELETE encendido (si no, 403), y el primer POST
  * no borra. Responde 409 con lo que se perdería y un token de un solo uso, ligado a ese id y
  * válido 60 s; borra el segundo POST, el que trae {confirm_token}. Así la UI tiene que enseñar

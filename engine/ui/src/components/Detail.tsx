@@ -682,7 +682,9 @@ function TraitView({
           <AlertDialogHeader>
             <AlertDialogTitle>Olvidar este rasgo</AlertDialogTitle>
             <AlertDialogDescription>
-              Se borra el rasgo. Las memorias que lo sostienen no se tocan. No se puede deshacer.
+              {challenge || !actionError
+                ? "Se borra el rasgo. Las memorias que lo sostienen no se tocan. No se puede deshacer."
+                : "No se puede olvidar este rasgo ahora."}
             </AlertDialogDescription>
           </AlertDialogHeader>
           {actionError && (
