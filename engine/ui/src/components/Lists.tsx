@@ -153,6 +153,7 @@ function LoadMore({
 /** The row list and its paging footer are the same in both infinite lists. */
 function PagedList<T>({
   rows,
+  empty,
   hasNextPage,
   fetchingNextPage,
   remaining,
@@ -160,6 +161,7 @@ function PagedList<T>({
   renderRow,
 }: {
   rows: readonly T[];
+  empty: ReactNode;
   hasNextPage: boolean;
   fetchingNextPage: boolean;
   remaining: number;
@@ -168,7 +170,8 @@ function PagedList<T>({
 }) {
   return (
     <>
-      <ul className="flex flex-col gap-2">{rows.map(renderRow)}</ul>
+      {/* The load-more footer stays outside the empty check, as it was before the extraction. */}
+      {rows.length === 0 ? empty : <ul className="flex flex-col gap-2">{rows.map(renderRow)}</ul>}
       {hasNextPage && <LoadMore remaining={remaining} busy={fetchingNextPage} onClick={onLoadMore} />}
     </>
   );
@@ -224,11 +227,9 @@ export function MemoryList({
           )}
         </div>
       )}
-      {rows.length === 0 ? (
-        query.isError ? null : <Empty>Todavía no hay memorias consolidadas en este ámbito.</Empty>
-      ) : (
-        <PagedList
+      <PagedList
           rows={rows}
+          empty={query.isError ? null : <Empty>Todavía no hay memorias consolidadas en este ámbito.</Empty>}
           hasNextPage={query.hasNextPage}
           fetchingNextPage={query.isFetchingNextPage}
           remaining={remaining}
@@ -258,7 +259,6 @@ export function MemoryList({
             />
           )}
         />
-      )}
     </div>
   );
 }
@@ -327,11 +327,9 @@ export function PendingList({ scope, selected, onSelect }: ListProps) {
     <div className="flex flex-col gap-2">
       {query.isError && <Failure what="los pendientes" error={query.error} stale={rows.length > 0} />}
       {rows.length > 0 && <Count>{`${rows.length} de ${total} episodios sin consolidar`}</Count>}
-      {rows.length === 0 ? (
-        query.isError ? null : <Empty>Nada pendiente: todo lo capturado ya pasó por la consolidación.</Empty>
-      ) : (
-        <PagedList
+      <PagedList
           rows={rows}
+          empty={query.isError ? null : <Empty>Nada pendiente: todo lo capturado ya pasó por la consolidación.</Empty>}
           hasNextPage={query.hasNextPage}
           fetchingNextPage={query.isFetchingNextPage}
           remaining={remaining}
@@ -352,7 +350,6 @@ export function PendingList({ scope, selected, onSelect }: ListProps) {
             />
           )}
         />
-      )}
     </div>
   );
 }
