@@ -81,12 +81,13 @@ jobs:
 
   workflow-lint:
     # Workflows run with our token, so lint them like code: actionlint for correctness,
-    # zizmor for security (unpinned actions, token scope, template injection).
+    # zizmor for security (unpinned actions, token scope, template injection). Both are
+    # pinned so a new release cannot fail a tag publish with no change in the repo.
     runs-on: ubuntu-latest
     timeout-minutes: 15
     steps:
       - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
         with:
           persist-credentials: false
-      - run: docker run --rm -v "$PWD:/repo" -w /repo rhysd/actionlint:1.7.7 -color
-      - run: pipx run 'zizmor==1.*' --min-severity medium .github/workflows
+      - run: docker run --rm -v "$PWD:/repo" -w /repo rhysd/actionlint:1.7.7@sha256:887a259a5a534f3c4f36cb02dca341673c6089431057242cdc931e9f133147e9 -color
+      - run: pipx run zizmor==1.31.1 --min-severity medium .github/workflows
