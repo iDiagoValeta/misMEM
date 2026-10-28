@@ -161,8 +161,8 @@ describe("recall estricto: desempates", () => {
   });
 });
 
-describe("recall híbrido: el rescate no salta el corte semántico", () => {
-  it("un recuerdo que sólo llega por palabras y no pasa el corte se descarta", async () => {
+describe("recall híbrido: el rescate sólo cuando no hay capa semántica", () => {
+  it("con vectores, lo que sólo llegaría por el rescate no entra", async () => {
     const lexico = memory("dev", "configurar servidor");
     const semantico = memory("finanzas", "temas de finanzas");
     const vecs = new Map<string, Float32Array>([
@@ -185,10 +185,37 @@ describe("recall híbrido: el rescate no salta el corte semántico", () => {
     expect(result.hits.map((hit) => hit.id)).not.toContain(lexico);
   });
 
-  it("sin ningún vector indexado, el rescate léxico sobrevive al corte", async () => {
-    // Embeddings activos pero backfill pendiente o modelo cambiado: `semantic` sale vacío
-    // porque no hay nada que puntuar, no porque el significado haya descartado el recuerdo.
-    // Tratar ambos casos igual dejaba el rescate muerto en configuraciones reales.
+  it("con vectores, tampoco rescata rasgos ni episodios, que no tienen corte semántico", async () => {
+    const indexada = memory("dev", "configurar servidor apache");
+    const pendiente = capture(db, { scope: "dev", body: "configurar servidor nginx" }).id;
+    const embed: EmbedFn = async (texts) => texts.map(() => Float32Array.from([0, 1]));
+    await embedPendingMemories(db, { embedFn: embed, model: "fake" });
+    const query = { query: "configurando servidores nginx", limit: 5, reinforce: false };
+
+    // Sin capa semántica el episodio se rescata; con ella, la búsqueda queda en la estricta.
+    expect(recall(db, query).hits.map((hit) => hit.id)).toContain(pendiente);
+    const result = await recallHybrid(db, query, async (texts) => texts.map(() => Float32Array.from([1, 0])), {
+      reinforce: false,
+      embeddingModel: "fake",
+    });
+    expect(result.hits.map((hit) => hit.id)).not.toContain(pendiente);
+    expect(result.hits.map((hit) => hit.id)).not.toContain(indexada);
+  });
+
+  it("con el embedder sin responder, rescata como el recall léxico", async () => {
+    const id = memory("dev", "configurar servidor nginx");
+    const caido: EmbedFn = async () => null;
+
+    const result = await recallHybrid(db, { query: "configurando servidores nginx", limit: 5 }, caido, {
+      reinforce: false,
+    });
+
+    expect(result.hits.map((hit) => hit.id)).toEqual([id]);
+  });
+
+  it("sin ningún vector del modelo activo, rescata", async () => {
+    // Embeddings activos pero backfill pendiente o modelo cambiado: el vector de la consulta
+    // no tiene con qué compararse y el recall depende sólo de lo léxico.
     const id = memory("dev", "configurar servidor nginx");
     const embed: EmbedFn = async (texts) => texts.map(() => Float32Array.from([1, 0]));
 

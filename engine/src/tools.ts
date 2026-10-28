@@ -351,12 +351,12 @@ function lexicalCandidates(
   db: DB,
   input: ReturnType<typeof RecallInput.parse>,
   at: number,
+  /** Sin capa semántica que responda, el rescate es lo único que encuentra una frase natural. */
+  { rescue = true }: { rescue?: boolean } = {},
 ): {
   traits: TraitCandidate[];
   memories: RecallHit[];
   episodes: EpisodeCandidate[];
-  /** Ids que sólo llegaron por el rescate; con embeddings deben pasar también el corte. */
-  relaxedMemoryIds: Set<string>;
 } {
   const strict = escapeFts(input.query);
   const scopeFilter = input.scope ? "AND t.scope = @scope" : "";
@@ -414,7 +414,7 @@ function lexicalCandidates(
   let rescuedTerms: RelaxedTerm[] | null = null;
   let rescuedWordCount = 0;
   let rows = strictRows;
-  if (strictEmpty) {
+  if (strictEmpty && rescue) {
     const { terms, wordCount } = relaxedTerms(input.query);
     const relaxed = relaxedFts(terms);
     if (relaxed !== strict) {
@@ -425,7 +425,6 @@ function lexicalCandidates(
       rescuedWordCount = Math.min(wordCount, RELAXED_MAX_TERMS);
     }
   }
-  const rescued = rescuedTerms !== null;
   const traitRows: TraitCandidate[] = (
     rescuedTerms
       ? relaxRows(rows.traits, rescuedTerms, rescuedWordCount)
@@ -464,7 +463,6 @@ function lexicalCandidates(
     traits: traitRows,
     memories,
     episodes: episodeRows,
-    relaxedMemoryIds: rescued ? new Set(memories.map((hit) => hit.id)) : new Set<string>(),
   };
 }
 
@@ -547,27 +545,27 @@ function semanticHitToRecall(hit: SemanticHit, at: number): RecallHit {
 }
 
 /**
- * Los ids con un vector que la búsqueda semántica de esta consulta podría puntuar: mismo
- * modelo (si se filtró por modelo) y mismas dimensiones. Sólo para ellos el corte significa
- * algo; una memoria sin vector nunca se puntuó, así que no puede haber quedado por debajo.
+ * Si la búsqueda semántica de esta consulta tiene algo que puntuar: algún vector del mismo
+ * modelo (si se filtró por modelo) y mismas dimensiones en el ámbito. Sin ninguno, el vector
+ * de la consulta no encuentra nada y el recall queda en manos de lo léxico.
  */
-function embeddedMemoryIds(
+function hasComparableVectors(
   db: DB,
   opts: { model?: string; dims: number; scope?: string },
-): Set<string> {
+): boolean {
   const filters = [
     opts.scope ? "m.scope = @scope" : null,
     opts.model ? "e.model = @model" : null,
     "e.dims = @dims",
   ].filter((value): value is string => value !== null);
-  const rows = db
-    .prepare(
-      `SELECT e.memory_id AS id
-       FROM memory_embeddings e JOIN memories m ON m.id = e.memory_id
-       WHERE ${filters.join(" AND ")}`,
-    )
-    .all({ scope: opts.scope, model: opts.model, dims: opts.dims }) as Array<{ id: string }>;
-  return new Set(rows.map((row) => row.id));
+  return (
+    db
+      .prepare(
+        `SELECT 1 FROM memory_embeddings e JOIN memories m ON m.id = e.memory_id
+         WHERE ${filters.join(" AND ")} LIMIT 1`,
+      )
+      .get({ scope: opts.scope, model: opts.model, dims: opts.dims }) !== undefined
+  );
 }
 
 function fuseMemories(
@@ -628,7 +626,6 @@ export async function recallHybrid(
 ): Promise<{ hits: RecallHit[] }> {
   const input = RecallInput.parse(raw);
   const at = options.at ?? now();
-  const lexical = lexicalCandidates(db, input, at);
   const cfg = loadEmbeddingConfig();
   const actualEmbedFn =
     embedFn ?? ((texts: string[]) => embedTexts(texts, cfg, "query"));
@@ -644,28 +641,16 @@ export async function recallHybrid(
         model: semanticModel,
       })
     : [];
-  // Un recuerdo que sólo aparece por el rescate léxico tiene que pasar también el corte
-  // semántico: el rescate recupera paráfrasis, pero no debe devolver lo que el significado
-  // descartó. `semantic` ya viene filtrado por minScore. La excepción es la memoria sin
-  // vector del modelo activo (backfill pendiente, modelo cambiado, índice a medias): no
-  // hubo puntuación, así que no hay corte que suspender, y matar el rescate léxico por
-  // algo que no se midió deja el recall vacío en silencio.
-  let memories = lexical.memories;
-  if (queryVec) {
-    const semanticIds = new Set(semantic.map((hit) => hit.id));
-    const indexed = embeddedMemoryIds(db, {
-      model: semanticModel,
-      dims: queryVec.length,
-      scope: input.scope,
-    });
-    const confirmed = lexical.memories.filter(
-      (hit) =>
-        !lexical.relaxedMemoryIds.has(hit.id) ||
-        !indexed.has(hit.id) ||
-        semanticIds.has(hit.id),
-    );
-    memories = fuseMemories(confirmed, semantic, at);
-  }
+  // El rescate léxico sólo entra cuando no hay capa semántica: embeddings apagados, el
+  // embedder sin responder o ningún vector del modelo activo. Medido con 2.527 memorias, con
+  // embeddings el rescate apenas suma aciertos y en cambio empuja la respuesta buena hacia
+  // abajo y trae recuerdos a preguntas ajenas; sin ellos, es lo que lleva el recall de 0,1 a
+  // 2,5 recuerdos por pregunta.
+  const semanticLayer =
+    queryVec !== undefined &&
+    hasComparableVectors(db, { model: semanticModel, dims: queryVec.length, scope: input.scope });
+  const lexical = lexicalCandidates(db, input, at, { rescue: !semanticLayer });
+  const memories = queryVec ? fuseMemories(lexical.memories, semantic, at) : lexical.memories;
   const hits: RecallHit[] = [
     ...lexical.traits.map((r) => ({ ...r, layer: "trait" as const })),
     ...memories,
