@@ -159,7 +159,7 @@ describe("handleAction", () => {
   });
 
   interface ActionBody {
-    impacto?: unknown;
+    impact?: unknown;
     confirm_token?: string;
     error?: string;
     expires_in?: number;
