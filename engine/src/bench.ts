@@ -6,7 +6,7 @@
  */
 import type { Database as DB } from "better-sqlite3";
 import { z } from "zod";
-import type { EmbedFn } from "./embeddings/index.js";
+import type { EmbedFn } from "./embeddings/provider.js";
 import { isNoiseGist } from "./noise.js";
 import { recallHybrid } from "./tools.js";
 

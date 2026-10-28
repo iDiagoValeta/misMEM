@@ -3,7 +3,7 @@ import type { IncomingMessage, ServerResponse } from "node:http";
 import type { Database as DB } from "better-sqlite3";
 import { openDb } from "../src/db.js";
 import type { ConsolidationJob } from "../src/consolidation/job.js";
-import { saveMemoryEmbedding } from "../src/embeddings/index.js";
+import { saveMemoryEmbedding } from "../src/embeddings/store.js";
 import { capture, consolidate, crystallize } from "../src/tools.js";
 import {
   ForgetConfirmations,

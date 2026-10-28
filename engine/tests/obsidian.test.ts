@@ -5,7 +5,7 @@ import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { Database as DB } from "better-sqlite3";
 import { openDb } from "../src/db.js";
-import { saveMemoryEmbedding } from "../src/embeddings/index.js";
+import { saveMemoryEmbedding } from "../src/embeddings/store.js";
 import { capture, consolidate, crystallize } from "../src/tools.js";
 import { EXPORT_ROOT, exportObsidian, safeName } from "../src/obsidian.js";
 

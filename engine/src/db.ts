@@ -3,11 +3,7 @@ import type { Database as DB } from "better-sqlite3";
 import { chmodSync, mkdirSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { homedir } from "node:os";
-import { createHash } from "node:crypto";
-
-export function contentHash(body: string): string {
-  return createHash("sha256").update(body, "utf8").digest("hex");
-}
+import { contentHash } from "./hash.js";
 
 export function defaultDbPath(): string {
   return resolve(process.env.MISMEM_DB ?? `${homedir()}/.mismem/mem.db`);
