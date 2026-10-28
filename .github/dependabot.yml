@@ -41,3 +41,7 @@ updates:
     cooldown:
       default-days: 14
     open-pull-requests-limit: 2
+    ignore:
+      # Node majors move by hand to an LTS, never by a weekly bot PR.
+      - dependency-name: node
+        update-types: ["version-update:semver-major"]

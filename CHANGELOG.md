@@ -2,6 +2,30 @@
 
 ## Sin publicar
 
+### Un estándar de contribución escrito, y comprobado
+
+- Contribuir no tenía forma: ni formularios de issue, ni plantillas de PR, ni normas escritas, y el
+  README mezclaba la presentación con material de referencia y con la historia de cada iteración. Ahora
+  `CONTRIBUTING.md` es la puerta de entrada (entorno, flujo trunk-based, estándar de issue y de PR,
+  etiquetas, releases) y `docs/standards/` fija ramas, commits, comentarios, estilo, tests, seguridad y
+  releases, cada norma con su forma de comprobarla. `docs/README.md` dice qué documento es para quién y
+  qué no se documenta.
+- `.github/` gana cuatro formularios de issue (error, mejora, documentación y medición de recall, cada
+  uno con su criterio de cierre), los issues en blanco desactivados con un enlace al reporte privado de
+  vulnerabilidades, una plantilla de PR por defecto y tres más (`release`, `dependency`, `documentation`),
+  `release.yml` para agrupar las notas por etiqueta y `CODEOWNERS`.
+- Las etiquetas que citan los formularios, las plantillas, `release.yml` y `CONTRIBUTING.md` se declaran
+  en `.github/labels.json`. `engine/tests/contribution-standard.test.ts` falla si alguno cita una que no
+  existe, o si un tipo se queda sin formulario ni excepción razonada; el workflow `labels.yml` compara
+  ese fichero con las etiquetas que tiene GitHub.
+- Dependabot deja de proponer saltos de versión mayor de `node` en el Dockerfile: los majors se mueven a
+  mano a una LTS.
+- El README pasa a ser una guía: qué es, un diagrama del sistema, el Quickstart primero y un mapa de la
+  documentación. Lo que era referencia se mueve sin perder nada: el comportamiento del recall y la
+  búsqueda por significado a `docs/recall.md`, los hooks a `docs/hooks.md`, y las capas, los componentes,
+  la saliencia y el índice hebbiano a `docs/architecture.md`. El roadmap por fases de `engine/README.md`
+  desaparece (la historia es este fichero) y la consolidación deja de repetir el despliegue de `DEPLOY.md`.
+
 ### zod 4
 
 - zod pasa de 3.25.76 a 4.6.7 (versión exacta): `.int()` rechaza enteros fuera del rango seguro de JS (y el `inputSchema` de `forget` lo anuncia), los límites de longitud cuentan *code points* en vez de unidades UTF-16 y cambian los textos de `ZodError`; `tests/tool-schemas.test.ts` compara con `z.toJSONSchema` en vez de leer internos de zod 3.
