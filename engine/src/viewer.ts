@@ -13,9 +13,10 @@ import type { ServerResponse } from "node:http";
 import type { Database as DB } from "better-sqlite3";
 import { recallHybrid } from "./tools.js";
 import type { EmbedFn } from "./embeddings/index.js";
+import { Layer } from "./schema.js";
 
-type Layer = "episode" | "memory" | "trait";
-const LAYERS: readonly Layer[] = ["episode", "memory", "trait"] as const;
+// One source for the layer names: the Zod enum that validates them.
+const LAYERS: readonly Layer[] = Layer.options;
 
 function isLayer(v: string | null): v is Layer {
   return v !== null && (LAYERS as readonly string[]).includes(v);

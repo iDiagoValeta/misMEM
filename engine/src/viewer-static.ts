@@ -10,7 +10,7 @@ import { extname, join, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 
 /** Junto al server-http.js compilado: dist/ui. */
-export const DEFAULT_UI_DIR = fileURLToPath(new URL("./ui/", import.meta.url));
+const DEFAULT_UI_DIR = fileURLToPath(new URL("./ui/", import.meta.url));
 
 const TYPES: Record<string, string> = {
   ".html": "text/html; charset=utf-8",

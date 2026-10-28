@@ -1,8 +1,8 @@
 import type { Database as DB } from "better-sqlite3";
 
-export const DEFAULT_SALIENCE_HALF_LIFE_DAYS = 90;
+const DEFAULT_SALIENCE_HALF_LIFE_DAYS = 90;
 
-export function loadSalienceHalfLifeDays(): number {
+function loadSalienceHalfLifeDays(): number {
   const value = Number(process.env.MISMEM_SALIENCE_HALF_LIFE_DAYS);
   return Number.isFinite(value) && value > 0
     ? value

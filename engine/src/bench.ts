@@ -12,7 +12,7 @@ import { recallHybrid } from "./tools.js";
 
 const BankLine = z.object({ id: z.string().min(1) }).catchall(z.string());
 
-export interface BankEntry {
+interface BankEntry {
   id: string;
   groups: Record<string, string>;
   queries: Record<string, string>;

@@ -13,6 +13,14 @@
   (y sus `-wal` y `-shm`), y el directorio, si lo crea mismem, en `0700`. Un directorio que ya existía
   no se toca.
 
+### Fuera el código muerto
+
+- Se retiran `src/tools/dump-engram.ts`, `ingest-engram-dump.ts` y `smoke-recall.ts`: scripts de una sola vez
+  que nada importaba ni documentaba, pero se compilaban dentro del paquete npm, y uno apagaba la
+  verificación TLS antes de mandar la cabecera `Authorization`. Para migrar desde Engram sigue
+  `mismem-migrate-engram`, que lee un `engram.db`. `ENGRAM_URL` y `ENGRAM_AUTH` salen de `.env.example`.
+- `pnpm knip` corre en CI: falla con ficheros, exports o dependencias sin uso.
+
 ### El índice hebbiano empieza a existir
 
 - `reinforce` recibía los `memory_ids` **juntos** —sabe que esos recuerdos se usaron en el mismo

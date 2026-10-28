@@ -13,7 +13,7 @@
 import type { Database as DB } from "better-sqlite3";
 import { excludeNoiseSql } from "../noise.js";
 
-export type EmbeddingProvider = "ollama" | "openai";
+type EmbeddingProvider = "ollama" | "openai";
 export type EmbedKind = "query" | "document";
 
 export interface EmbeddingConfig {

@@ -11,7 +11,6 @@
  * Idempotente: usa hash determinístico como id-prefix → si re-corres, salta dups.
  */
 import Database from "better-sqlite3";
-import { ulid } from "ulid";
 import { createHash } from "node:crypto";
 import { openDefaultDb, defaultDbPath } from "./db.js";
 
@@ -173,8 +172,6 @@ async function main(): Promise<void> {
 
   tx();
   console.log(`[migrate] DONE inserted=${inserted} skipped(dups)=${skipped}`);
-  // ULID variable noted to silence unused import warning.
-  void ulid;
 
   src.close();
   dst.close();

@@ -7,7 +7,7 @@
  */
 
 /** El servidor enmarca el JSON-RPC como SSE: la carga viene en una línea `data:`. */
-export function parseRpc(body: string): unknown {
+function parseRpc(body: string): unknown {
   const line = body.split("\n").find((l) => l.startsWith("data: "));
   return JSON.parse(line ? line.slice(6) : body);
 }
@@ -27,7 +27,7 @@ function authHeader(): string | undefined {
 }
 
 /** Un JSON-RPC contra `/mcp`. El servidor no pide handshake para `tools/*`. */
-export async function rpc(
+async function rpc(
   url: string,
   method: string,
   params: unknown,

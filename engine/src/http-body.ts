@@ -8,7 +8,7 @@
 import type { IncomingMessage } from "node:http";
 
 /** De sobra para una tool call; la ingesta masiva va por `mismem-ingest`, no por HTTP. */
-export const DEFAULT_MAX_BODY_BYTES = 4 * 1024 * 1024;
+const DEFAULT_MAX_BODY_BYTES = 4 * 1024 * 1024;
 
 export class BodyTooLargeError extends Error {
   override name = "BodyTooLargeError";
