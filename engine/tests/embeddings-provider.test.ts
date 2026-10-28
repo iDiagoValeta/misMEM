@@ -13,6 +13,7 @@ const ENV_KEYS = [
   "MISMEM_EMBEDDING_QUERY_PREFIX",
   "MISMEM_EMBEDDING_DOC_PREFIX",
   "MISMEM_EMBEDDING_MIN_SCORE",
+  "MISMEM_EMBEDDING_TIMEOUT_MS",
 ] as const;
 const saved = Object.fromEntries(ENV_KEYS.map((k) => [k, process.env[k]]));
 
@@ -98,6 +99,19 @@ describe("loadEmbeddingConfig", () => {
     setEnv({ MISMEM_EMBEDDING_PROVIDER: "openai", MISMEM_OLLAMA_URL: "http://ollama:11434" });
     expect(loadEmbeddingConfig().url).toBe("http://127.0.0.1:8080");
   });
+
+  it("un timeout válido se respeta", () => {
+    setEnv({ MISMEM_EMBEDDING_TIMEOUT_MS: "250" });
+    expect(loadEmbeddingConfig().timeoutMs).toBe(250);
+  });
+
+  it.each(["-5", "abc", ""])(
+    "un timeout imposible (%j) vuelve a 3000 en vez de romper AbortSignal",
+    (value) => {
+      setEnv({ MISMEM_EMBEDDING_TIMEOUT_MS: value });
+      expect(loadEmbeddingConfig().timeoutMs).toBe(3000);
+    },
+  );
 
   it("lee proveedor, URL, prefijos y corte", () => {
     setEnv({ ...GEMMA_ENV, MISMEM_EMBEDDING_MIN_SCORE: "0.68" });

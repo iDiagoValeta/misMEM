@@ -1,11 +1,11 @@
 # Seguridad
 
-Las reglas de [`AGENTS.md`](../../AGENTS.md) (no leer ni editar `.env*`, no tocar `db.ts` sin plan de
-migración, validar en los bordes con Zod) siguen mandando. Esto es lo que las completa.
+Las reglas de [`AGENTS.md`](../../AGENTS.md) (no leer ni editar `.env*`, cambiar el esquema sólo con
+migraciones aditivas en `migrate()`, validar en los bordes con Zod) siguen mandando. Esto es lo que las completa.
 
 ## Secretos y datos
 
-- Nunca en git: `.env*` (salvo `.env.example`, que sólo lleva nombres), bases `*.db` y sus `-wal`,
+- Nunca en git: `.env*` (salvo `.env.example`, que lleva nombres y valores de ejemplo, nunca reales), bases `*.db` y sus `-wal`,
   `-shm` y `-journal`, exports de ChatGPT, volcados de Engram. Están en `.gitignore`.
 - `gitleaks` revisa toda la historia en cada PR. Una clave filtrada se **rota primero**; después se
   reporta en privado ([`SECURITY.md`](../../SECURITY.md)). Nunca como un issue público.
