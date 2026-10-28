@@ -26,6 +26,10 @@
   la saliencia y el índice hebbiano a `docs/architecture.md`. El roadmap por fases de `engine/README.md`
   desaparece (la historia es este fichero) y la consolidación deja de repetir el despliegue de `DEPLOY.md`.
 
+### zod 4
+
+- zod pasa de 3.25.76 a 4.6.7 (versión exacta): `.int()` rechaza enteros fuera del rango seguro de JS (y el `inputSchema` de `forget` lo anuncia), los límites de longitud cuentan *code points* en vez de unidades UTF-16 y cambian los textos de `ZodError`; `tests/tool-schemas.test.ts` compara con `z.toJSONSchema` en vez de leer internos de zod 3.
+
 ### Un solo diálogo de confirmación en el detalle
 
 - `MemoryView` y `TraitView` repetían el pie del diálogo de confirmación y la forma de sus props. Ambos viven ahora en `DetailParts.tsx` (`ConfirmDialog` y `DetailViewProps`), sin cambios visibles, y `pnpm dup` pasa a exigir umbral 0: ningún bloque copiado de 10 o más líneas.
