@@ -43,7 +43,7 @@ function fmtTs(ms: number | null): string {
 }
 
 async function main(): Promise<void> {
-  let opts;
+  let opts: ReturnType<typeof parseStatsArgs>;
   try {
     opts = parseStatsArgs(process.argv.slice(2));
   } catch (err) {

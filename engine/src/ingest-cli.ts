@@ -23,7 +23,7 @@ DB: ${DB_PATH}  (override with MISMEM_DB)`);
 }
 
 async function main(): Promise<void> {
-  let parsed;
+  let parsed: ReturnType<typeof parseIngestArgs>;
   try {
     parsed = parseIngestArgs(process.argv.slice(2));
   } catch (err) {

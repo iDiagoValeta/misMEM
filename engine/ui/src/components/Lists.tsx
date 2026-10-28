@@ -88,14 +88,16 @@ function Row({
   );
 }
 
+const SKELETON_ROWS = ["s1", "s2", "s3", "s4", "s5", "s6"];
+
 function Loading({ label }: { label: string }) {
   return (
     <div aria-busy="true" className="flex flex-col gap-2">
       <span role="status" className="sr-only">
         {label}
       </span>
-      {Array.from({ length: 6 }, (_, index) => (
-        <Skeleton key={index} className="h-16 w-full bg-surface-raised" />
+      {SKELETON_ROWS.map((key) => (
+        <Skeleton key={key} className="h-16 w-full bg-surface-raised" />
       ))}
     </div>
   );

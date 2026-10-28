@@ -109,9 +109,13 @@ describe("MCP inputSchema matches the Zod schema", () => {
   }
 
   it("the arrays that Zod requires non-empty advertise minItems: 1", () => {
-    const props = (name: string): any => CANONICAL_TOOLS.find((t) => t.name === name)!.inputSchema.properties;
-    expect(props("consolidate").source_episode_ids.minItems).toBe(1);
-    expect(props("crystallize").evidence_memory_ids.minItems).toBe(1);
-    expect(props("reinforce").memory_ids.minItems).toBe(1);
+    const props = (name: string): Record<string, Record<string, unknown>> =>
+      CANONICAL_TOOLS.find((t) => t.name === name)!.inputSchema.properties as unknown as Record<
+        string,
+        Record<string, unknown>
+      >;
+    expect(props("consolidate").source_episode_ids?.minItems).toBe(1);
+    expect(props("crystallize").evidence_memory_ids?.minItems).toBe(1);
+    expect(props("reinforce").memory_ids?.minItems).toBe(1);
   });
 });

@@ -30,7 +30,7 @@ Env:
 }
 
 async function main(): Promise<void> {
-  let opts;
+  let opts: ReturnType<typeof parseForgetArgs>;
   try {
     opts = parseForgetArgs(process.argv.slice(2));
   } catch (err) {

@@ -31,7 +31,7 @@ export function loadMaxBodyBytes(env: NodeJS.ProcessEnv = process.env): number {
  * que el SDK los rechace igual.
  */
 export function isJsonContentType(header: string | undefined): boolean {
-  return header !== undefined && header.includes("application/json");
+  return header?.includes("application/json") === true;
 }
 
 export function readJsonBody(req: IncomingMessage, maxBytes: number): Promise<unknown> {

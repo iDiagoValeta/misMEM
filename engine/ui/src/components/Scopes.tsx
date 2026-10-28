@@ -15,6 +15,8 @@ interface Props {
  * En pantallas anchas es una columna; por debajo, una fila que se desplaza. Un
  * desplegable escondía los ámbitos, que es justo lo que se viene a ver aquí.
  */
+const SKELETON_ROWS = ["s1", "s2", "s3", "s4", "s5"];
+
 export function Scopes({ scopes, isPending, error, current, onChange }: Props) {
   const list = scopes ?? [];
   const total = list.reduce((n, s) => n + s.memories, 0);
@@ -25,8 +27,8 @@ export function Scopes({ scopes, isPending, error, current, onChange }: Props) {
         <span role="status" className="sr-only">
           Cargando los ámbitos…
         </span>
-        {Array.from({ length: 5 }, (_, index) => (
-          <Skeleton key={index} className="h-8 w-28 shrink-0 bg-field lg:w-full" />
+        {SKELETON_ROWS.map((key) => (
+          <Skeleton key={key} className="h-8 w-28 shrink-0 bg-field lg:w-full" />
         ))}
       </div>
     );
@@ -66,12 +68,12 @@ export function Scopes({ scopes, isPending, error, current, onChange }: Props) {
               <span className="flex shrink-0 items-center gap-1.5">
                 <span className="text-xs tabular-nums text-ink-muted">{scope.memories}</span>
                 {scope.episodes_pending > 0 && (
-                  <span
-                    className="rounded-full bg-brand/15 px-1.5 text-[11px] text-brand-text"
-                    aria-label={`${scope.episodes_pending} sin consolidar`}
-                  >
+                  <span className="rounded-full bg-brand/15 px-1.5 text-[11px] text-brand-text" aria-hidden="true">
                     +{scope.episodes_pending}
                   </span>
+                )}
+                {scope.episodes_pending > 0 && (
+                  <span className="sr-only">{scope.episodes_pending} sin consolidar</span>
                 )}
               </span>
             </button>

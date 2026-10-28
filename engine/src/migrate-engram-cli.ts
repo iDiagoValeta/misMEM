@@ -87,7 +87,7 @@ function buildScope(prefix: string, project: string | null | undefined, suffix?:
 }
 
 async function main(): Promise<void> {
-  let opts;
+  let opts: ReturnType<typeof parseMigrateEngramArgs>;
   try {
     opts = parseMigrateEngramArgs(process.argv.slice(2));
   } catch (err) {

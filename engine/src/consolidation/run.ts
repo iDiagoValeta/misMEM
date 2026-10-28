@@ -158,7 +158,7 @@ export async function runConsolidation(
      WHERE scope = @scope AND consolidated_into IS NULL AND created_at < @cutoff`,
   );
 
-  scopeLoop: for (const { scope, n, newest } of scopes) {
+  for (const { scope, n, newest } of scopes) {
     if (n < minEpisodes && newest >= quietBefore) {
       summary.scopes_skipped_too_few++;
       log(`[consolidation] skip scope="${scope}" (${n} < ${minEpisodes})`);
@@ -203,7 +203,7 @@ export async function runConsolidation(
       if (err instanceof LlmFatalError) {
         summary.aborted = true;
         log("[consolidation] el proveedor rechazó la clave o no hay saldo: corrida cortada");
-        break scopeLoop;
+        break;
       }
     }
   }

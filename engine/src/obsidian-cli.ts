@@ -46,7 +46,7 @@ function isMismemDb(path: string): boolean {
 }
 
 function main(): void {
-  let values;
+  let values: { out?: string; scope?: string; episodes: boolean; "dry-run": boolean; help: boolean };
   try {
     // strict: un flag mal escrito corta en vez de quedar ignorado.
     ({ values } = parseArgs({

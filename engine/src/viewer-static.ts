@@ -58,9 +58,11 @@ export function serveUi(res: ServerResponse, pathname: string, dir = DEFAULT_UI_
       // Nada fuera de dist/ui, aunque la ruta traiga `..` codificado.
       if (!file.startsWith(root + sep) || !statSync(file).isFile()) throw new Error("fuera de la interfaz");
       res.setHeader("cache-control", "public, max-age=31536000, immutable");
-      return send(res, 200, TYPES[extname(file)] ?? "application/octet-stream", readFileSync(file));
+      send(res, 200, TYPES[extname(file)] ?? "application/octet-stream", readFileSync(file));
+      return;
     } catch {
-      return send(res, 404, "text/plain; charset=utf-8", "Not Found");
+      send(res, 404, "text/plain; charset=utf-8", "Not Found");
+      return;
     }
   }
 
@@ -69,12 +71,13 @@ export function serveUi(res: ServerResponse, pathname: string, dir = DEFAULT_UI_
     html = readFileSync(join(root, "index.html"));
   } catch {
     // Pasa corriendo con tsx sin compilar, o con un paquete armado sin la interfaz.
-    return send(
+    send(
       res,
       503,
       "text/plain; charset=utf-8",
       "La interfaz de misMEM no está compilada: corre `pnpm build` en engine/ y reinicia el servidor.",
     );
+    return;
   }
   res.setHeader("cache-control", "no-store");
   res.setHeader("content-security-policy", CSP);
