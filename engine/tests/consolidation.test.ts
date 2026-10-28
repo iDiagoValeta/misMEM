@@ -61,7 +61,9 @@ describe("runConsolidation", () => {
     });
 
     it("MIN_AGE_HOURS=0 is honoured: a brand-new episode is eligible", async () => {
-      for (const n of ["a", "b", "c"]) captureOld("s", `episodio ${n}`, 0);
+      // One second old: with age 0 the episode and the cutoff can share a millisecond, and
+      // the query is strictly `created_at < cutoff`.
+      for (const n of ["a", "b", "c"]) captureOld("s", `episodio ${n}`, 1 / 3600);
       expect(pendingScopes()).toEqual(["s"]);
       expect(await run()).toBe(0); // default 24h: too young
       vi.stubEnv("MISMEM_CONSOLIDATION_MIN_AGE_HOURS", "0");
