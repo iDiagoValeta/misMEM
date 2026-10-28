@@ -50,6 +50,11 @@
   componentes como la sección de privacidad hablaban sólo de DeepSeek y OpenRouter. Importa
   porque es lo que permite consolidar sin que el texto salga de la red propia.
 - Una sección para el índice hebbiano y un enlace al diseño del ordenador de memoria.
+- El README y DEPLOY.md mandaban a `docker pull ghcr.io/lucasmella-stack/mismem-brain:latest` como
+  camino recomendado, y esa imagen **nunca se publicó**: las tres corridas de `docker.yml` fallan
+  al empujar con `denied: permission_denied: read_package`, así que el `pull` responde `denied`.
+  Cualquiera que siguiera el README se chocaba con eso. Ahora el camino documentado es el build
+  local, que sí funciona, y la imagen publicada queda marcada como pendiente.
 - Una sección de agradecimiento con lo que trajo [@iDiagoValeta](https://github.com/iDiagoValeta),
   que a esta altura es buena parte de lo que hace a misMEM instalable y auditable por alguien que
   no sea su autor.

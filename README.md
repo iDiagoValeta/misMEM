@@ -76,16 +76,21 @@ La DB se crea sola en el primer uso (default: `~/.mismem/mem.db`, configurable c
 
 ### Instancia remota (multi-cliente)
 
-Para acceder a la misma memoria desde varias máquinas, la imagen Docker oficial:
+Para acceder a la misma memoria desde varias máquinas, en Docker:
 
 ```bash
+git clone https://github.com/lucasmella-stack/misMEM.git && cd misMEM/engine
+docker build -t mismem-brain:latest -f Dockerfile.mismem-brain .
 docker run -d --name mismem-brain \
   -e MISMEM_AUTH_USER=brain -e MISMEM_AUTH_PASS=<pass> \
   -v mismem-data:/data -p 3200:3200 \
-  ghcr.io/lucasmella-stack/mismem-brain:latest
+  mismem-brain:latest
 ```
 
-Guía completa con Traefik + TLS en [DEPLOY.md](./DEPLOY.md).
+La imagen multi-arch publicada (`ghcr.io/lucasmella-stack/mismem-brain:latest`)
+**todavía no está disponible**: el workflow que la publica falla al empujar al
+registro. Mientras tanto, el build local es el camino. Guía completa con Traefik
++ TLS en [DEPLOY.md](./DEPLOY.md).
 
 ### Desde el código
 
