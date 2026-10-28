@@ -152,7 +152,7 @@ describe("engram-compat: mem_get_observation", () => {
   it("throws on missing id", () => {
     expect(() =>
       dispatchEngramTool(db, "mem_get_observation", { id: "doesnotexist" }),
-    ).toThrow(/not found/);
+    ).toThrow(/no existe/);
   });
 });
 

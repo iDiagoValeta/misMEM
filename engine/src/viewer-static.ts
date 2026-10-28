@@ -60,7 +60,7 @@ export function serveUi(res: ServerResponse, pathname: string, dir = DEFAULT_UI_
       res.setHeader("cache-control", "public, max-age=31536000, immutable");
       return send(res, 200, TYPES[extname(file)] ?? "application/octet-stream", readFileSync(file));
     } catch {
-      return send(res, 404, "text/plain; charset=utf-8", "Not Found");
+      return send(res, 404, "text/plain; charset=utf-8", "No encontrado");
     }
   }
 

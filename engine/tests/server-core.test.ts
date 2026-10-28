@@ -165,7 +165,7 @@ describe("MCP tool dispatch", () => {
   it("reports invalid arguments as an error result and writes nothing", async () => {
     const r = await call("capture", { scope: "p/a" });
     expect(r.isError).toBe(true);
-    expect(r.text).toContain("Error in capture");
+    expect(r.text).toContain("Error en capture");
     expect(count("SELECT COUNT(*) AS n FROM episodes")).toBe(0);
   });
 });

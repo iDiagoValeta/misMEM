@@ -71,7 +71,7 @@ describe("mismem-obsidian", () => {
     const vault = join(dir, "vault");
     const result = run(["--out", vault], dbPath);
     expect(result.status).toBe(1);
-    expect(result.stderr).toContain("FATAL: no hay memorias ni rasgos que exportar: no se toca la bóveda");
+    expect(result.stderr).toContain("ERROR: no hay memorias ni rasgos que exportar: no se toca la bóveda");
     expect(existsSync(vault)).toBe(false);
   });
 });

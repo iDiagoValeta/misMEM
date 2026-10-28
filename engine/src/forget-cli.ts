@@ -9,11 +9,11 @@ import { parseForgetArgs } from "./forget-args.js";
 import { forget } from "./tools.js";
 
 function help(): void {
-  console.log(`misMEM forget CLI
+  console.log(`misMEM: CLI de olvido
 
 Purga episodios consolidados antiguos + memorias con salience baja.
 
-Usage:
+Uso:
   mismem-forget [opciones]
 
 Opciones:
@@ -24,7 +24,7 @@ Opciones:
   --salience-below <n>     Umbral de salience para memorias (default 0.1)
   --help                   Esta ayuda
 
-Env:
+Variables:
   MISMEM_DB                default ${defaultDbPath()}
 `);
 }
@@ -57,6 +57,6 @@ async function main(): Promise<void> {
 }
 
 main().catch((err) => {
-  console.error("[forget] FATAL:", err instanceof Error ? err.message : err);
+  console.error("[forget] ERROR:", err instanceof Error ? err.message : err);
   process.exit(1);
 });

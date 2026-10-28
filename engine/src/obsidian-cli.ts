@@ -28,7 +28,7 @@ Opciones:
   --dry-run        Contar qué cambiaría sin escribir nada
   --help           Esta ayuda
 
-Env:
+Variables:
   MISMEM_DB        default ${defaultDbPath()} (debe existir: el export no crea la base)
 `;
 
@@ -103,6 +103,6 @@ function main(): void {
 try {
   main();
 } catch (err) {
-  console.error("[obsidian] FATAL:", err instanceof Error ? err.message : err);
+  console.error("[obsidian] ERROR:", err instanceof Error ? err.message : err);
   process.exit(1);
 }
