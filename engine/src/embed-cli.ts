@@ -22,7 +22,7 @@ function help(): void {
   console.log(
     "mismem-embed [--scope <name>] [--batch 32] [--status] [--force]\n" +
       `DB: ${defaultDbPath()} (override con MISMEM_DB)\n` +
-      "Env: MISMEM_EMBEDDING_PROVIDER (ollama|openai), MISMEM_EMBEDDING_URL o MISMEM_OLLAMA_URL,\n" +
+      "Variables: MISMEM_EMBEDDING_PROVIDER (ollama|openai), MISMEM_EMBEDDING_URL o MISMEM_OLLAMA_URL,\n" +
       "     MISMEM_EMBEDDING_MODEL, MISMEM_EMBEDDING_QUERY_PREFIX, MISMEM_EMBEDDING_DOC_PREFIX,\n" +
       "     MISMEM_EMBEDDING_MIN_SCORE, MISMEM_EMBEDDING_MAX_CHARS, MISMEM_EMBEDDING_TIMEOUT_MS,\n" +
       "     MISMEM_EMBEDDINGS=off\n" +
@@ -83,6 +83,6 @@ async function main(): Promise<void> {
 }
 
 main().catch((e) => {
-  console.error("Error:", e);
+  console.error("ERROR:", e);
   process.exit(1);
 });

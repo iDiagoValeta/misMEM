@@ -84,7 +84,7 @@ export function handleStats(db: DB, res: ServerResponse): void {
 export function handleRecent(db: DB, res: ServerResponse, url: URL): void {
   const layerParam = url.searchParams.get("layer") ?? "episode";
   if (!isLayer(layerParam)) {
-    json(res, 400, { error: `invalid layer: ${layerParam}` });
+    json(res, 400, { error: `capa inválida: ${layerParam}` });
     return;
   }
   const layer: Layer = layerParam;
@@ -143,7 +143,7 @@ export async function handleSearch(
 ): Promise<void> {
   const query = (url.searchParams.get("q") ?? "").trim();
   if (!query) {
-    json(res, 400, { error: "missing q" });
+    json(res, 400, { error: "falta q" });
     return;
   }
   const scope = url.searchParams.get("scope") ?? undefined;

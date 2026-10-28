@@ -24,7 +24,7 @@ function help(): void {
 
 Muestra estadísticas de la DB misMEM.
 
-Usage:
+Uso:
   mismem-stats [--json] [--scope <prefix>]
 
 Opciones:
@@ -32,7 +32,7 @@ Opciones:
   --scope <prefix>  Filtrar por prefix de scope (ej. 'engram/')
   --help
 
-Env:
+Variables:
   MISMEM_DB         Path a la DB (default ${defaultDbPath()})
 `);
 }
@@ -96,7 +96,7 @@ async function main(): Promise<void> {
       console.log(`Memorias total:           ${stats.memories_total}`);
       console.log(`Traits total:             ${stats.traits_total}`);
       console.log(`Rango temporal:           ${fmtTs(stats.oldest_episode_ts)}  →  ${fmtTs(stats.newest_episode_ts)}`);
-      console.log(`Top scopes (max 20):`);
+      console.log(`Scopes principales (máx 20):`);
       for (const s of stats.scopes) console.log(`  ${s.scope.padEnd(50)} ${s.count}`);
     }
   } finally {
@@ -105,6 +105,6 @@ async function main(): Promise<void> {
 }
 
 main().catch((err) => {
-  console.error("[stats] FATAL:", err instanceof Error ? err.message : err);
+  console.error("[stats] ERROR:", err instanceof Error ? err.message : err);
   process.exit(1);
 });

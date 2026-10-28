@@ -10,16 +10,16 @@ import { parseIngestArgs } from "./ingest-args.js";
 const DB_PATH = defaultDbPath();
 
 function help(): void {
-  console.log(`misMEM ingest CLI
-Usage:
-  mismem-ingest walk <root> <scope-prefix>     Walk a directory tree.
-  mismem-ingest file <path> <scope>            Ingest a single file.
-  mismem-ingest chatgpt <export-root>          Parse conversations-*.json.
-  mismem-ingest vscode <user-dir>              Transcripts + prompts.
-  mismem-ingest stats                          Show DB stats.
+  console.log(`misMEM: CLI de ingesta
+Uso:
+  mismem-ingest walk <root> <scope-prefix>     Recorre un árbol de directorios.
+  mismem-ingest file <path> <scope>            Ingiere un solo fichero.
+  mismem-ingest chatgpt <export-root>          Lee conversations-*.json.
+  mismem-ingest vscode <user-dir>              Transcripciones y prompts.
+  mismem-ingest stats                          Muestra estadísticas de la DB.
   mismem-ingest help
 
-DB: ${DB_PATH}  (override with MISMEM_DB)`);
+DB: ${DB_PATH}  (se cambia con MISMEM_DB)`);
 }
 
 async function main(): Promise<void> {
@@ -78,6 +78,6 @@ async function main(): Promise<void> {
 }
 
 main().catch((e) => {
-  console.error("Error:", e);
+  console.error("ERROR:", e);
   process.exit(1);
 });

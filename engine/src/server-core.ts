@@ -185,7 +185,7 @@ export function createServer(db: DB): Server {
             result = await dispatchEngramTool(db, name, args);
             break;
           }
-          throw new Error(`Unknown tool: ${name}`);
+          throw new Error(`Herramienta desconocida: ${name}`);
       }
       return {
         content: [{ type: "text", text: JSON.stringify(result, null, 2) }],
@@ -194,7 +194,7 @@ export function createServer(db: DB): Server {
       const message = err instanceof Error ? err.message : String(err);
       return {
         isError: true,
-        content: [{ type: "text", text: `Error in ${name}: ${message}` }],
+        content: [{ type: "text", text: `Error en ${name}: ${message}` }],
       };
     }
   });

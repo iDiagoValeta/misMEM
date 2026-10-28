@@ -236,7 +236,7 @@ export function dispatchEngramTool(
 
     case "mem_get_observation": {
       const id = asString(args.id);
-      if (!id) throw new Error("mem_get_observation: 'id' is required");
+      if (!id) throw new Error("mem_get_observation: falta 'id'");
       const ep = db
         .prepare(
           "SELECT id, scope, body AS text, created_at FROM episodes WHERE id = ?",
@@ -255,7 +255,7 @@ export function dispatchEngramTool(
         )
         .get(id);
       if (tr) return { layer: "trait", ...tr };
-      throw new Error(`mem_get_observation: id not found: ${id}`);
+      throw new Error(`mem_get_observation: no existe el id: ${id}`);
     }
 
     case "mem_session_summary": {
@@ -271,7 +271,7 @@ export function dispatchEngramTool(
     case "mem_update": {
       const id = asString(args.id);
       const content = asString(args.content);
-      if (!id || !content) throw new Error("mem_update: 'id' and 'content' required");
+      if (!id || !content) throw new Error("mem_update: faltan 'id' y 'content'");
       const updMem = db
         .prepare("UPDATE memories SET gist = ? WHERE id = ?")
         .run(content, id);
@@ -298,16 +298,16 @@ export function dispatchEngramTool(
     }
 
     case "mem_session_start":
-      return { ok: true, note: "misMEM is stateless; no session to start." };
+      return { ok: true, note: "misMEM no guarda estado; no hay sesión que iniciar." };
 
     case "mem_session_end":
       return {
         ok: true,
-        note: "Use mem_session_summary to persist end-of-session notes.",
+        note: "Usa mem_session_summary para guardar las notas de fin de sesión.",
       };
 
     default:
-      throw new Error(`Unknown engram-compat tool: ${name}`);
+      throw new Error(`herramienta engram-compat desconocida: ${name}`);
   }
 }
 

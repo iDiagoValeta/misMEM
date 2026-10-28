@@ -253,7 +253,7 @@ export function handleMemories(db: DB, res: ServerResponse, url: URL, at = Date.
 export function handleMemory(db: DB, res: ServerResponse, id: string, at = Date.now()): void {
   const row = db.prepare(`SELECT ${MEMORY_COLUMNS} FROM memories WHERE id = ?`).get(id) as MemoryRow | undefined;
   if (!row) {
-    json(res, 404, { error: `memory not found: ${id}` });
+    json(res, 404, { error: `no existe la memoria: ${id}` });
     return;
   }
 
@@ -301,7 +301,7 @@ export function handleTrait(db: DB, res: ServerResponse, id: string, at = Date.n
     )
     .get(id) as TraitRow | undefined;
   if (!row) {
-    json(res, 404, { error: `trait not found: ${id}` });
+    json(res, 404, { error: `no existe el rasgo: ${id}` });
     return;
   }
   const getMemory = db.prepare(`SELECT ${MEMORY_COLUMNS} FROM memories WHERE id = ?`);

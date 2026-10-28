@@ -143,7 +143,7 @@ async function post<T>(path: string, body: unknown = {}): Promise<T> {
 export interface ForgetChallenge {
   confirm_token: string;
   expires_in: number;
-  impacto: { episodios?: number; rasgos_que_la_citan?: number; memorias_que_cita?: number };
+  impact: { episodes?: number; traits_citing?: number; memories_cited?: number };
 }
 
 async function forgetChallenge(path: string): Promise<ForgetChallenge> {

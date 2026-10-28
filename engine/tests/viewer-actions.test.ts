@@ -195,7 +195,7 @@ describe("handleAction", () => {
     expect((await act(`/api/trait/${t}/edit`)).handled).toBe(false);
     const first = await act(`/api/trait/${t}/forget`);
     expect(first.status).toBe(409);
-    expect(first.body.impacto).toEqual({ memorias_que_cita: 1 });
+    expect(first.body.impact).toEqual({ memories_cited: 1 });
     expect((await act(`/api/trait/${t}/forget`, { confirm_token: first.body.confirm_token })).status).toBe(200);
     expect(count("SELECT COUNT(*) AS n FROM traits")).toBe(0);
     expect(count("SELECT COUNT(*) AS n FROM memories")).toBe(1);
@@ -220,7 +220,7 @@ describe("handleAction", () => {
     crystallize(db, { scope: "a", name: "dos", evidence_memory_ids: [memoryId] });
     const first = await act(`/api/memory/${memoryId}/forget`);
     expect(first.status).toBe(409);
-    expect(first.body).toMatchObject({ expires_in: 60, impacto: { episodios: 2, rasgos_que_la_citan: 2 } });
+    expect(first.body).toMatchObject({ expires_in: 60, impact: { episodes: 2, traits_citing: 2 } });
     expect(first.body.error).toBeUndefined();
     expect(count("SELECT COUNT(*) AS n FROM memories")).toBe(1);
     const second = await act(`/api/memory/${memoryId}/forget`, { confirm_token: first.body.confirm_token });

@@ -27,7 +27,7 @@ cuántos recuerdos devuelve por pregunta (el modelo los lee todos) y un aviso si
 algún marcador de ruido llegó al tope.
 
 DB: ${defaultDbPath()} (override con --db o MISMEM_DB). No refuerza ni escribe memorias.
-Env: las mismas MISMEM_EMBEDDING_* que el servidor.`);
+Variables: las mismas MISMEM_EMBEDDING_* que el servidor.`);
 }
 
 const percent = (score: Score): string =>

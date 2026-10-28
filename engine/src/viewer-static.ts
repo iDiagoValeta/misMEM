@@ -61,7 +61,7 @@ export function serveUi(res: ServerResponse, pathname: string, dir = DEFAULT_UI_
       send(res, 200, TYPES[extname(file)] ?? "application/octet-stream", readFileSync(file));
       return;
     } catch {
-      send(res, 404, "text/plain; charset=utf-8", "Not Found");
+      send(res, 404, "text/plain; charset=utf-8", "No encontrado");
       return;
     }
   }
