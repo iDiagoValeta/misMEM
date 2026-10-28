@@ -2,6 +2,13 @@
 
 ## Sin publicar
 
+### jscpd sube a 5.4.1, y sus dos clones de más desaparecen
+
+- `jscpd` pasa de 4.3.0 a 5.4.1 (versión exacta). La 5 compara dos bloques que la 4 no veía: `recall` y
+  `recallHybrid` montaban igual la lista de hits, ahora en `finalizeHits`, y `MemoryList`/`PendingList`
+  repetían el `<ul>` y el pie de "cargar más", ahora en `PagedList`. `pnpm dup` sigue con umbral 0 y no
+  encuentra clones; no hay cambios de comportamiento ni visibles.
+
 ### Un estándar de contribución escrito, y comprobado
 
 - Contribuir no tenía forma: ni formularios de issue, ni plantillas de PR, ni normas escritas, y el

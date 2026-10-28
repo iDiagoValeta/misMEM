@@ -150,6 +150,30 @@ function LoadMore({
   );
 }
 
+/** The row list and its paging footer are the same in both infinite lists. */
+function PagedList<T>({
+  rows,
+  hasNextPage,
+  fetchingNextPage,
+  remaining,
+  onLoadMore,
+  renderRow,
+}: {
+  rows: readonly T[];
+  hasNextPage: boolean;
+  fetchingNextPage: boolean;
+  remaining: number;
+  onLoadMore: () => void;
+  renderRow: (row: T) => ReactNode;
+}) {
+  return (
+    <>
+      <ul className="flex flex-col gap-2">{rows.map(renderRow)}</ul>
+      {hasNextPage && <LoadMore remaining={remaining} busy={fetchingNextPage} onClick={onLoadMore} />}
+    </>
+  );
+}
+
 export function MemoryList({
   scope,
   selected,
@@ -203,8 +227,13 @@ export function MemoryList({
       {rows.length === 0 ? (
         query.isError ? null : <Empty>Todavía no hay memorias consolidadas en este ámbito.</Empty>
       ) : (
-        <ul className="flex flex-col gap-2">
-          {rows.map((memory) => (
+        <PagedList
+          rows={rows}
+          hasNextPage={query.hasNextPage}
+          fetchingNextPage={query.isFetchingNextPage}
+          remaining={remaining}
+          onLoadMore={() => void query.fetchNextPage()}
+          renderRow={(memory) => (
             <Row
               key={memory.id}
               layer="memory"
@@ -227,11 +256,8 @@ export function MemoryList({
                 </>
               }
             />
-          ))}
-        </ul>
-      )}
-      {query.hasNextPage && (
-        <LoadMore remaining={remaining} busy={query.isFetchingNextPage} onClick={() => void query.fetchNextPage()} />
+          )}
+        />
       )}
     </div>
   );
@@ -304,8 +330,13 @@ export function PendingList({ scope, selected, onSelect }: ListProps) {
       {rows.length === 0 ? (
         query.isError ? null : <Empty>Nada pendiente: todo lo capturado ya pasó por la consolidación.</Empty>
       ) : (
-        <ul className="flex flex-col gap-2">
-          {rows.map((episode) => (
+        <PagedList
+          rows={rows}
+          hasNextPage={query.hasNextPage}
+          fetchingNextPage={query.isFetchingNextPage}
+          remaining={remaining}
+          onLoadMore={() => void query.fetchNextPage()}
+          renderRow={(episode) => (
             <Row
               key={episode.id}
               layer="episode"
@@ -319,11 +350,8 @@ export function PendingList({ scope, selected, onSelect }: ListProps) {
                 </>
               }
             />
-          ))}
-        </ul>
-      )}
-      {query.hasNextPage && (
-        <LoadMore remaining={remaining} busy={query.isFetchingNextPage} onClick={() => void query.fetchNextPage()} />
+          )}
+        />
       )}
     </div>
   );

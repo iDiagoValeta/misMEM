@@ -85,12 +85,27 @@ export interface RecallOptions {
   embeddingModel?: string;
 }
 
+/**
+ * Both recall paths rank traits first, then memories, then episodes, and cut to the limit;
+ * the hit shape is built here so the two paths cannot drift apart.
+ */
 function finalizeHits(
   db: DB,
-  hits: RecallHit[],
+  layers: {
+    traits: readonly Omit<RecallHit, "layer">[];
+    memories: readonly RecallHit[];
+    episodes: readonly Omit<RecallHit, "layer">[];
+  },
+  limit: number,
   options: RecallOptions,
   at: number,
 ): { hits: RecallHit[] } {
+  const hits: RecallHit[] = [
+    ...layers.traits.map((r) => ({ ...r, layer: "trait" as const })),
+    ...layers.memories,
+    ...layers.episodes.map((r) => ({ ...r, layer: "episode" as const })),
+  ].slice(0, limit);
+
   if (options.reinforce ?? reinforcesOnRecall()) {
     reinforceMemories(
       db,
@@ -173,12 +188,13 @@ export function recall(
   const input = RecallInput.parse(raw);
   const at = options.at ?? now();
   const lexical = lexicalCandidates(db, input, at);
-  const hits: RecallHit[] = [
-    ...lexical.traits.map((r) => ({ ...r, layer: "trait" as const })),
-    ...lexical.memories,
-    ...lexical.episodes.map((r) => ({ ...r, layer: "episode" as const })),
-  ].slice(0, input.limit);
-  return finalizeHits(db, hits, { ...options, reinforce: options.reinforce ?? input.reinforce }, at);
+  return finalizeHits(
+    db,
+    { traits: lexical.traits, memories: lexical.memories, episodes: lexical.episodes },
+    input.limit,
+    { ...options, reinforce: options.reinforce ?? input.reinforce },
+    at,
+  );
 }
 
 /**
@@ -219,13 +235,13 @@ export async function recallHybrid(
     hasComparableVectors(db, { model: semanticModel, dims: queryVec.length, scope: input.scope });
   const lexical = lexicalCandidates(db, input, at, { rescue: !semanticLayer });
   const memories = queryVec ? fuseMemories(lexical.memories, semantic, at) : lexical.memories;
-  const hits: RecallHit[] = [
-    ...lexical.traits.map((r) => ({ ...r, layer: "trait" as const })),
-    ...memories,
-    ...lexical.episodes.map((r) => ({ ...r, layer: "episode" as const })),
-  ].slice(0, input.limit);
-
-  return finalizeHits(db, hits, { ...options, reinforce: options.reinforce ?? input.reinforce }, at);
+  return finalizeHits(
+    db,
+    { traits: lexical.traits, memories, episodes: lexical.episodes },
+    input.limit,
+    { ...options, reinforce: options.reinforce ?? input.reinforce },
+    at,
+  );
 }
 
 export function consolidate(
