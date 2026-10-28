@@ -1,8 +1,12 @@
 import { describe, it, expect, beforeEach } from "vitest";
 import type { Database as DB } from "better-sqlite3";
 import { openDb } from "../src/db.js";
-import { capture, consolidate, recall, recallHybrid } from "../src/tools.js";
-import { embedPendingMemories, type EmbedFn } from "../src/embeddings/index.js";
+import { capture, consolidate, crystallize, recall, recallHybrid } from "../src/tools.js";
+import {
+  embedPendingMemories,
+  saveMemoryEmbedding,
+  type EmbedFn,
+} from "../src/embeddings/index.js";
 
 let db: DB;
 
@@ -135,14 +139,41 @@ describe("recall léxico: frases normales", () => {
   });
 });
 
+describe("recall léxico sin memorias: rescata episodios y rasgos", () => {
+  it("rescata un episodio cuando sus palabras no están en ninguna memoria", () => {
+    // Sin memorias, todos los términos salen con frecuencia 0. Descartarlos por eso vaciaba
+    // el rescate en la instalación recién nacida, que es justo donde no hay capa semántica.
+    const episode = capture(db, { scope: "dev", body: "configurar servidor nginx" }).id;
+
+    const hits = recall(db, { query: "configurando servidores nginx", reinforce: false }).hits;
+
+    expect(hits.map((hit) => hit.id)).toContain(episode);
+  });
+
+  it("rescata un rasgo cuando su nombre no está en ninguna memoria", () => {
+    // Los rasgos tampoco viven en `memories_fts`: medir ahí su vocabulario no puede decidir
+    // si se rescatan.
+    const ajeno = capture(db, { scope: "dev", body: "notas de finanzas" }).id;
+    const trait = crystallize(db, {
+      scope: "dev",
+      name: "configurar servidor nginx",
+      evidence_memory_ids: [ajeno],
+    }).trait_id;
+
+    const hits = recall(db, { query: "configurando servidores nginx", reinforce: false }).hits;
+
+    expect(hits.map((hit) => hit.id)).toContain(trait);
+  });
+});
+
 describe("recall estricto: desempates", () => {
   it("con empate de bm25, desempata por la saliencia ya decaída", () => {
     const at = Date.now();
     const stale = memory("pc", "alfa beta gamma delta");
     const fresh = memory("pc", "delta gamma beta alfa");
     // Mismo perfil de términos, así que mismo bm25: sólo cambia la saliencia. La vieja
-    // tiene la saliencia cruda más alta; la decaída, más baja. Ordenar por la cruda (lo que
-    // hacía el rescate) pone primero la que ya no se usa; `upstream/main` usa la decaída.
+    // tiene la saliencia cruda más alta; la decaída, más baja. Desempatar por la cruda
+    // pondría primero la que ya no se usa; el orden actual desempata por la decaída.
     db.prepare("UPDATE memories SET salience = 0.9, salience_updated_at = ? WHERE id = ?").run(
       at - 730 * 86_400_000,
       stale,
@@ -188,18 +219,78 @@ describe("recall híbrido: el rescate sólo cuando no hay capa semántica", () =
   it("con vectores, tampoco rescata rasgos ni episodios, que no tienen corte semántico", async () => {
     const indexada = memory("dev", "configurar servidor apache");
     const pendiente = capture(db, { scope: "dev", body: "configurar servidor nginx" }).id;
+    const rasgo = crystallize(db, {
+      scope: "dev",
+      name: "configurar servidor nginx",
+      evidence_memory_ids: [indexada],
+    }).trait_id;
     const embed: EmbedFn = async (texts) => texts.map(() => Float32Array.from([0, 1]));
     await embedPendingMemories(db, { embedFn: embed, model: "fake" });
     const query = { query: "configurando servidores nginx", limit: 5, reinforce: false };
 
-    // Sin capa semántica el episodio se rescata; con ella, la búsqueda queda en la estricta.
+    // Sin capa semántica el episodio y el rasgo se rescatan; con ella, la búsqueda queda en
+    // la estricta.
     expect(recall(db, query).hits.map((hit) => hit.id)).toContain(pendiente);
+    expect(recall(db, query).hits.map((hit) => hit.id)).toContain(rasgo);
     const result = await recallHybrid(db, query, async (texts) => texts.map(() => Float32Array.from([1, 0])), {
       reinforce: false,
       embeddingModel: "fake",
     });
     expect(result.hits.map((hit) => hit.id)).not.toContain(pendiente);
+    expect(result.hits.map((hit) => hit.id)).not.toContain(rasgo);
     expect(result.hits.map((hit) => hit.id)).not.toContain(indexada);
+  });
+
+  it("un vector de una memoria de ruido no cierra la puerta al rescate", async () => {
+    // `semanticSearchMemories` excluye el ruido, así que ese vector no puntúa nada; si la
+    // puerta lo cuenta, apaga el rescate sin capa que lo sustituya. Puede pasar en bases
+    // que embebieron memorias `[noise]` antes de que el backfill las excluyera.
+    memory("dev", "configurar servidor apache");
+    const ruido = memory("dev", "[noise] 3 episodios sin señal consolidable");
+    saveMemoryEmbedding(db, ruido, "fake", Float32Array.from([1, 0]));
+    const episode = capture(db, { scope: "dev", body: "configurar servidor nginx" }).id;
+    const embed: EmbedFn = async (texts) => texts.map(() => Float32Array.from([1, 0]));
+
+    const result = await recallHybrid(
+      db,
+      { query: "configurando servidores nginx", limit: 5 },
+      embed,
+      { reinforce: false, embeddingModel: "fake" },
+    );
+
+    expect(result.hits.map((hit) => hit.id)).toContain(episode);
+  });
+
+  it("un vector de otro modelo no cierra la puerta al rescate", async () => {
+    const otra = memory("dev", "configurar servidor apache");
+    saveMemoryEmbedding(db, otra, "otro-modelo", Float32Array.from([1, 0]));
+    const episode = capture(db, { scope: "dev", body: "configurar servidor nginx" }).id;
+    const embed: EmbedFn = async (texts) => texts.map(() => Float32Array.from([1, 0]));
+
+    const result = await recallHybrid(
+      db,
+      { query: "configurando servidores nginx", limit: 5 },
+      embed,
+      { reinforce: false, embeddingModel: "fake" },
+    );
+
+    expect(result.hits.map((hit) => hit.id)).toContain(episode);
+  });
+
+  it("un vector de otro ámbito no cierra la puerta al rescate", async () => {
+    const otra = memory("finanzas", "configurar servidor apache");
+    saveMemoryEmbedding(db, otra, "fake", Float32Array.from([1, 0]));
+    const episode = capture(db, { scope: "dev", body: "configurar servidor nginx" }).id;
+    const embed: EmbedFn = async (texts) => texts.map(() => Float32Array.from([1, 0]));
+
+    const result = await recallHybrid(
+      db,
+      { query: "configurando servidores nginx", scope: "dev", limit: 5 },
+      embed,
+      { reinforce: false, embeddingModel: "fake" },
+    );
+
+    expect(result.hits.map((hit) => hit.id)).toContain(episode);
   });
 
   it("con el embedder sin responder, rescata como el recall léxico", async () => {

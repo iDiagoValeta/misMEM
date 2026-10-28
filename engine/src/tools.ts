@@ -167,10 +167,12 @@ function relaxedFts(terms: RelaxedTerm[]): string {
  * rescate. Se mide sobre `memories_fts` (gist + details, el mismo texto que se puntúa) y
  * no sobre la capa que se rescata: las memorias son el corpus consolidado donde se
  * acumula el vocabulario genérico, mientras rasgos y episodios son dispersos y ahí casi
- * todo parecería raro. Cuenta sin filtrar por scope porque el vocabulario es de la
- * persona, no del proyecto, y así el umbral no cambia de una memoria pequeña a otra
- * grande. El ruido que `forget` conserva no es conocimiento: se excluye igual que en la
- * búsqueda, o empujaría un término real por encima de `rare`.
+ * todo parecería raro. Ese cero sólo dice que el término no está en las memorias, no que
+ * no exista en el recall: rasgos y episodios no viven en esta tabla. Cuenta sin filtrar
+ * por scope porque el vocabulario es de la persona, no del proyecto, y así el umbral no
+ * cambia de una memoria pequeña a otra grande. El ruido que `forget` conserva no es
+ * conocimiento: se excluye igual que en la búsqueda, o empujaría un término real por
+ * encima de `rare`.
  */
 function documentFrequency(db: DB, term: RelaxedTerm): number {
   const q = term.prefix ? `${quoteFts(term.prefix)}*` : quoteFts(term.word);
@@ -185,9 +187,13 @@ function documentFrequency(db: DB, term: RelaxedTerm): number {
 }
 
 /**
- * Los términos que distinguen dentro de este corpus. Un término ausente (frecuencia 0)
- * nunca va a coincidir, así que no entra: contarlo sólo subiría el mínimo de
- * coincidencias sin aportar señal y rompería la excepción de la consulta de una palabra.
+ * Los términos que pueden distinguir dentro de este corpus. La frecuencia se mide sólo
+ * sobre las memorias, así que un término ausente de ellas sale con 0, el valor más raro
+ * posible: no puede casar con ninguna memoria y por eso no altera el rescate de esa capa,
+ * pero sí puede casar con un episodio o un rasgo, que no están en `memories_fts`.
+ * Descartarlo dejaba esos dos rescates vacíos en cuanto sus palabras no aparecían en
+ * ninguna memoria, y con la tabla de memorias vacía pasaba siempre (instalación recién
+ * nacida, sin capa semántica), que es justo el caso que el rescate tiene que cubrir.
  *
  * Un término que sale en todas las memorias también entra: con el corpus diminuto de un
  * test o de una instalación recién nacida, "todos los documentos" no es ruido sino el
@@ -209,7 +215,7 @@ function informativeTerms(db: DB, terms: RelaxedTerm[]): RelaxedTerm[] {
   const rare = Math.max(RELAXED_RARE_MIN_DOCS, Math.ceil(total * RELAXED_RARE_FRACTION));
   return terms.filter((term) => {
     const frequency = documentFrequency(db, term);
-    return frequency > 0 && (frequency <= rare || frequency === total);
+    return frequency <= rare || frequency === total;
   });
 }
 
@@ -437,9 +443,8 @@ function lexicalCandidates(
   ).map(({ fts_rank: _ftsRank, ...row }) => row);
 
   // El rescate ya viene ordenado por coincidencias y recortado a RELAXED_MAX_RESULTS. El
-  // estricto conserva el orden de siempre: desempata por la saliencia ya decaída, como
-  // `upstream/main`, no por la cruda. La cruda favorecía lo que se usó hace mucho y encima
-  // decidía quién entraba en el corte de CANDIDATE_POOL_LIMIT.
+  // estricto conserva el orden de FTS5 y desempata por la saliencia ya decaída: la cruda
+  // favorecía lo que se usó hace mucho y no es la que ve el cliente en el hit.
   const orderedMemories = rescuedTerms
     ? relaxRows(rows.memories, rescuedTerms, rescuedWordCount)
     : rows.memories.sort(
@@ -516,6 +521,10 @@ export function reinforce(
   };
 }
 
+/**
+ * Recall léxico puro: es el camino sin capa semántica, así que siempre puede rescatar.
+ * `recallHybrid` es quien apaga el rescate cuando hay vectores comparables que puntuar.
+ */
 export function recall(
   db: DB,
   raw: unknown,
@@ -548,6 +557,11 @@ function semanticHitToRecall(hit: SemanticHit, at: number): RecallHit {
  * Si la búsqueda semántica de esta consulta tiene algo que puntuar: algún vector del mismo
  * modelo (si se filtró por modelo) y mismas dimensiones en el ámbito. Sin ninguno, el vector
  * de la consulta no encuentra nada y el recall queda en manos de lo léxico.
+ *
+ * Lleva los mismos filtros que `semanticSearchMemories`, ruido incluido: un vector que esa
+ * búsqueda descarta no puede encender la capa, o la puerta queda cerrada sin nada que la
+ * sustituya. El backfill no excluía el ruido hasta tarde, así que hay bases con vectores de
+ * memorias `[noise]` y `[pareto:l0]`.
  */
 function hasComparableVectors(
   db: DB,
@@ -557,6 +571,7 @@ function hasComparableVectors(
     opts.scope ? "m.scope = @scope" : null,
     opts.model ? "e.model = @model" : null,
     "e.dims = @dims",
+    excludeNoiseSql("m"),
   ].filter((value): value is string => value !== null);
   return (
     db
