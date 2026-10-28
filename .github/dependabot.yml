@@ -2,12 +2,15 @@ version: 2
 
 # Same shape as the owner's other repos: weekly on Monday. npm groups minor and patch so a
 # review is one CI run and keeps majors apart; action bumps all travel in one PR.
+# cooldown: only releases at least 14 days old, the repo's supply-chain minimum.
 updates:
   - package-ecosystem: npm
     directory: /engine
     schedule:
       interval: weekly
       day: monday
+    cooldown:
+      default-days: 14
     open-pull-requests-limit: 5
     groups:
       engine-minor:
@@ -21,6 +24,8 @@ updates:
     schedule:
       interval: weekly
       day: monday
+    cooldown:
+      default-days: 14
     open-pull-requests-limit: 3
     groups:
       actions:
@@ -33,4 +38,6 @@ updates:
     schedule:
       interval: weekly
       day: monday
+    cooldown:
+      default-days: 14
     open-pull-requests-limit: 2
