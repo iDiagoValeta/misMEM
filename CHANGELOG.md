@@ -9,6 +9,11 @@
   repetían el `<ul>` y el pie de "cargar más", ahora en `PagedList`. `pnpm dup` sigue con umbral 0 y no
   encuentra clones; no hay cambios de comportamiento ni visibles.
 
+### `AGENTS.md` como contrato de trabajo
+
+- `AGENTS.md` deja de ser las antiguas instrucciones de Copilot: mapa del código actual, comandos, reglas duras con
+  su porqué, convenciones y trampas propias del repo, y enlaces al resto de la documentación en vez de copiarla.
+
 ### Un estándar de contribución escrito, y comprobado
 
 - Contribuir no tenía forma: ni formularios de issue, ni plantillas de PR, ni normas escritas, y el
