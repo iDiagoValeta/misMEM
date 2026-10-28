@@ -2,6 +2,7 @@
  * Lo que el servidor HTTP decide antes de atender una petición. Vive aparte de
  * server-http.ts, que escucha al importarse, para poder probarlo.
  */
+import { timingSafeEqual } from "node:crypto";
 
 /**
  * Loopback unless told otherwise: without MISMEM_AUTH_* the Host guard only stops browser
@@ -29,4 +30,22 @@ export function loadAuth(env: NodeJS.ProcessEnv = process.env): BasicCredentials
   if (!user) throw new Error("MISMEM_AUTH_PASS está definida pero falta MISMEM_AUTH_USER");
   if (!pass) throw new Error("MISMEM_AUTH_USER está definida pero falta MISMEM_AUTH_PASS");
   return { user, pass };
+}
+
+function safeEqual(a: string, b: string): boolean {
+  const ab = Buffer.from(a, "utf8");
+  const bb = Buffer.from(b, "utf8");
+  if (ab.length !== bb.length) return false;
+  return timingSafeEqual(ab, bb);
+}
+
+export function checkBasicAuth(header: string | undefined, auth: BasicCredentials | null): boolean {
+  if (!auth) return true;
+  if (!header?.startsWith("Basic ")) return false;
+  const decoded = Buffer.from(header.slice(6), "base64").toString("utf8");
+  const sep = decoded.indexOf(":");
+  if (sep < 0) return false;
+  const user = decoded.slice(0, sep);
+  const pass = decoded.slice(sep + 1);
+  return safeEqual(user, auth.user) && safeEqual(pass, auth.pass);
 }

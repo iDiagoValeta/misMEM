@@ -1,0 +1,6 @@
+{"role":"user","content":"first prompt about llamas"}
+this line is not json at all
+
+{"role":"assistant","text":"reply through the text field"}
+{"role":"tool","content":{"nested":"object"}}
+{"broken": 

@@ -44,6 +44,11 @@ message_feedback.json
 shared_conversations.json
 user.json
 user_settings.json
+# The export names above are generic (file-*, user.json, conversations-*.json) and would
+# also hide source files and test fixtures; code trees are never an export drop.
+!engine/src/**
+!engine/tests/**
+!engine/ui/src/**
 
 # Bardon personal practice + copyrighted material
 bardon_diario.md
