@@ -53,6 +53,27 @@ async function rpc(
   return parsed.result;
 }
 
+/** With a stdin nobody closes, a hook would wait forever and hang the turn. */
+const STDIN_TIMEOUT_MS = 2000;
+
+/** The hook payload from stdin; empty on a TTY or after the timeout. Never rejects. */
+export function readStdin(): Promise<string> {
+  return new Promise((resolve) => {
+    let data = "";
+    if (process.stdin.isTTY) return resolve("");
+    const done = (): void => {
+      clearTimeout(timer);
+      resolve(data);
+    };
+    const timer = setTimeout(done, STDIN_TIMEOUT_MS);
+    timer.unref();
+    process.stdin.setEncoding("utf8");
+    process.stdin.on("data", (chunk) => (data += chunk));
+    process.stdin.on("end", done);
+    process.stdin.on("error", done);
+  });
+}
+
 /** Llama una tool y devuelve el JSON que puso en el texto. */
 export async function callRemoteTool(
   url: string,

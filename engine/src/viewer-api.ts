@@ -17,7 +17,7 @@ import type { Database as DB } from "better-sqlite3";
 import { cosine } from "./embeddings/index.js";
 import { excludeNoiseSql, isNoiseGist } from "./noise.js";
 import { effectiveSalience, type SalienceRow } from "./salience.js";
-import { clampLimit, json } from "./viewer.js";
+import { clampLimit, json, parseOffset } from "./viewer.js";
 
 interface MemoryRow extends SalienceRow {
   id: string;
@@ -227,7 +227,7 @@ export function handleMemories(db: DB, res: ServerResponse, url: URL, at = Date.
   const scope = url.searchParams.get("scope");
   const withNoise = url.searchParams.get("noise") === "1";
   const limit = clampLimit(url.searchParams.get("limit"), 50, 200);
-  const offset = Math.max(0, Math.floor(Number(url.searchParams.get("offset")) || 0));
+  const offset = parseOffset(url.searchParams.get("offset"));
 
   const rows = db
     .prepare(

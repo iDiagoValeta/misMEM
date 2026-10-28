@@ -20,7 +20,7 @@
  *   mem_session_end      → no-op informativo
  */
 import type { Database as DB } from "better-sqlite3";
-import { capture, recallHybrid } from "./tools.js";
+import { capture, pendingEpisodes, recallHybrid } from "./tools.js";
 import type { EmbedFn } from "./embeddings/index.js";
 
 export interface EngramToolDef {
@@ -223,19 +223,15 @@ export function dispatchEngramTool(
     case "mem_context": {
       const scope = args.scope ? asString(args.scope) : null;
       const limit = Math.min(50, Math.max(1, Number(args.limit) || 10));
-      // rowid DESC as tiebreaker → deterministic order even when several
-      // episodes share the same created_at millisecond.
-      const rows = db
-        .prepare(
-          `SELECT id, scope, body AS text, created_at
-           FROM episodes
-           WHERE consolidated_into IS NULL
-             AND (@scope IS NULL OR scope = @scope)
-           ORDER BY created_at DESC, rowid DESC
-           LIMIT @limit`,
-        )
-        .all({ scope, limit });
-      return { hits: (rows as unknown[]).map((r) => ({ ...(r as object), layer: "episode" })) };
+      // Same rows as the viewer's pending list, minus consolidated_into (always null here).
+      const hits = pendingEpisodes(db, scope, limit).map(({ id, scope: s, text, created_at }) => ({
+        id,
+        scope: s,
+        text,
+        created_at,
+        layer: "episode",
+      }));
+      return { hits };
     }
 
     case "mem_get_observation": {

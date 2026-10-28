@@ -15,7 +15,7 @@
  */
 import type { ServerResponse } from "node:http";
 import type { Database as DB } from "better-sqlite3";
-import { recallHybrid } from "./tools.js";
+import { countPendingEpisodes, pendingEpisodes, recallHybrid } from "./tools.js";
 import type { EmbedFn } from "./embeddings/index.js";
 import { Layer } from "./schema.js";
 
@@ -39,10 +39,13 @@ export function json(res: ServerResponse, status: number, payload: unknown): voi
   res.end(JSON.stringify(payload));
 }
 
-/** Un offset inválido o negativo cuenta como 0; SQLite no acepta NaN ni Infinity. */
-function parseOffset(raw: string | null): number {
+/**
+ * Un offset inválido o negativo cuenta como 0; SQLite no acepta NaN ni Infinity. Pasado
+ * MAX_SAFE_INTEGER (1e20) deja de ser un entero que SQLite pueda bindear: se recorta.
+ */
+export function parseOffset(raw: string | null): number {
   const n = Number(raw);
-  return Number.isFinite(n) && n > 0 ? Math.floor(n) : 0;
+  return Number.isFinite(n) && n > 0 ? Math.min(Math.floor(n), Number.MAX_SAFE_INTEGER) : 0;
 }
 
 export function handleStats(db: DB, res: ServerResponse): void {
@@ -92,19 +95,9 @@ export function handleRecent(db: DB, res: ServerResponse, url: URL): void {
   // cambia nada y la respuesta sigue siendo la de siempre, sin `total`.
   if (layer === "episode" && url.searchParams.get("pending") === "1") {
     const offset = parseOffset(url.searchParams.get("offset"));
-    const where = "consolidated_into IS NULL AND (@scope IS NULL OR scope = @scope)";
-    // El total va antes del LIMIT: el cliente pagina con él, no con el tamaño de la página.
-    const total = (
-      db.prepare(`SELECT COUNT(*) AS n FROM episodes WHERE ${where}`).get({ scope }) as { n: number }
-    ).n;
-    const rows = db
-      .prepare(
-        `SELECT id, scope, body AS text, created_at, consolidated_into
-         FROM episodes
-         WHERE ${where}
-         ORDER BY created_at DESC, rowid DESC LIMIT @limit OFFSET @offset`,
-      )
-      .all({ scope, limit, offset });
+    // El total es el de todos los pendientes: el cliente pagina con él, no con el tamaño de la página.
+    const total = countPendingEpisodes(db, scope);
+    const rows = pendingEpisodes(db, scope, limit, offset);
     json(res, 200, { layer, scope, rows, total });
     return;
   }

@@ -25,7 +25,7 @@ import { randomBytes } from "node:crypto";
 import type { IncomingMessage, ServerResponse } from "node:http";
 import type { Database as DB } from "better-sqlite3";
 import { z } from "zod";
-import { CrystallizeInput } from "./schema.js";
+import { CrystallizeInput, Scope } from "./schema.js";
 import { crystallize } from "./tools.js";
 import { embedPendingMemories } from "./embeddings/index.js";
 import { JobError, type ConsolidationJob } from "./consolidation/job.js";
@@ -152,7 +152,7 @@ export function loadAllowDelete(env: NodeJS.ProcessEnv = process.env): boolean {
   return ["1", "true", "on"].includes((env.MISMEM_VIEWER_ALLOW_DELETE ?? "").trim().toLowerCase());
 }
 
-const ForgetInput = z.object({ confirm_token: z.string().min(1).max(128).optional() });
+const ConfirmInput = z.object({ confirm_token: z.string().min(1).max(128).optional() });
 
 /** Olvida como `forget`: la memoria y lo que la respaldaba. */
 export function forgetMemory(db: DB, id: string): { id: string; episodes_deleted: number } {
@@ -213,7 +213,7 @@ export async function handleAction(
   const reembed = opts.reembed ?? defaultReembed;
   try {
     if (pathname === "/api/consolidate" && opts.job) {
-      const scope = z.object({ scope: z.string().min(1).max(128).optional() }).parse(body ?? {}).scope;
+      const scope = z.object({ scope: Scope.optional() }).parse(body ?? {}).scope;
       json(res, 202, opts.job.start(scope));
       return true;
     }
@@ -241,7 +241,7 @@ export async function handleAction(
         });
         return true;
       }
-      const token = ForgetInput.parse(body ?? {}).confirm_token;
+      const token = ConfirmInput.parse(body ?? {}).confirm_token;
       if (!token || !opts.confirmations.consume(token, target, id)) {
         json(res, 409, {
           ...(token ? { error: "la confirmación caducó o no es de este recuerdo; confirma otra vez" } : {}),

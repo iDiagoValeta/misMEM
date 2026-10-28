@@ -16,7 +16,9 @@ import {
   isEngramTool,
 } from "./engram-compat.js";
 
-const CANONICAL_TOOLS = [
+// The advertised inputSchemas are hand-written mirrors of the Zod schemas in schema.ts, which
+// are what actually validates calls. tests/tool-schemas.test.ts fails if the two drift.
+export const CANONICAL_TOOLS = [
   {
     name: "capture",
     description:
@@ -25,8 +27,8 @@ const CANONICAL_TOOLS = [
       type: "object",
       required: ["scope", "body"],
       properties: {
-        scope: { type: "string", description: "Project/context namespace" },
-        body: { type: "string" },
+        scope: { type: "string", minLength: 1, maxLength: 128, description: "Project/context namespace" },
+        body: { type: "string", minLength: 1 },
       },
     },
   },
@@ -38,8 +40,8 @@ const CANONICAL_TOOLS = [
       type: "object",
       required: ["query"],
       properties: {
-        query: { type: "string" },
-        scope: { type: "string" },
+        query: { type: "string", minLength: 1 },
+        scope: { type: "string", minLength: 1, maxLength: 128 },
         limit: { type: "integer", minimum: 1, maximum: 50, default: 10 },
         reinforce: {
           type: "boolean",
@@ -58,7 +60,7 @@ const CANONICAL_TOOLS = [
       properties: {
         memory_ids: {
           type: "array",
-          items: { type: "string" },
+          items: { type: "string", minLength: 1 },
           minItems: 1,
           maxItems: 50,
           description: "Ids of the memories the answer actually relied on",
@@ -75,10 +77,10 @@ const CANONICAL_TOOLS = [
       type: "object",
       required: ["scope", "gist", "source_episode_ids"],
       properties: {
-        scope: { type: "string" },
-        gist: { type: "string" },
+        scope: { type: "string", minLength: 1, maxLength: 128 },
+        gist: { type: "string", minLength: 1 },
         details: { type: "string" },
-        source_episode_ids: { type: "array", items: { type: "string" } },
+        source_episode_ids: { type: "array", items: { type: "string" }, minItems: 1 },
       },
     },
   },
@@ -90,9 +92,9 @@ const CANONICAL_TOOLS = [
       type: "object",
       required: ["scope", "name", "evidence_memory_ids"],
       properties: {
-        scope: { type: "string" },
-        name: { type: "string" },
-        evidence_memory_ids: { type: "array", items: { type: "string" } },
+        scope: { type: "string", minLength: 1, maxLength: 128 },
+        name: { type: "string", minLength: 1 },
+        evidence_memory_ids: { type: "array", items: { type: "string" }, minItems: 1 },
         polarity: {
           type: "string",
           enum: ["shadow", "light", "neutral"],
@@ -108,7 +110,7 @@ const CANONICAL_TOOLS = [
     inputSchema: {
       type: "object",
       properties: {
-        scope: { type: "string" },
+        scope: { type: "string", minLength: 1, maxLength: 128 },
         before_days: { type: "integer", minimum: 1, default: 30 },
         salience_below: {
           type: "number",

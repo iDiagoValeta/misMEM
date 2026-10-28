@@ -3,6 +3,7 @@ import { readdir } from "node:fs/promises";
 import { join } from "node:path";
 import type { Database as DB } from "better-sqlite3";
 import { capture } from "../tools.js";
+import { chunkText } from "./walk.js";
 
 interface ChatGPTMessage {
   id: string;
@@ -55,8 +56,6 @@ function flattenConversation(conv: ChatGPTConversation): string {
   return lines.join("\n");
 }
 
-const MAX_BYTES_PER_CONV = 80_000;
-
 export async function ingestChatGPTExport(
   db: DB, exportRoot: string,
 ): Promise<ChatGPTStats> {
@@ -77,10 +76,7 @@ export async function ingestChatGPTExport(
       const text = flattenConversation(conv);
       if (!text.trim()) { stats.skipped++; continue; }
 
-      const chunks: string[] = [];
-      for (let i = 0; i < text.length; i += MAX_BYTES_PER_CONV) {
-        chunks.push(text.slice(i, i + MAX_BYTES_PER_CONV));
-      }
+      const chunks = chunkText(text);
       for (let i = 0; i < chunks.length; i++) {
         const tag = chunks.length > 1 ? ` [${i + 1}/${chunks.length}]` : "";
         capture(db, {
