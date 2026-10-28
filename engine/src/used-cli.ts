@@ -11,7 +11,8 @@
  */
 import { readFileSync } from "node:fs";
 import { defaultDbPath, openDb } from "./db.js";
-import { callRemoteTool } from "./hook-client.js";
+import { envOptionalPositiveNumber } from "./env.js";
+import { callRemoteTool, readStdin } from "./hook-client.js";
 import { reinforce } from "./tools.js";
 import {
   assistantReply,
@@ -22,34 +23,10 @@ import {
   type UsageOptions,
 } from "./usage.js";
 
-function envNumber(name: string): number | undefined {
-  const value = Number(process.env[name]);
-  return Number.isFinite(value) ? value : undefined;
-}
-
-/** Con un stdin que nadie cierra, un hook esperaría para siempre y colgaría el turno. */
-const STDIN_TIMEOUT_MS = 2000;
 const REMOTE_TIMEOUT_MS = 5000;
 
-function readStdin(): Promise<string> {
-  return new Promise((resolve) => {
-    let data = "";
-    if (process.stdin.isTTY) return resolve("");
-    const done = (): void => {
-      clearTimeout(timer);
-      resolve(data);
-    };
-    const timer = setTimeout(done, STDIN_TIMEOUT_MS);
-    timer.unref();
-    process.stdin.setEncoding("utf8");
-    process.stdin.on("data", (chunk) => (data += chunk));
-    process.stdin.on("end", done);
-    process.stdin.on("error", done);
-  });
-}
-
 function reinforceLocal(ids: string[]): void {
-  const db = openDb(process.env.MISMEM_DB ?? defaultDbPath());
+  const db = openDb(defaultDbPath());
   try {
     reinforce(db, { memory_ids: ids });
   } finally {
@@ -93,8 +70,8 @@ async function main(): Promise<void> {
   if (memories.length === 0) return;
 
   const opts: UsageOptions = {
-    minOverlap: envNumber("MISMEM_HOOK_MIN_OVERLAP"),
-    minShared: envNumber("MISMEM_HOOK_MIN_SHARED"),
+    minOverlap: envOptionalPositiveNumber("MISMEM_HOOK_MIN_OVERLAP"),
+    minShared: envOptionalPositiveNumber("MISMEM_HOOK_MIN_SHARED"),
   };
   const used = usedMemoryIds(memories, assistantReply(turn), opts);
 

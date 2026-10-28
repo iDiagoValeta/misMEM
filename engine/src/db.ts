@@ -97,20 +97,14 @@ END;
 CREATE TRIGGER IF NOT EXISTS memories_ad AFTER DELETE ON memories BEGIN
   INSERT INTO memories_fts(memories_fts, rowid, gist, details) VALUES('delete', old.rowid, old.gist, COALESCE(old.details, ''));
 END;
-CREATE TRIGGER IF NOT EXISTS memories_au AFTER UPDATE OF gist, details ON memories BEGIN
-  INSERT INTO memories_fts(memories_fts, rowid, gist, details) VALUES('delete', old.rowid, old.gist, COALESCE(old.details, ''));
-  INSERT INTO memories_fts(rowid, gist, details) VALUES (new.rowid, new.gist, COALESCE(new.details, ''));
-END;
+-- memories_au and traits_au are defined once, in migrate(): it must replace the legacy
+-- versions that reindexed on every UPDATE, so a copy here would just be dropped right after.
 
 CREATE TRIGGER IF NOT EXISTS traits_ai AFTER INSERT ON traits BEGIN
   INSERT INTO traits_fts(rowid, name) VALUES (new.rowid, new.name);
 END;
 CREATE TRIGGER IF NOT EXISTS traits_ad AFTER DELETE ON traits BEGIN
   INSERT INTO traits_fts(traits_fts, rowid, name) VALUES('delete', old.rowid, old.name);
-END;
-CREATE TRIGGER IF NOT EXISTS traits_au AFTER UPDATE OF name ON traits BEGIN
-  INSERT INTO traits_fts(traits_fts, rowid, name) VALUES('delete', old.rowid, old.name);
-  INSERT INTO traits_fts(rowid, name) VALUES (new.rowid, new.name);
 END;
 
 CREATE TABLE IF NOT EXISTS memory_embeddings (

@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { envPositiveNumber } from "../env.js";
 
 const MAX_GIST_CHARS = 500;
 
@@ -45,13 +46,11 @@ export class LlmInvalidJsonError extends Error {
 const DEFAULT_TIMEOUT_MS = 120_000;
 
 function loadTimeoutMs(): number {
-  const value = Number(process.env.MISMEM_CONSOLIDATION_TIMEOUT_MS);
-  return Number.isFinite(value) && value > 0 ? value : DEFAULT_TIMEOUT_MS;
+  return envPositiveNumber("MISMEM_CONSOLIDATION_TIMEOUT_MS", DEFAULT_TIMEOUT_MS);
 }
 
 function loadMaxTokens(): number {
-  const value = Number(process.env.MISMEM_CONSOLIDATION_MAX_TOKENS);
-  return Number.isFinite(value) && value > 0 ? value : DEFAULT_MAX_TOKENS;
+  return envPositiveNumber("MISMEM_CONSOLIDATION_MAX_TOKENS", DEFAULT_MAX_TOKENS);
 }
 
 type LlmProvider = "deepseek" | "openrouter" | "openai" | "compatible";

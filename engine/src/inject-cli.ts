@@ -12,7 +12,8 @@
  */
 import { readFileSync } from "node:fs";
 import { defaultDbPath, openDb } from "./db.js";
-import { callRemoteTool } from "./hook-client.js";
+import { envPositiveNumber } from "./env.js";
+import { callRemoteTool, readStdin } from "./hook-client.js";
 import { serverReady } from "./hook-readiness.js";
 import {
   DEFAULT_MAX_CHARS,
@@ -27,44 +28,21 @@ import type { RecallHit } from "./schema.js";
 import { recallHybrid } from "./tools.js";
 
 const DEFAULT_TIMEOUT_MS = 2500;
-const STDIN_TIMEOUT_MS = 2000;
 /** Cuántos recuerdos pedirle al recall antes de filtrar: el filtro descarta varios. */
 const CANDIDATES = 10;
-
-function envNumber(name: string, fallback: number): number {
-  const value = Number(process.env[name]);
-  return Number.isFinite(value) && value > 0 ? value : fallback;
-}
-
-function readStdin(): Promise<string> {
-  return new Promise((resolve) => {
-    let data = "";
-    if (process.stdin.isTTY) return resolve("");
-    const done = (): void => {
-      clearTimeout(timer);
-      resolve(data);
-    };
-    const timer = setTimeout(done, STDIN_TIMEOUT_MS);
-    timer.unref();
-    process.stdin.setEncoding("utf8");
-    process.stdin.on("data", (chunk) => (data += chunk));
-    process.stdin.on("end", done);
-    process.stdin.on("error", done);
-  });
-}
 
 async function search(query: string, timeoutMs: number): Promise<RecallHit[]> {
   const scope = process.env.MISMEM_HOOK_SCOPE || undefined;
   const args = { query, limit: CANDIDATES, reinforce: false, ...(scope ? { scope } : {}) };
   const url = process.env.MISMEM_HOOK_URL;
   if (url) {
-    const dbPath = process.env.MISMEM_DB ?? defaultDbPath();
+    const dbPath = defaultDbPath();
     // Un servidor sin `reinforce` descarta el campo y refuerza igual: no se le habla.
     if (!(await serverReady(url, dbPath, timeoutMs))) return [];
     const result = (await callRemoteTool(url, "recall", args, timeoutMs)) as { hits?: RecallHit[] };
     return result?.hits ?? [];
   }
-  const db = openDb(process.env.MISMEM_DB ?? defaultDbPath());
+  const db = openDb(defaultDbPath());
   try {
     return (await recallHybrid(db, args)).hits;
   } finally {
@@ -87,10 +65,10 @@ async function main(): Promise<void> {
   }
   if (!prompt?.trim()) return;
 
-  const minTerms = envNumber("MISMEM_HOOK_MIN_PROMPT_TERMS", DEFAULT_MIN_PROMPT_TERMS);
+  const minTerms = envPositiveNumber("MISMEM_HOOK_MIN_PROMPT_TERMS", DEFAULT_MIN_PROMPT_TERMS);
   if (!worthRecalling(prompt, minTerms)) return;
 
-  const hits = await search(prompt, envNumber("MISMEM_HOOK_TIMEOUT_MS", DEFAULT_TIMEOUT_MS));
+  const hits = await search(prompt, envPositiveNumber("MISMEM_HOOK_TIMEOUT_MS", DEFAULT_TIMEOUT_MS));
 
   // Un id que ya figura en el transcript ya está en el contexto: repetirlo es pagarlo dos veces.
   let alreadyPresent = new Set<string>();
@@ -104,8 +82,8 @@ async function main(): Promise<void> {
   }
 
   const chosen = selectForInjection(hits, {
-    maxMemories: envNumber("MISMEM_HOOK_MAX_MEMORIES", DEFAULT_MAX_MEMORIES),
-    maxChars: envNumber("MISMEM_HOOK_MAX_CHARS", DEFAULT_MAX_CHARS),
+    maxMemories: envPositiveNumber("MISMEM_HOOK_MAX_MEMORIES", DEFAULT_MAX_MEMORIES),
+    maxChars: envPositiveNumber("MISMEM_HOOK_MAX_CHARS", DEFAULT_MAX_CHARS),
     excludeScopes: parseScopeList(process.env.MISMEM_HOOK_EXCLUDE_SCOPES),
     alreadyPresent,
   });

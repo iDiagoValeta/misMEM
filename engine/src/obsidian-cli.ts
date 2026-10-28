@@ -9,6 +9,7 @@
 import { existsSync } from "node:fs";
 import { parseArgs } from "node:util";
 import Database from "better-sqlite3";
+import { EXIT_USAGE } from "./cli-args.js";
 import { defaultDbPath, openDb } from "./db.js";
 import { EXPORT_ROOT, exportObsidian } from "./obsidian.js";
 
@@ -30,9 +31,6 @@ Opciones:
 Env:
   MISMEM_DB        default ${defaultDbPath()} (debe existir: el export no crea la base)
 `;
-
-// EX_USAGE, como el resto de CLIs que validan sus flags.
-const EXIT_USAGE = 64;
 
 function isMismemDb(path: string): boolean {
   try {

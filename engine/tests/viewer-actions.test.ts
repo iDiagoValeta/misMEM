@@ -2,6 +2,7 @@ import { describe, it, expect, beforeEach } from "vitest";
 import type { IncomingMessage, ServerResponse } from "node:http";
 import type { Database as DB } from "better-sqlite3";
 import { openDb } from "../src/db.js";
+import type { ConsolidationJob } from "../src/consolidation/job.js";
 import { saveMemoryEmbedding } from "../src/embeddings/index.js";
 import { capture, consolidate, crystallize } from "../src/tools.js";
 import {
@@ -242,6 +243,21 @@ describe("handleAction", () => {
     expect((await act(`/api/memory/${a}/forget`, { confirm_token: ok })).status).toBe(200);
     expect((await act(`/api/memory/${b}/forget`, { confirm_token: ok })).status).toBe(409);
     expect(remaining()).toBe(1);
+  });
+
+  it("consolidate validates the scope with the shared Scope rules", async () => {
+    const started: Array<string | undefined> = [];
+    const job = { start: (scope?: string) => (started.push(scope), { running: true }) } as unknown as ConsolidationJob;
+    const run = async (body: unknown): Promise<number> => {
+      const res = { statusCode: 200, setHeader() {}, end() {} };
+      await handleAction(db, res as unknown as ServerResponse, "/api/consolidate", body, { job });
+      return res.statusCode;
+    };
+    expect(await run({ scope: "ok" })).toBe(202);
+    expect(await run({})).toBe(202);
+    expect(await run({ scope: "" })).toBe(400);
+    expect(await run({ scope: "x".repeat(129) })).toBe(400);
+    expect(started).toEqual(["ok", undefined]);
   });
 
   it("una entrada inválida es 400 y una ruta desconocida no se despacha", async () => {
