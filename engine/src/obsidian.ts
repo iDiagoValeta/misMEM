@@ -11,6 +11,11 @@
  * persona haya escrito en la bóveda. "Propia" se comprueba, no se supone: antes de borrar,
  * el frontmatter de la nota tiene que seguir declarando el id que apuntó el manifiesto.
  * Con --scope sólo se tocan las entradas de ese ámbito; las demás se conservan.
+ *
+ * Antes de tocar nada, la base tiene que tener algo que exportar: con 0 memorias y 0 rasgos
+ * (en el ámbito pedido, si hay --scope) se niega, también en --dry-run. Si el manifiesto
+ * existe pero no se puede interpretar, también se niega: reescribirlo en silencio dejaría
+ * las notas viejas huérfanas, sin nadie que las rastree para borrarlas algún día.
  */
 import { createHash } from "node:crypto";
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
@@ -126,6 +131,14 @@ export function exportObsidian(db: DB, opts: ExportOptions): ExportStats {
        FROM traits WHERE (@scope IS NULL OR scope = @scope)`,
     )
     .all({ scope: scope ?? null }) as TraitRow[];
+  // Una base recién creada (o la ruta equivocada a otro SQLite) no tiene nada que exportar:
+  // seguir adelante borraría todas las notas propias del manifiesto y la bóveda quedaría
+  // vacía sin error. Mejor negarse antes de escribir o borrar, también en --dry-run.
+  if (memories.length === 0 && traits.length === 0) {
+    throw new Error(
+      `no hay memorias ni rasgos que exportar${scope === undefined ? "" : ` en el ámbito ${scope}`}: no se toca la bóveda`,
+    );
+  }
   const episodes = db
     .prepare(
       `SELECT e.id, e.scope, e.body, e.created_at, e.consolidated_into FROM episodes e
@@ -324,9 +337,10 @@ interface Manifest {
 }
 
 /**
- * Lee el manifiesto. `null` si no se puede interpretar (ilegible o con forma desconocida),
- * que significa "no se borra nada". Un array es el formato viejo y se lee como entradas sin
- * id ni scope: no hay forma de demostrar que esos ficheros son nuestros.
+ * Lee el manifiesto. `null` si no se puede interpretar (ilegible o con forma desconocida);
+ * quien llama decide: si el fichero existe, el export se niega a seguir para no reescribirlo
+ * y dejar huérfanas las notas que apuntaba. Un array es el formato viejo y se lee como
+ * entradas sin id ni scope: no hay forma de demostrar que esos ficheros son nuestros.
  */
 function readManifest(path: string): Map<string, ManifestEntry | null> | null {
   let parsed: unknown;
@@ -375,7 +389,16 @@ function writeVault(
 ): ExportStats {
   const root = resolve(opts.dir, EXPORT_ROOT);
   const manifestPath = join(root, MANIFEST);
+  const manifestExists = existsSync(manifestPath);
   const previous = readManifest(manifestPath);
+  // Escribir un manifiesto nuevo encima de uno ilegible pierde el rastro de las notas viejas
+  // para siempre: ya nadie sabrá que eran nuestras y ningún export las borrará. Se para
+  // antes de escribir nada; arreglarlo o borrarlo es una decisión de la persona.
+  if (previous === null && manifestExists) {
+    throw new Error(
+      `el manifiesto no se puede interpretar: ${manifestPath}. Arréglalo o bórralo a mano: no se toca la bóveda`,
+    );
+  }
 
   const inside = (rel: string): string | null => {
     const file = resolve(root, rel);

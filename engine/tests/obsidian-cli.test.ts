@@ -47,4 +47,14 @@ describe("mismem-obsidian", () => {
     expect(JSON.parse(result.stdout)).toMatchObject({ memories: 1, scopes: 1, removed: 0 });
     expect(existsSync(join(vault, "misMEM", ".mismem-export.json"))).toBe(true);
   });
+
+  it("falla con la base vacía en vez de vaciar la bóveda", () => {
+    const dbPath = join(dir, "vacia.db");
+    openDb(dbPath).close();
+    const vault = join(dir, "vault");
+    const result = run(["--out", vault], dbPath);
+    expect(result.status).toBe(1);
+    expect(result.stderr).toContain("FATAL: no hay memorias ni rasgos que exportar: no se toca la bóveda");
+    expect(existsSync(vault)).toBe(false);
+  });
 });

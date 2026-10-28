@@ -127,6 +127,54 @@ describe("exportObsidian", () => {
     expect(existsSync(join(vault, EXPORT_ROOT))).toBe(false);
   });
 
+  it("una base vacía se niega en vez de vaciar la bóveda", () => {
+    memoryFrom("a", "una memoria de a", ["x"]);
+    exportObsidian(db, { dir: vault });
+    const memories = notes("Memorias");
+    const manifest = manifestOf(vault);
+
+    const empty = openDb(":memory:");
+    try {
+      expect(() => exportObsidian(empty, { dir: vault })).toThrow(
+        /no hay memorias ni rasgos que exportar: no se toca la bóveda/,
+      );
+      // --dry-run tampoco pasa: el aviso es el mismo antes de calcular nada.
+      expect(() => exportObsidian(empty, { dir: vault, dryRun: true })).toThrow(
+        /no hay memorias ni rasgos que exportar/,
+      );
+    } finally {
+      empty.close();
+    }
+    expect(notes("Memorias")).toEqual(memories);
+    expect(manifestOf(vault)).toEqual(manifest);
+  });
+
+  it("--scope sin nada que exportar se niega y no toca las notas de otros ámbitos", () => {
+    memoryFrom("a", "una memoria de a", ["x"]);
+    exportObsidian(db, { dir: vault });
+    const memories = notes("Memorias");
+    const manifest = manifestOf(vault);
+
+    expect(() => exportObsidian(db, { dir: vault, scope: "vacio" })).toThrow(
+      /no hay memorias ni rasgos que exportar en el ámbito vacio: no se toca la bóveda/,
+    );
+    expect(notes("Memorias")).toEqual(memories);
+    expect(manifestOf(vault)).toEqual(manifest);
+  });
+
+  it("un manifiesto ilegible detiene el export y se queda como estaba", () => {
+    memoryFrom("a", "se queda", ["x"]);
+    exportObsidian(db, { dir: vault });
+    const memories = notes("Memorias");
+    const manifestPath = join(vault, EXPORT_ROOT, ".mismem-export.json");
+    writeFileSync(manifestPath, "{ roto");
+
+    expect(() => exportObsidian(db, { dir: vault })).toThrow(/no se puede interpretar: .*\.mismem-export\.json/);
+    expect(notes("Memorias")).toEqual(memories);
+    // El manifiesto corrupto no se pisa: arreglarlo o borrarlo es cosa de la persona.
+    expect(readFileSync(manifestPath, "utf8")).toBe("{ roto");
+  });
+
   it("--scope no borra ni pierde las notas de los demás ámbitos", () => {
     memoryFrom("a", "una memoria de a", ["x"]);
     const b = memoryFrom("b", "una memoria de b", ["y"]);
