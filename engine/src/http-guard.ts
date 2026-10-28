@@ -3,6 +3,15 @@
  * server-http.ts, que escucha al importarse, para poder probarlo.
  */
 
+/**
+ * Loopback unless told otherwise: without MISMEM_AUTH_* the Host guard only stops browser
+ * DNS rebinding, any LAN client can send `Host: localhost`. Containers opt in to 0.0.0.0
+ * explicitly. An empty value counts as undefined.
+ */
+export function bindHost(env: NodeJS.ProcessEnv = process.env): string {
+  return env.MISMEM_HTTP_HOST || "127.0.0.1";
+}
+
 export interface BasicCredentials {
   user: string;
   pass: string;
