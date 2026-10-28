@@ -10,11 +10,8 @@
  *   mismem-embed [--scope <name>] [--batch 32] [--status] [--force]
  */
 import { defaultDbPath, openDefaultDb } from "./db.js";
-import {
-  embedPendingMemories,
-  getEmbeddingIndexStatus,
-  loadEmbeddingConfig,
-} from "./embeddings/index.js";
+import { embedPendingMemories, getEmbeddingIndexStatus } from "./embeddings/store.js";
+import { loadEmbeddingConfig } from "./embeddings/provider.js";
 import { ArgsError, EXIT_USAGE } from "./cli-args.js";
 import { parseEmbedArgs } from "./embed-args.js";
 

@@ -3,7 +3,8 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { Database as DB } from "better-sqlite3";
-import { openDb, contentHash } from "../src/db.js";
+import { openDb } from "../src/db.js";
+import { contentHash } from "../src/hash.js";
 import { capture, recall } from "../src/tools.js";
 
 let db: DB;

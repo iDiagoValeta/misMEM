@@ -10,7 +10,7 @@ import {
 } from "@modelcontextprotocol/sdk/types.js";
 import type { Database as DB } from "better-sqlite3";
 import { capture, recallHybrid, consolidate, crystallize, forget, reinforce } from "./tools.js";
-import { embedPendingMemories } from "./embeddings/index.js";
+import { embedPendingMemories } from "./embeddings/store.js";
 import {
   ENGRAM_TOOLS,
   dispatchEngramTool,

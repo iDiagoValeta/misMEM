@@ -27,7 +27,7 @@ import type { Database as DB } from "better-sqlite3";
 import { z } from "zod";
 import { CrystallizeInput, Scope } from "./schema.js";
 import { crystallize } from "./tools.js";
-import { embedPendingMemories } from "./embeddings/index.js";
+import { embedPendingMemories } from "./embeddings/store.js";
 import { JobError, type ConsolidationJob } from "./consolidation/job.js";
 import { json } from "./viewer.js";
 
