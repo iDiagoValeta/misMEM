@@ -90,7 +90,7 @@ describe("exportObsidian", () => {
   });
 
   it("re-exportar no reescribe lo que no cambió y borra sólo lo propio que ya no existe", () => {
-    const keep = memoryFrom("a", "se queda", ["x"]);
+    memoryFrom("a", "se queda", ["x"]);
     const gone = memoryFrom("a", "se va", ["y"]);
     exportObsidian(db, { dir: vault });
     // Una nota de la persona dentro de la misma carpeta no se toca nunca.
@@ -107,7 +107,6 @@ describe("exportObsidian", () => {
     expect(after.removed).toBe(1);
     expect(notes("Memorias")).toEqual(["mi nota.md", expect.stringMatching(/^se queda/)]);
     expect(existsSync(join(vault, "Diario", "hoy.md"))).toBe(true);
-    expect(keep).toBeTruthy();
   });
 
   it("un <palabra> del texto no corta el Markdown de la nota: se escapa", () => {

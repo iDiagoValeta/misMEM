@@ -1,7 +1,7 @@
 import { readFileSync } from "node:fs";
 import { fileURLToPath } from "node:url";
 import { describe, expect, it } from "vitest";
-import { contrastRatio } from "../ui/src/lib/contrast";
+import { contrastRatio } from "./support/contrast";
 
 const CSS_PATH = fileURLToPath(new URL("../ui/src/styles.css", import.meta.url));
 

@@ -10,10 +10,6 @@ const MemorySchema = z.object({
   confidence: z.number().min(0).max(1).optional(),
 });
 
-const ResponseSchema = z.object({
-  memories: z.array(MemorySchema),
-});
-
 export type DistilledMemory = z.infer<typeof MemorySchema>;
 
 export interface LlmConfig {
@@ -58,7 +54,7 @@ function loadMaxTokens(): number {
   return Number.isFinite(value) && value > 0 ? value : DEFAULT_MAX_TOKENS;
 }
 
-export type LlmProvider = "deepseek" | "openrouter" | "openai" | "compatible";
+type LlmProvider = "deepseek" | "openrouter" | "openai" | "compatible";
 
 const PROVIDERS: readonly LlmProvider[] = ["deepseek", "openrouter", "openai", "compatible"];
 

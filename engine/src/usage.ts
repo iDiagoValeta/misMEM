@@ -25,8 +25,8 @@ export interface UsageOptions {
 // Calibrado sobre 573 recuerdos devueltos en turnos reales con recall: la mediana de
 // solapamiento es 0,07 y el percentil 90 es 0,25. Con estos umbrales cuenta como usado
 // el 9 %, más o menos uno por llamada a recall; con 0,30/4 baja al 4 %.
-export const DEFAULT_MIN_OVERLAP = 0.2;
-export const DEFAULT_MIN_SHARED = 3;
+const DEFAULT_MIN_OVERLAP = 0.2;
+const DEFAULT_MIN_SHARED = 3;
 
 interface Block {
   type?: string;

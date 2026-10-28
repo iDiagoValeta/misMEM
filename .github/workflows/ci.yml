@@ -32,6 +32,8 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm typecheck
       - run: pnpm test
+      # Fails on unused files, exports and dependencies, so dead code cannot come back unnoticed.
+      - run: pnpm knip
       - run: pnpm build
 
   scripts:

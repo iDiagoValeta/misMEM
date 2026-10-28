@@ -106,7 +106,7 @@ export function unconsolidateMemory(db: DB, id: string): { id: string; episodes_
 }
 
 /** Lo que se pierde al olvidar: lo que el primer paso enseña antes de pedir confirmación. */
-export function forgetImpact(db: DB, layer: "memory" | "trait", id: string): Record<string, number> {
+function forgetImpact(db: DB, layer: "memory" | "trait", id: string): Record<string, number> {
   if (layer === "trait") {
     const { n } = db
       .prepare("SELECT json_array_length(evidence_memory_ids) AS n FROM traits WHERE id = ?")
@@ -123,7 +123,7 @@ export function forgetImpact(db: DB, layer: "memory" | "trait", id: string): Rec
   };
 }
 
-export const CONFIRM_TTL_SECONDS = 60;
+const CONFIRM_TTL_SECONDS = 60;
 
 /** Tokens de confirmación de los forget: de un solo uso, ligados a la capa y el id, con TTL. */
 export class ForgetConfirmations {
@@ -163,7 +163,7 @@ export function forgetMemory(db: DB, id: string): { id: string; episodes_deleted
   })();
 }
 
-export function forgetTrait(db: DB, id: string): { id: string } {
+function forgetTrait(db: DB, id: string): { id: string } {
   db.prepare("DELETE FROM traits WHERE id = ?").run(id);
   return { id };
 }
@@ -182,7 +182,7 @@ export function crystallizeFromUi(db: DB, raw: unknown): ReturnType<typeof cryst
   return crystallize(db, { ...input, evidence_memory_ids: ids });
 }
 
-export class ActionError extends Error {
+class ActionError extends Error {
   constructor(
     readonly status: number,
     message: string,

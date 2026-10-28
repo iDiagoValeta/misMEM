@@ -10,7 +10,7 @@ export interface ScopeCount {
   traits: number;
 }
 
-export interface MemoryItem {
+interface MemoryItem {
   id: string;
   scope: string;
   text: string;
@@ -104,7 +104,7 @@ export interface MemoriesPage {
 }
 
 /** Cuántas filas se piden por página. El tope del servidor es 200. */
-export const PAGE_SIZE = 50;
+const PAGE_SIZE = 50;
 
 export const isMissing = (item: object): item is Missing => "missing" in item;
 

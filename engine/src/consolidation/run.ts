@@ -13,7 +13,7 @@ import {
 } from "./llm.js";
 import { SYSTEM_PROMPT, buildUserPrompt, type EpisodeForPrompt } from "./prompts.js";
 
-export type DistillFn = (
+type DistillFn = (
   cfg: LlmConfig,
   systemPrompt: string,
   userPrompt: string,
