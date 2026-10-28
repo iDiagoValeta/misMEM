@@ -1,5 +1,5 @@
-import { describe, it, expect, beforeEach } from "vitest";
-import { mkdtempSync } from "node:fs";
+import { describe, it, expect, beforeEach, afterEach } from "vitest";
+import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import type { Database as DB } from "better-sqlite3";
@@ -46,8 +46,16 @@ describe("capture dedup", () => {
 });
 
 describe("content_hash migration", () => {
+  let dir: string;
+  beforeEach(() => {
+    dir = mkdtempSync(join(tmpdir(), "mismem-test-"));
+  });
+  afterEach(() => {
+    rmSync(dir, { recursive: true, force: true });
+  });
+
   it("backfillea hashes de filas legacy al reabrir la DB", () => {
-    const path = join(mkdtempSync(join(tmpdir(), "mismem-test-")), "mem.db");
+    const path = join(dir, "mem.db");
 
     // Fila "legacy": insertada sin hash (como las anteriores a v0.2).
     const first = openDb(path);
@@ -59,15 +67,19 @@ describe("content_hash migration", () => {
 
     // Reabrir dispara migrate() → backfill.
     const reopened = openDb(path);
-    const row = reopened
-      .prepare("SELECT content_hash FROM episodes WHERE id = 'legacy1'")
-      .get() as { content_hash: string };
-    expect(row.content_hash).toBe(contentHash("cuerpo legacy"));
+    try {
+      const row = reopened
+        .prepare("SELECT content_hash FROM episodes WHERE id = 'legacy1'")
+        .get() as { content_hash: string };
+      expect(row.content_hash).toBe(contentHash("cuerpo legacy"));
 
-    // Y capture del mismo body dedupea contra la fila migrada.
-    const r = capture(reopened, { scope: "s", body: "cuerpo legacy" });
-    expect(r.deduped).toBe(true);
-    expect(r.id).toBe("legacy1");
-    reopened.close();
+      // Y capture del mismo body dedupea contra la fila migrada.
+      const r = capture(reopened, { scope: "s", body: "cuerpo legacy" });
+      expect(r.deduped).toBe(true);
+      expect(r.id).toBe("legacy1");
+    } finally {
+      // Closed before afterEach removes the dir: an open handle would make rmSync fail (EBUSY on Windows).
+      reopened.close();
+    }
   });
 });
