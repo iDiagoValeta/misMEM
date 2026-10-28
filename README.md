@@ -234,29 +234,7 @@ Issues y PRs bienvenidos. Antes de un PR: `pnpm typecheck && pnpm test` desde `e
 ## Gracias
 
 misMEM lo arrancó una persona sola, pero no siguió así.
-[**@iDiagoValeta**](https://github.com/iDiagoValeta) trajo buena parte de lo que
-hoy lo hace usable por alguien que no sea su autor:
-
-- **Instalación de un comando en Linux** ([`scripts/install.sh`](scripts/install.sh), #69):
-  detecta los clientes, deja la clave fuera de sus configuraciones y re-ejecutarlo
-  actualiza sin duplicar.
-- **Ver de dónde sale cada recuerdo** (#52): la API de sólo lectura con los ámbitos, el
-  origen de cada memoria, los rasgos que la citan y el grafo de la memoria entera.
-- **Consolidar con el proveedor que quieras** (#67): OpenAI y cualquier servidor
-  compatible, además de DeepSeek y OpenRouter. Es lo que permite consolidar sin que el
-  texto salga de tu red.
-- **Que el servidor HTTP no se abra por descuido** (#31, #33, #35): no arranca con la auth a
-  medias, sin auth sólo atiende loopback, y el cuerpo de `POST /mcp` corta en 4 MiB.
-- **Que no se pierda memoria por un descuido** (#37, #39, #50): una preferencia corta llega
-  al LLM en vez de caer como ruido, una tanda sin señal suma un strike en vez de condenar el
-  episodio, y cada llamada al LLM tiene un tope de tiempo.
-- **Que un flag mal escrito corte en vez de hacer otra cosa** (#42, #44), que con `forget`
-  es la diferencia entre un error y una purga.
-- **El hallazgo de que el refuerzo por uso no veía lo que la inyección adelantaba** (#48),
-  que es el bug que hacía que la saliencia no midiera nada.
-
-Las revisiones de sus PRs están abiertas en el repo a propósito: las mediciones y los
-desacuerdos valen tanto como el código.
+[**@iDiagoValeta**](https://github.com/iDiagoValeta) colaboró en su desarrollo de forma activa como muestra de su amor y apoyo incondicional hacia el Open-Source.
 
 ## Licencia
 
