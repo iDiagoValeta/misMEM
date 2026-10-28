@@ -5,10 +5,12 @@ import { openDb } from "../src/db.js";
 import { saveMemoryEmbedding } from "../src/embeddings/index.js";
 import { capture, consolidate, crystallize } from "../src/tools.js";
 import {
+  ForgetConfirmations,
   crystallizeFromUi,
   editMemory,
   forgetMemory,
   handleAction,
+  loadAllowDelete,
   unconsolidateMemory,
   writeGuard,
 } from "../src/viewer-actions.js";
@@ -130,6 +132,16 @@ describe("cristalizar desde la interfaz", () => {
   });
 });
 
+describe("loadAllowDelete", () => {
+  it("sólo se enciende a propósito", () => {
+    expect(loadAllowDelete({})).toBe(false);
+    expect(loadAllowDelete({ MISMEM_VIEWER_ALLOW_DELETE: "0" })).toBe(false);
+    expect(loadAllowDelete({ MISMEM_VIEWER_ALLOW_DELETE: "off" })).toBe(false);
+    expect(loadAllowDelete({ MISMEM_VIEWER_ALLOW_DELETE: "1" })).toBe(true);
+    expect(loadAllowDelete({ MISMEM_VIEWER_ALLOW_DELETE: " True " })).toBe(true);
+  });
+});
+
 describe("handleAction", () => {
   interface MockResponse {
     statusCode: number;
@@ -137,7 +149,15 @@ describe("handleAction", () => {
     setHeader(): void;
     end(payload?: string): void;
   }
-  async function act(path: string, body: unknown = {}): Promise<{ handled: boolean; status: number; body: unknown }> {
+  let clock = 1_000_000;
+  let confirmations: ForgetConfirmations;
+  let allowDelete: boolean;
+  beforeEach(() => {
+    confirmations = new ForgetConfirmations(() => clock);
+    allowDelete = true;
+  });
+
+  async function act(path: string, body: unknown = {}): Promise<{ handled: boolean; status: number; body: any }> {
     const res: MockResponse = {
       statusCode: 200,
       body: "",
@@ -146,7 +166,11 @@ describe("handleAction", () => {
         this.body = payload ?? "";
       },
     };
-    const handled = await handleAction(db, res as unknown as ServerResponse, path, body, { reembed: noReembed });
+    const handled = await handleAction(db, res as unknown as ServerResponse, path, body, {
+      reembed: noReembed,
+      allowDelete,
+      confirmations,
+    });
     return { handled, status: res.statusCode, body: res.body ? JSON.parse(res.body) : undefined };
   }
 
@@ -161,8 +185,63 @@ describe("handleAction", () => {
     const m = memoryFrom("a", "memoria", ["e1"]).memoryId;
     const t = crystallize(db, { scope: "a", name: "rasgo", evidence_memory_ids: [m] }).trait_id;
     expect((await act(`/api/trait/${t}/edit`)).handled).toBe(false);
-    expect((await act(`/api/trait/${t}/forget`)).status).toBe(200);
+    const first = await act(`/api/trait/${t}/forget`);
+    expect(first.status).toBe(409);
+    expect(first.body.impacto).toEqual({ memorias_que_cita: 1 });
+    expect((await act(`/api/trait/${t}/forget`, { confirm_token: first.body.confirm_token })).status).toBe(200);
     expect(count("SELECT COUNT(*) AS n FROM traits")).toBe(0);
+    expect(count("SELECT COUNT(*) AS n FROM memories")).toBe(1);
+  });
+
+  it("sin el interruptor, los dos forget dan 403 y no borran; lo demás sigue", async () => {
+    allowDelete = false;
+    const { memoryId } = memoryFrom("a", "memoria", ["e1"]);
+    const t = crystallize(db, { scope: "a", name: "rasgo", evidence_memory_ids: [memoryId] }).trait_id;
+    const memory = await act(`/api/memory/${memoryId}/forget`);
+    expect(memory.status).toBe(403);
+    expect(memory.body.error).toMatch(/MISMEM_VIEWER_ALLOW_DELETE/);
+    expect((await act(`/api/trait/${t}/forget`)).status).toBe(403);
+    expect(count("SELECT COUNT(*) AS n FROM memories")).toBe(1);
+    expect(count("SELECT COUNT(*) AS n FROM traits")).toBe(1);
+    expect((await act(`/api/memory/${memoryId}/edit`, { gist: "nueva" })).status).toBe(200);
+  });
+
+  it("olvidar una memoria pide confirmación con su impacto y borra sólo con el token", async () => {
+    const { memoryId } = memoryFrom("a", "memoria", ["e1", "e2"]);
+    crystallize(db, { scope: "a", name: "uno", evidence_memory_ids: [memoryId] });
+    crystallize(db, { scope: "a", name: "dos", evidence_memory_ids: [memoryId] });
+    const first = await act(`/api/memory/${memoryId}/forget`);
+    expect(first.status).toBe(409);
+    expect(first.body).toMatchObject({ expires_in: 60, impacto: { episodios: 2, rasgos_que_la_citan: 2 } });
+    expect(first.body.error).toBeUndefined();
+    expect(count("SELECT COUNT(*) AS n FROM memories")).toBe(1);
+    const second = await act(`/api/memory/${memoryId}/forget`, { confirm_token: first.body.confirm_token });
+    expect(second).toMatchObject({ status: 200, body: { id: memoryId, episodes_deleted: 2 } });
+    expect(count("SELECT COUNT(*) AS n FROM memories")).toBe(0);
+  });
+
+  it("el token es de un solo uso, de ese id y caduca a los 60 s", async () => {
+    const a = memoryFrom("a", "una", ["e1"]).memoryId;
+    const b = memoryFrom("a", "otra", ["e2"]).memoryId;
+    const remaining = () => count("SELECT COUNT(*) AS n FROM memories");
+
+    const forA = (await act(`/api/memory/${a}/forget`)).body.confirm_token;
+    const wrongId = await act(`/api/memory/${b}/forget`, { confirm_token: forA });
+    expect(wrongId.status).toBe(409);
+    expect(wrongId.body.error).toMatch(/caducó/);
+    // Se gastó al intentarlo con otro id: tampoco sirve ya para el suyo.
+    expect((await act(`/api/memory/${a}/forget`, { confirm_token: forA })).status).toBe(409);
+    expect(remaining()).toBe(2);
+
+    const late = (await act(`/api/memory/${a}/forget`)).body.confirm_token;
+    clock += 60_000;
+    expect((await act(`/api/memory/${a}/forget`, { confirm_token: late })).status).toBe(409);
+    expect(remaining()).toBe(2);
+
+    const ok = (await act(`/api/memory/${a}/forget`)).body.confirm_token;
+    expect((await act(`/api/memory/${a}/forget`, { confirm_token: ok })).status).toBe(200);
+    expect((await act(`/api/memory/${b}/forget`, { confirm_token: ok })).status).toBe(409);
+    expect(remaining()).toBe(1);
   });
 
   it("una entrada inválida es 400 y una ruta desconocida no se despacha", async () => {

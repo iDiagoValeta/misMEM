@@ -3,8 +3,8 @@
  *
  *   POST /api/memory/:id/edit           {gist, details?}
  *   POST /api/memory/:id/unconsolidate  la memoria se borra y sus episodios vuelven a pendientes
- *   POST /api/memory/:id/forget         la memoria y sus episodios se borran
- *   POST /api/trait/:id/forget          el rasgo se borra
+ *   POST /api/memory/:id/forget         la memoria y sus episodios se borran (en dos pasos)
+ *   POST /api/trait/:id/forget          el rasgo se borra (en dos pasos)
  *   POST /api/crystallize               {scope, name, polarity?, memory_ids}
  *   POST /api/consolidate               {scope?}: arranca una corrida en segundo plano
  *
@@ -13,7 +13,14 @@
  * CORS que el servidor no contesta, y un Origin igual al propio servidor, que corta un
  * formulario o un fetch desde otra web. La auth y el filtro de Host de server-http siguen
  * delante, y el filtro de Host es el que cubre el DNS rebinding.
+ *
+ * Los dos forget son lo único sin vuelta atrás, y borran también la evidencia, así que piden
+ * más: sólo existen con MISMEM_VIEWER_ALLOW_DELETE encendido (si no, 403), y el primer POST
+ * no borra. Responde 409 con lo que se perdería y un token de un solo uso, ligado a ese id y
+ * válido 60 s; borra el segundo POST, el que trae {confirm_token}. Así la UI tiene que enseñar
+ * el impacto antes de preguntar, y un request forjado suelto no alcanza.
  */
+import { randomBytes } from "node:crypto";
 import type { IncomingMessage, ServerResponse } from "node:http";
 import type { Database as DB } from "better-sqlite3";
 import { z } from "zod";
@@ -97,6 +104,55 @@ export function unconsolidateMemory(db: DB, id: string): { id: string; episodes_
   })();
 }
 
+/** Lo que se pierde al olvidar: lo que el primer paso enseña antes de pedir confirmación. */
+export function forgetImpact(db: DB, layer: "memory" | "trait", id: string): Record<string, number> {
+  if (layer === "trait") {
+    const { n } = db
+      .prepare("SELECT json_array_length(evidence_memory_ids) AS n FROM traits WHERE id = ?")
+      .get(id) as { n: number };
+    // Las memorias que cita no se borran; se cuentan para que el diálogo lo diga.
+    return { memorias_que_cita: n };
+  }
+  const count = (sql: string): number => (db.prepare(sql).get(id) as { n: number }).n;
+  return {
+    episodios: count("SELECT COUNT(*) AS n FROM episodes WHERE consolidated_into = ?"),
+    rasgos_que_la_citan: count(
+      "SELECT COUNT(DISTINCT t.id) AS n FROM traits t, json_each(t.evidence_memory_ids) j WHERE j.value = ?",
+    ),
+  };
+}
+
+export const CONFIRM_TTL_SECONDS = 60;
+
+/** Tokens de confirmación de los forget: de un solo uso, ligados a la capa y el id, con TTL. */
+export class ForgetConfirmations {
+  private readonly pending = new Map<string, { target: string; expiresAt: number }>();
+
+  constructor(private readonly clock: () => number = Date.now) {}
+
+  issue(layer: string, id: string): string {
+    const at = this.clock();
+    for (const [token, entry] of this.pending) if (entry.expiresAt <= at) this.pending.delete(token);
+    const token = randomBytes(16).toString("hex");
+    this.pending.set(token, { target: `${layer}/${id}`, expiresAt: at + CONFIRM_TTL_SECONDS * 1000 });
+    return token;
+  }
+
+  /** true si el token vale para esta capa e id. Lo gasta siempre, valga o no. */
+  consume(token: string, layer: string, id: string): boolean {
+    const entry = this.pending.get(token);
+    this.pending.delete(token);
+    return entry !== undefined && entry.target === `${layer}/${id}` && entry.expiresAt > this.clock();
+  }
+}
+
+/** El interruptor del borrado desde la interfaz: apagado salvo que se encienda a propósito. */
+export function loadAllowDelete(env: NodeJS.ProcessEnv = process.env): boolean {
+  return ["1", "true", "on"].includes((env.MISMEM_VIEWER_ALLOW_DELETE ?? "").trim().toLowerCase());
+}
+
+const ForgetInput = z.object({ confirm_token: z.string().min(1).max(128).optional() });
+
 /** Olvida como `forget`: la memoria y lo que la respaldaba. */
 export function forgetMemory(db: DB, id: string): { id: string; episodes_deleted: number } {
   return db.transaction(() => {
@@ -146,7 +202,12 @@ export async function handleAction(
   res: ServerResponse,
   pathname: string,
   body: unknown,
-  opts: { reembed?: Reembed; job?: ConsolidationJob } = {},
+  opts: {
+    reembed?: Reembed;
+    job?: ConsolidationJob;
+    allowDelete?: boolean;
+    confirmations?: ForgetConfirmations;
+  } = {},
 ): Promise<boolean> {
   const reembed = opts.reembed ?? defaultReembed;
   try {
@@ -163,17 +224,34 @@ export async function handleAction(
     if (!match) return false;
     const [, layer, rawId, action] = match;
     const id = decodeURIComponent(rawId ?? "");
-    const table = layer === "trait" ? "traits" : "memories";
+    const target = layer === "trait" ? "trait" : "memory";
+    const table = target === "trait" ? "traits" : "memories";
     if (!exists(db, table, id)) {
       json(res, 404, { error: `${layer} not found: ${id}` });
       return true;
     }
-    if (layer === "trait") {
-      if (action !== "forget") return false;
-      json(res, 200, forgetTrait(db, id));
-    } else if (action === "edit") json(res, 200, await editMemory(db, id, body, reembed));
+    if (target === "trait" && action !== "forget") return false;
+    if (action === "edit") json(res, 200, await editMemory(db, id, body, reembed));
     else if (action === "unconsolidate") json(res, 200, unconsolidateMemory(db, id));
-    else json(res, 200, forgetMemory(db, id));
+    else {
+      if (!opts.allowDelete || !opts.confirmations) {
+        json(res, 403, {
+          error: "borrar desde la interfaz está desactivado: arranca el servidor con MISMEM_VIEWER_ALLOW_DELETE=1",
+        });
+        return true;
+      }
+      const token = ForgetInput.parse(body ?? {}).confirm_token;
+      if (!token || !opts.confirmations.consume(token, target, id)) {
+        json(res, 409, {
+          ...(token ? { error: "la confirmación caducó o no es de este recuerdo; confirma otra vez" } : {}),
+          confirm_token: opts.confirmations.issue(target, id),
+          expires_in: CONFIRM_TTL_SECONDS,
+          impacto: forgetImpact(db, target, id),
+        });
+        return true;
+      }
+      json(res, 200, target === "trait" ? forgetTrait(db, id) : forgetMemory(db, id));
+    }
     return true;
   } catch (err) {
     if (err instanceof ActionError || err instanceof JobError) json(res, err.status, { error: err.message });

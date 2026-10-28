@@ -110,6 +110,7 @@ Y en `mcp.json`: `"command": "node", "args": ["<ruta-al-repo>/misMEM/engine/dist
 - **`engine/src/server-http.ts`** — Streamable HTTP para deploy remoto (BasicAuth opcional, `/healthz`). Ver [DEPLOY.md](./DEPLOY.md).
 - **`engine/ui/`** — la interfaz (React + Vite, compilada a `dist/ui/`) que `server-http` sirve en `/viewer`: memorias por salience de hoy, rasgos, lo pendiente y de dónde sale cada recuerdo. `pnpm dev:ui` la levanta en desarrollo contra un servidor en `:3200`.
 - **`engine/src/viewer.ts`**, **`viewer-api.ts`** — su API de sólo lectura: `/api/{stats,recent,search,scopes,memories,graph}` y `/api/{memory,trait}/:id`. La salience que devuelven es la efectiva, con el decay aplicado a hoy, la misma que usa el recall.
+- **`engine/src/viewer-actions.ts`** — lo que la interfaz puede cambiar, sólo por POST JSON desde el propio origen: corregir una memoria, deshacer su consolidación, cristalizar y lanzar una consolidación. Olvidar una memoria o un rasgo es lo único irreversible y está apagado salvo con `MISMEM_VIEWER_ALLOW_DELETE=1`; aun así va en dos pasos: el primer POST devuelve qué se perdería y un token de 60 s, y borra el segundo, el que lo trae.
 - **Consolidación LLM** — cron nocturno que destila episodios en memorias con DeepSeek, OpenRouter, OpenAI o cualquier servidor compatible, con pre-filtro Pareto para descartar ruido. Ver [engine/src/consolidation/README.md](engine/src/consolidation/README.md).
 - **CLIs** — `mismem-ingest` (exports de ChatGPT / transcripts de VS Code), `mismem-consolidate`, `mismem-forget`, `mismem-stats`, `mismem-embed`, `mismem-migrate-engram`, `mismem-bench` (mide el recall con un banco de preguntas propio, sin reforzar) y los dos hooks, `mismem-inject` y `mismem-used`.
 
@@ -129,7 +130,7 @@ Y en `mcp.json`: `"command": "node", "args": ["<ruta-al-repo>/misMEM/engine/dist
 - ✅ Servidor Streamable HTTP + deploy Docker/Traefik.
 - ✅ Consolidación LLM nocturna (episodes → memories).
 - ✅ Índice hebbiano: `use_count` por recuerdo y `co_use` por par usado en el mismo turno.
-- ✅ Viewer read-only, con el origen de cada recuerdo y el grafo de la memoria, + CLIs de introspección.
+- ✅ Viewer con el origen de cada recuerdo y el grafo de la memoria, + CLIs de introspección.
 - ✅ Dedup en captura/ingesta (re-ingestar es idempotente).
 - ✅ Recall híbrido: FTS5 + búsqueda semántica opcional vía [Ollama](https://ollama.com) o cualquier servidor compatible con OpenAI.
 - ✅ Hooks opcionales de cliente: adelantar recuerdos antes de responder y reforzar los que se usaron.

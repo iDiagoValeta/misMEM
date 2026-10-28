@@ -139,6 +139,24 @@ async function post<T>(path: string, body: unknown = {}): Promise<T> {
   return (await res.json()) as T;
 }
 
+/** El primer paso de un forget: no borra, devuelve lo que se perdería y el token para confirmar. */
+export interface ForgetChallenge {
+  confirm_token: string;
+  expires_in: number;
+  impacto: { episodios?: number; rasgos_que_la_citan?: number; memorias_que_cita?: number };
+}
+
+async function forgetChallenge(path: string): Promise<ForgetChallenge> {
+  const res = await fetch(`../api/${path}`, {
+    method: "POST",
+    headers: { "content-type": "application/json" },
+    body: "{}",
+  });
+  const payload = (await res.json().catch(() => null)) as (Partial<ForgetChallenge> & { error?: string }) | null;
+  if (res.status === 409 && payload?.confirm_token) return payload as ForgetChallenge;
+  throw new Error(payload?.error ?? `HTTP ${res.status}`);
+}
+
 export type Polarity = "neutral" | "light" | "shadow";
 
 export interface ConsolidationState {
@@ -161,9 +179,14 @@ export const actions = {
     post<{ id: string; reembedded: boolean }>(`memory/${encodeURIComponent(id)}/edit`, { gist, details }),
   unconsolidate: (id: string) =>
     post<{ id: string; episodes_released: number }>(`memory/${encodeURIComponent(id)}/unconsolidate`),
-  forgetMemory: (id: string) =>
-    post<{ id: string; episodes_deleted: number }>(`memory/${encodeURIComponent(id)}/forget`),
-  forgetTrait: (id: string) => post<{ id: string }>(`trait/${encodeURIComponent(id)}/forget`),
+  forgetMemoryChallenge: (id: string) => forgetChallenge(`memory/${encodeURIComponent(id)}/forget`),
+  forgetMemory: (id: string, token: string) =>
+    post<{ id: string; episodes_deleted: number }>(`memory/${encodeURIComponent(id)}/forget`, {
+      confirm_token: token,
+    }),
+  forgetTraitChallenge: (id: string) => forgetChallenge(`trait/${encodeURIComponent(id)}/forget`),
+  forgetTrait: (id: string, token: string) =>
+    post<{ id: string }>(`trait/${encodeURIComponent(id)}/forget`, { confirm_token: token }),
   consolidate: (scope?: string) => post<ConsolidationState>("consolidate", scope ? { scope } : {}),
   crystallize: (scope: string, name: string, polarity: Polarity, ids: string[]) =>
     post<{ trait_id: string; created: boolean; strength: number }>("crystallize", {

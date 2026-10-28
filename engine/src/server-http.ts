@@ -13,6 +13,7 @@
  *   MISMEM_DB            ruta SQLite (default ~/.mismem/mem.db)
  *   MISMEM_ALLOWED_HOSTS sin auth, nombres de Host aceptados además de loopback (coma)
  *   MISMEM_HTTP_MAX_BODY_BYTES  tope del cuerpo de POST /mcp (default 4 MiB); más, 413
+ *   MISMEM_VIEWER_ALLOW_DELETE  1 para que la interfaz pueda olvidar memorias y rasgos (default apagado)
  *
  * Endpoints:
  *   GET  /healthz   →  200 ok (liveness)
@@ -44,7 +45,13 @@ import {
   parseDetailPath,
 } from "./viewer-api.js";
 import { serveUi } from "./viewer-static.js";
-import { ACTION_MAX_BODY_BYTES, handleAction, writeGuard } from "./viewer-actions.js";
+import {
+  ACTION_MAX_BODY_BYTES,
+  ForgetConfirmations,
+  handleAction,
+  loadAllowDelete,
+  writeGuard,
+} from "./viewer-actions.js";
 import { ConsolidationJob } from "./consolidation/job.js";
 
 const PORT = Number(process.env.MISMEM_HTTP_PORT ?? 3200);
@@ -89,6 +96,8 @@ function send401(res: ServerResponse): void {
 const db = openDefaultDb();
 // La corrida de consolidación que se lanza desde la interfaz: una a la vez por proceso.
 const consolidationJob = new ConsolidationJob(db);
+const ALLOW_DELETE = loadAllowDelete();
+const forgetConfirmations = new ForgetConfirmations();
 
 const httpServer = createHttpServer(async (req, res) => {
   try {
@@ -200,7 +209,8 @@ const httpServer = createHttpServer(async (req, res) => {
           res.end(JSON.stringify({ error: tooLarge ? "cuerpo demasiado grande" : "JSON inválido" }));
           return;
         }
-        if (await handleAction(db, res, url.pathname, body, { job: consolidationJob })) return;
+        const actionOpts = { job: consolidationJob, allowDelete: ALLOW_DELETE, confirmations: forgetConfirmations };
+        if (await handleAction(db, res, url.pathname, body, actionOpts)) return;
         res.statusCode = 404;
         res.setHeader("content-type", "application/json; charset=utf-8");
         res.end(JSON.stringify({ error: `unknown action: ${url.pathname}` }));

@@ -15,7 +15,7 @@ import {
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
 import { Skeleton } from "@/components/ui/skeleton";
-import { actions, api, isMissing, type MemoryDetail } from "../api";
+import { actions, api, isMissing, type ForgetChallenge, type MemoryDetail } from "../api";
 import type { Selection } from "../App";
 import { ago, exact, percent } from "../format";
 import { errorMessage } from "../lib/errors";
@@ -217,6 +217,7 @@ function MemoryView({
   const query = useQuery({ queryKey: ["memory", id], queryFn: ({ signal }) => api.memory(id, signal) });
   const [editing, setEditing] = useState(false);
   const [confirm, setConfirm] = useState<"unconsolidate" | "forget" | null>(null);
+  const [challenge, setChallenge] = useState<ForgetChallenge>();
   const [busy, setBusy] = useState(false);
   const [actionError, setActionError] = useState<string>();
 
@@ -242,6 +243,19 @@ function MemoryView({
     void queryClient.invalidateQueries();
   };
 
+  // Olvidar va en dos pasos (viewer-actions.ts): el servidor dice qué se pierde y da el token
+  // que confirma; sin él no borra. El diálogo enseña ese impacto, no uno calculado aquí.
+  const askForget = async () => {
+    setConfirm("forget");
+    setChallenge(undefined);
+    setActionError(undefined);
+    try {
+      setChallenge(await actions.forgetMemoryChallenge(memory.id));
+    } catch (err) {
+      setActionError(errorMessage(err));
+    }
+  };
+
   const runAction = async (kind: "unconsolidate" | "forget") => {
     setBusy(true);
     setActionError(undefined);
@@ -255,7 +269,8 @@ function MemoryView({
             : `Consolidación deshecha: ${out.episodes_released} episodios vuelven a estar pendientes.`,
         );
       } else {
-        const out = await actions.forgetMemory(memory.id);
+        if (!challenge) return;
+        const out = await actions.forgetMemory(memory.id, challenge.confirm_token);
         setConfirm(null);
         toast.success(
           out.episodes_deleted === 1
@@ -268,6 +283,11 @@ function MemoryView({
       const message = errorMessage(err);
       setActionError(message);
       toast.error(`No se pudo: ${message}`);
+      // El token se gastó en el intento: sin uno nuevo, el siguiente clic tampoco borraría.
+      if (kind === "forget") {
+        setChallenge(undefined);
+        actions.forgetMemoryChallenge(memory.id).then(setChallenge, () => undefined);
+      }
     } finally {
       setBusy(false);
     }
@@ -342,7 +362,7 @@ function MemoryView({
           <Button type="button" variant="outline" size="sm" onClick={() => setConfirm("unconsolidate")}>
             Deshacer consolidación
           </Button>
-          <Button type="button" variant="outline" size="sm" className="text-danger" onClick={() => setConfirm("forget")}>
+          <Button type="button" variant="outline" size="sm" className="text-danger" onClick={() => void askForget()}>
             Olvidar
           </Button>
         </div>
@@ -399,6 +419,7 @@ function MemoryView({
         onOpenChange={(open) => {
           if (!open) {
             setConfirm(null);
+            setChallenge(undefined);
             setActionError(undefined);
           }
         }}
@@ -409,7 +430,13 @@ function MemoryView({
               {confirm === "forget" ? "Olvidar esta memoria" : "Deshacer la consolidación"}
             </AlertDialogTitle>
             <AlertDialogDescription>
-              {confirm === "forget" ? forgetText(linked, traits.length) : unconsolidateText(linked)}
+              {confirm === "forget"
+                ? challenge
+                  ? forgetText(challenge.impacto.episodios ?? 0, challenge.impacto.rasgos_que_la_citan ?? 0)
+                  : actionError
+                    ? "No se puede olvidar esta memoria ahora."
+                    : "Mirando qué se perdería…"
+                : unconsolidateText(linked)}
             </AlertDialogDescription>
           </AlertDialogHeader>
           {actionError && (
@@ -421,7 +448,7 @@ function MemoryView({
             <AlertDialogCancel disabled={busy}>Cancelar</AlertDialogCancel>
             <AlertDialogAction
               variant={confirm === "forget" ? "destructive" : "default"}
-              disabled={busy}
+              disabled={busy || (confirm === "forget" && !challenge)}
               onClick={(event) => {
                 // La confirmación no se cierra sola: si la escritura falla, se lee el error aquí.
                 event.preventDefault();
@@ -537,6 +564,7 @@ function TraitView({
 }) {
   const query = useQuery({ queryKey: ["trait", id], queryFn: ({ signal }) => api.trait(id, signal) });
   const [confirm, setConfirm] = useState(false);
+  const [challenge, setChallenge] = useState<ForgetChallenge>();
   const [busy, setBusy] = useState(false);
   const [actionError, setActionError] = useState<string>();
 
@@ -550,11 +578,24 @@ function TraitView({
   }
   const { trait, evidence } = data;
 
+  // Como la memoria: primero el servidor da el token que confirma, y sólo con él borra.
+  const askForget = async () => {
+    setConfirm(true);
+    setChallenge(undefined);
+    setActionError(undefined);
+    try {
+      setChallenge(await actions.forgetTraitChallenge(trait.id));
+    } catch (err) {
+      setActionError(errorMessage(err));
+    }
+  };
+
   const forget = async () => {
+    if (!challenge) return;
     setBusy(true);
     setActionError(undefined);
     try {
-      await actions.forgetTrait(trait.id);
+      await actions.forgetTrait(trait.id, challenge.confirm_token);
       setConfirm(false);
       toast.success("Rasgo olvidado.");
       onChanged(null);
@@ -562,6 +603,8 @@ function TraitView({
       const message = errorMessage(err);
       setActionError(message);
       toast.error(`No se pudo: ${message}`);
+      setChallenge(undefined);
+      actions.forgetTraitChallenge(trait.id).then(setChallenge, () => undefined);
     } finally {
       setBusy(false);
     }
@@ -592,7 +635,7 @@ function TraitView({
       </dl>
 
       <div className="mt-4">
-        <Button type="button" variant="outline" size="sm" className="text-danger" onClick={() => setConfirm(true)}>
+        <Button type="button" variant="outline" size="sm" className="text-danger" onClick={() => void askForget()}>
           Olvidar rasgo
         </Button>
       </div>
@@ -630,6 +673,7 @@ function TraitView({
         onOpenChange={(open) => {
           if (!open) {
             setConfirm(false);
+            setChallenge(undefined);
             setActionError(undefined);
           }
         }}
@@ -650,7 +694,7 @@ function TraitView({
             <AlertDialogCancel disabled={busy}>Cancelar</AlertDialogCancel>
             <AlertDialogAction
               variant="destructive"
-              disabled={busy}
+              disabled={busy || !challenge}
               onClick={(event) => {
                 event.preventDefault();
                 void forget();
