@@ -2,6 +2,10 @@
 
 ## Sin publicar
 
+### zod 4
+
+- zod pasa de 3.25.76 a 4.6.7 (versión exacta): `.int()` rechaza enteros fuera del rango seguro de JS (y el `inputSchema` de `forget` lo anuncia), los límites de longitud cuentan *code points* en vez de unidades UTF-16 y cambian los textos de `ZodError`; `tests/tool-schemas.test.ts` compara con `z.toJSONSchema` en vez de leer internos de zod 3.
+
 ### Linter con Biome, y fuera las directivas de ESLint que no hacían nada
 
 - No había linter ni formateador. Ahora Biome 2 es el único, sólo como linter: `pnpm lint` y un step
