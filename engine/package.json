@@ -61,7 +61,7 @@
     "lint": "biome lint .",
     "knip": "knip",
     "dup": "jscpd --min-lines 10 --threshold 0 --no-gitignore --ignore \"**/*.css\" --reporters console src ui/src",
-    "prepublishOnly": "npm run typecheck && npm test && npm run build"
+    "prepublishOnly": "pnpm typecheck && pnpm test && pnpm build"
   },
   "dependencies": {
     "@modelcontextprotocol/sdk": "^1.0.4",

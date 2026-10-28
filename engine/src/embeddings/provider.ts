@@ -6,6 +6,8 @@
  * no responde, todo degrada silenciosamente a FTS5 puro.
  */
 
+import { envPositiveNumber } from "../env.js";
+
 type EmbeddingProvider = "ollama" | "openai";
 export type EmbedKind = "query" | "document";
 
@@ -43,7 +45,7 @@ export function loadEmbeddingConfig(): EmbeddingConfig {
       process.env.MISMEM_EMBEDDING_URL ??
       (provider === "openai" ? OPENAI_DEFAULT_URL : (process.env.MISMEM_OLLAMA_URL ?? OLLAMA_DEFAULT_URL)),
     model: process.env.MISMEM_EMBEDDING_MODEL ?? "nomic-embed-text",
-    timeoutMs: Number(process.env.MISMEM_EMBEDDING_TIMEOUT_MS) || 3000,
+    timeoutMs: envPositiveNumber("MISMEM_EMBEDDING_TIMEOUT_MS", 3000),
     queryPrefix: process.env.MISMEM_EMBEDDING_QUERY_PREFIX ?? "",
     docPrefix: process.env.MISMEM_EMBEDDING_DOC_PREFIX ?? "",
     minScore: Number.isFinite(minScore) && minScore >= 0 ? minScore : DEFAULT_MIN_SCORE,

@@ -3,8 +3,12 @@
  * (unset, empty, "abc", 0, negative) counts as not set. A zero or negative window, timeout
  * or batch size is never a useful setting and used to mean different things per module.
  */
-export function envPositiveNumber(name: string, fallback: number): number {
-  return envOptionalPositiveNumber(name) ?? fallback;
+export function envPositiveNumber(
+  name: string,
+  fallback: number,
+  env: NodeJS.ProcessEnv = process.env,
+): number {
+  return envOptionalPositiveNumber(name, env) ?? fallback;
 }
 
 /** Zero is a valid setting here (e.g. "no minimum age"); unset, empty, garbage and negatives fall back. */
@@ -17,7 +21,10 @@ export function envNonNegativeNumber(name: string, fallback: number): number {
 }
 
 /** Same rule, for callers whose own default lives further down and must see "not set". */
-export function envOptionalPositiveNumber(name: string): number | undefined {
-  const value = Number(process.env[name]);
+export function envOptionalPositiveNumber(
+  name: string,
+  env: NodeJS.ProcessEnv = process.env,
+): number | undefined {
+  const value = Number(env[name]);
   return Number.isFinite(value) && value > 0 ? value : undefined;
 }

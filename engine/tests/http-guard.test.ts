@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { bindHost, loadAuth } from "../src/http-guard.js";
+import { bindHost, httpPort, loadAuth } from "../src/http-guard.js";
 
 describe("http-guard: loadAuth", () => {
   it("sin ninguna variable no hay auth: es el uso local", () => {
@@ -26,6 +26,23 @@ describe("http-guard: loadAuth", () => {
       /MISMEM_AUTH_PASS/,
     );
   });
+});
+
+describe("http-guard: httpPort", () => {
+  it("without MISMEM_HTTP_PORT listens on 3200", () => {
+    expect(httpPort({})).toBe(3200);
+  });
+
+  it("an explicit port wins", () => {
+    expect(httpPort({ MISMEM_HTTP_PORT: "8080" })).toBe(8080);
+  });
+
+  it.each(["abc", "", "0", "-1", "NaN", "Infinity"])(
+    "an unusable port (%j) falls back to 3200 instead of NaN",
+    (value) => {
+      expect(httpPort({ MISMEM_HTTP_PORT: value })).toBe(3200);
+    },
+  );
 });
 
 describe("http-guard: bindHost", () => {

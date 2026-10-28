@@ -2,6 +2,8 @@
 
 ## Sin publicar
 
+- El timeout de embeddings y el puerto HTTP dejan de aceptar valores imposibles: un negativo, basura, 0 o vacío vuelven a 3000 ms y a 3200 (antes `MISMEM_EMBEDDING_TIMEOUT_MS=-5` hacía que `AbortSignal.timeout` lanzara `RangeError` y un `MISMEM_HTTP_PORT` con basura llegaba a `listen` como `NaN`); `prepublishOnly` usa pnpm.
+
 ### jscpd sube a 5.4.1, y sus dos clones de más desaparecen
 
 - `jscpd` pasa de 4.3.0 a 5.4.1 (versión exacta). La 5 compara dos bloques que la 4 no veía: `recall` y

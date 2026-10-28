@@ -3,6 +3,7 @@
  * server-http.ts, que escucha al importarse, para poder probarlo.
  */
 import { timingSafeEqual } from "node:crypto";
+import { envPositiveNumber } from "./env.js";
 
 /**
  * Loopback unless told otherwise: without MISMEM_AUTH_* the Host guard only stops browser
@@ -11,6 +12,14 @@ import { timingSafeEqual } from "node:crypto";
  */
 export function bindHost(env: NodeJS.ProcessEnv = process.env): string {
   return env.MISMEM_HTTP_HOST || "127.0.0.1";
+}
+
+/**
+ * A garbage port used to reach listen() as NaN, which fails far from the variable that caused
+ * it. Same rule as every other numeric env var: anything but a positive finite number means unset.
+ */
+export function httpPort(env: NodeJS.ProcessEnv = process.env): number {
+  return envPositiveNumber("MISMEM_HTTP_PORT", 3200, env);
 }
 
 export interface BasicCredentials {
