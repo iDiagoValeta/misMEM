@@ -49,7 +49,7 @@ function help(): void {
 
 Migra una DB de engram (sessions/observations/user_prompts) a mismem episodes.
 
-Usage:
+Uso:
   mismem-migrate-engram --source /path/engram.db [opciones]
 
 Opciones:
@@ -58,7 +58,7 @@ Opciones:
   --dry-run                Mostrar conteo sin escribir
   --help
 
-Env:
+Variables:
   MISMEM_DB                target DB (default ${defaultDbPath()})
 `);
 }
@@ -123,11 +123,11 @@ async function main(): Promise<void> {
 
   const prompts = src.prepare(`SELECT id, content, project, created_at FROM user_prompts`).all() as PromptRow[];
 
-  console.log(`[migrate] source: ${opts.source}`);
-  console.log(`[migrate] observations=${observations.length} sessions(w/summary)=${sessions.length} prompts=${prompts.length}`);
+  console.log(`[migrate] origen: ${opts.source}`);
+  console.log(`[migrate] observaciones=${observations.length} sesiones(con resumen)=${sessions.length} prompts=${prompts.length}`);
 
   if (opts.dryRun) {
-    console.log("[migrate] dry-run, exit");
+    console.log("[migrate] dry-run, saliendo");
     src.close();
     dst.close();
     return;
@@ -167,13 +167,13 @@ async function main(): Promise<void> {
   });
 
   tx();
-  console.log(`[migrate] DONE inserted=${inserted} skipped(dups)=${skipped}`);
+  console.log(`[migrate] HECHO insertados=${inserted} omitidos(duplicados)=${skipped}`);
 
   src.close();
   dst.close();
 }
 
 main().catch((err) => {
-  console.error("[migrate] FATAL:", err instanceof Error ? err.message : err);
+  console.error("[migrate] ERROR:", err instanceof Error ? err.message : err);
   process.exit(1);
 });

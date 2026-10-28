@@ -112,12 +112,12 @@ function forgetImpact(db: DB, layer: "memory" | "trait", id: string): Record<str
       .prepare("SELECT json_array_length(evidence_memory_ids) AS n FROM traits WHERE id = ?")
       .get(id) as { n: number };
     // Las memorias que cita no se borran; se cuentan para que el diálogo lo diga.
-    return { memorias_que_cita: n };
+    return { memories_cited: n };
   }
   const count = (sql: string): number => (db.prepare(sql).get(id) as { n: number }).n;
   return {
-    episodios: count("SELECT COUNT(*) AS n FROM episodes WHERE consolidated_into = ?"),
-    rasgos_que_la_citan: count(
+    episodes: count("SELECT COUNT(*) AS n FROM episodes WHERE consolidated_into = ?"),
+    traits_citing: count(
       "SELECT COUNT(DISTINCT t.id) AS n FROM traits t, json_each(t.evidence_memory_ids) j WHERE j.value = ?",
     ),
   };
@@ -228,7 +228,7 @@ export async function handleAction(
     const target = layer === "trait" ? "trait" : "memory";
     const table = target === "trait" ? "traits" : "memories";
     if (!exists(db, table, id)) {
-      json(res, 404, { error: `${layer} not found: ${id}` });
+      json(res, 404, { error: `no existe ${target === "trait" ? "el rasgo" : "la memoria"}: ${id}` });
       return true;
     }
     if (target === "trait" && action !== "forget") return false;
@@ -247,7 +247,7 @@ export async function handleAction(
           ...(token ? { error: "la confirmación caducó o no es de este recuerdo; confirma otra vez" } : {}),
           confirm_token: opts.confirmations.issue(target, id),
           expires_in: CONFIRM_TTL_SECONDS,
-          impacto: forgetImpact(db, target, id),
+          impact: forgetImpact(db, target, id),
         });
         return true;
       }

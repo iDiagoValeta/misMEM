@@ -432,7 +432,7 @@ function MemoryView({
             <AlertDialogDescription>
               {confirm === "forget"
                 ? challenge
-                  ? forgetText(challenge.impacto.episodios ?? 0, challenge.impacto.rasgos_que_la_citan ?? 0)
+                  ? forgetText(challenge.impact.episodes ?? 0, challenge.impact.traits_citing ?? 0)
                   : actionError
                     ? "No se puede olvidar esta memoria ahora."
                     : "Mirando qué se perdería…"

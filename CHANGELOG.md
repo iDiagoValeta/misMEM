@@ -2,6 +2,24 @@
 
 ## Sin publicar
 
+### Errores, claves y ayudas en el idioma del producto
+
+- Los errores que ven un cliente MCP o el viewer salían en inglés (`Unknown tool`, `not found`,
+  `is required`, `invalid layer`) mientras el resto del producto responde en español. Ahora están en
+  español, con el mismo contenido y el mismo código de estado.
+- La confirmación de olvido mezclaba claves en los dos idiomas (`impacto`, `memorias_que_cita`,
+  `rasgos_que_la_citan`, `episodios`). Pasan a `impact`, `memories_cited`, `traits_citing` y
+  `episodes`; la UI y los tests leen las nuevas claves.
+- Las ayudas de `mismem-consolidate`, `mismem-forget`, `mismem-stats`, `mismem-migrate-engram`,
+  `mismem-obsidian` y `mismem-embed` usan los encabezados `Uso:` y `Variables:`, y la de
+  `mismem-ingest`, que estaba entera en inglés, también está en español. Los encabezados de las ayudas
+  pasan a `misMEM: CLI de ...`, el progreso de `mismem-migrate-engram` y la cabecera de `mismem-stats`
+  están traducidos, y los fallos de todos los CLIs salen con el prefijo `ERROR:` en vez de `FATAL:` o
+  `Error:`. Los flags y lo que hace cada comando no cambian.
+- El servidor HTTP responde en español el 415 de `/mcp`, el error de parseo de JSON-RPC (mismo
+  `-32700`), las acciones y endpoints desconocidos y los 404, también los del viewer. Los códigos de
+  estado, los identificadores y los nombres de tools no cambian.
+
 ### Una sola versión, y comprobada
 
 - La versión estaba escrita a mano en `engine/package.json`, `server.json` (dos campos) y

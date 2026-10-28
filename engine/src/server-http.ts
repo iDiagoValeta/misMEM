@@ -70,7 +70,7 @@ try {
 function send401(res: ServerResponse): void {
   res.statusCode = 401;
   res.setHeader("WWW-Authenticate", 'Basic realm="misMEM"');
-  res.end("Unauthorized");
+  res.end("No autorizado");
 }
 
 const db = openDefaultDb();
@@ -83,7 +83,7 @@ const httpServer = createHttpServer(async (req, res) => {
   try {
     if (!hostAllowed(req.headers.host, { auth: AUTH !== null, extra: ALLOWED_HOSTS })) {
       res.statusCode = 403;
-      res.end("Forbidden host");
+      res.end("Host no permitido");
       return;
     }
     const url = new URL(req.url ?? "/", `http://${req.headers.host ?? "localhost"}`);
@@ -111,7 +111,7 @@ const httpServer = createHttpServer(async (req, res) => {
               jsonrpc: "2.0",
               error: {
                 code: -32000,
-                message: "Unsupported Media Type: Content-Type must be application/json",
+                message: "Tipo de contenido no soportado: Content-Type debe ser application/json",
               },
               id: null,
             }),
@@ -125,7 +125,7 @@ const httpServer = createHttpServer(async (req, res) => {
             res.statusCode = 413;
             // Lo que quede sin leer no se drena: se cierra la conexión.
             res.setHeader("connection", "close");
-            res.end("Payload Too Large");
+            res.end("Cuerpo demasiado grande");
             return;
           }
           if (err instanceof InvalidJsonError) {
@@ -134,7 +134,7 @@ const httpServer = createHttpServer(async (req, res) => {
             res.end(
               JSON.stringify({
                 jsonrpc: "2.0",
-                error: { code: -32700, message: "Parse error" },
+                error: { code: -32700, message: "Error de parseo" },
                 id: null,
               }),
             );
@@ -193,13 +193,13 @@ const httpServer = createHttpServer(async (req, res) => {
         if (await handleAction(db, res, url.pathname, body, actionOpts)) return;
         res.statusCode = 404;
         res.setHeader("content-type", "application/json; charset=utf-8");
-        res.end(JSON.stringify({ error: `unknown action: ${url.pathname}` }));
+        res.end(JSON.stringify({ error: `acción desconocida: ${url.pathname}` }));
         return;
       }
       if (req.method !== "GET") {
         res.statusCode = 405;
         res.setHeader("allow", "GET, POST");
-        res.end("Method Not Allowed");
+        res.end("Método no permitido");
         return;
       }
       if (url.pathname === "/api/stats") return handleStats(db, res);
@@ -226,14 +226,14 @@ const httpServer = createHttpServer(async (req, res) => {
       if (url.pathname.startsWith("/api/")) {
         res.statusCode = 404;
         res.setHeader("content-type", "application/json; charset=utf-8");
-        res.end(JSON.stringify({ error: `unknown endpoint: ${url.pathname}` }));
+        res.end(JSON.stringify({ error: `endpoint desconocido: ${url.pathname}` }));
         return;
       }
       return serveUi(res, url.pathname);
     }
 
     res.statusCode = 404;
-    res.end("Not Found");
+    res.end("No encontrado");
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
     // eslint-disable-next-line no-console
@@ -251,7 +251,7 @@ const httpServer = createHttpServer(async (req, res) => {
 httpServer.listen(PORT, HOST, () => {
   // eslint-disable-next-line no-console
   console.log(
-    `misMEM HTTP listening on http://${HOST}:${PORT} (mcp=/mcp viewer=/viewer)`,
+    `misMEM HTTP escuchando en http://${HOST}:${PORT} (mcp=/mcp viewer=/viewer)`,
   );
 });
 
