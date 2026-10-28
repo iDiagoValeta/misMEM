@@ -10,6 +10,7 @@ import {
   type RecallHit,
 } from "./schema.js";
 import { contentHash } from "./db.js";
+import { registerTurn } from "./connectome.js";
 import { excludeNoiseSql } from "./noise.js";
 import { searchTerms } from "./terms.js";
 import {
@@ -215,6 +216,9 @@ function registrarUso(db: DB, memoryIds: readonly string[], at: number): void {
   );
 
   db.transaction(() => {
+    // El turno entra en la misma transacción que los conteos: el denominador no
+    // puede quedar desfasado de los numeradores ni por un error a mitad de camino.
+    registerTurn(db);
     for (const id of ids) contar.run(id);
     for (let i = 0; i < ids.length; i++) {
       for (let j = i + 1; j < ids.length; j++) {

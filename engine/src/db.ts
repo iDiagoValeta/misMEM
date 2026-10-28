@@ -60,6 +60,14 @@ CREATE TABLE IF NOT EXISTS co_use (
 );
 CREATE INDEX IF NOT EXISTS idx_co_use_b ON co_use(memory_b, n);
 
+-- Contadores de la propia base. Hoy sólo vive acá el total de turnos de uso
+-- medido, que es el denominador del índice hebbiano: sin él, el co-uso de un
+-- recuerdo que se usa siempre no se distingue del azar.
+CREATE TABLE IF NOT EXISTS meta (
+  key   TEXT PRIMARY KEY,
+  value TEXT NOT NULL
+);
+
 CREATE TABLE IF NOT EXISTS traits (
   id                   TEXT PRIMARY KEY,
   scope                TEXT NOT NULL,

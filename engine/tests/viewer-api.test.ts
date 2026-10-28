@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach } from "vitest";
 import type { Database as DB } from "better-sqlite3";
 import { openDb } from "../src/db.js";
-import { capture, consolidate, crystallize } from "../src/tools.js";
+import { capture, consolidate, crystallize, reinforce } from "../src/tools.js";
 import {
   handleGraph,
   handleMemories,
@@ -182,5 +182,122 @@ describe("viewer-api: /api/graph", () => {
     const full = call((res) => handleGraph(db, res, url("/api/graph?episodes=1"))).body;
     expect(full.links).toContainEqual({ source: episodeIds[0], target: memoryId, kind: "origin" });
     expect(full.nodes.some((n: { layer: string }) => n.layer === "episode")).toBe(true);
+  });
+});
+
+describe("viewer-api: /api/graph?co_use=1 (la capa lateral)", () => {
+  function parDeUso(): { a: string; b: string; suelta: string } {
+    const a = memoryFrom("a", "el deploy usa docker compose", ["e1"]).memoryId;
+    const b = memoryFrom("a", "el backup corre a las tres", ["e2"]).memoryId;
+    const suelta = memoryFrom("a", "el bench corre con el embedder arriba", ["e3"]).memoryId;
+    reinforce(db, { memory_ids: [a, b] });
+    reinforce(db, { memory_ids: [a, b] });
+    reinforce(db, { memory_ids: [a, suelta] });
+    return { a, b, suelta };
+  }
+
+  it("sin pedirla, la respuesta es la de siempre: ni aristas ni resumen de conectoma", () => {
+    // Es el contrato que ya consume la interfaz: no puede cambiar por agregar esto.
+    parDeUso();
+
+    const body = call((res) => handleGraph(db, res, url("/api/graph"))).body;
+
+    expect(body.links.some((l: { kind: string }) => l.kind === "co_use")).toBe(false);
+    expect(body.connectome).toBeUndefined();
+    expect(body.nodes.every((n: Record<string, unknown>) => n.co_use === undefined)).toBe(true);
+  });
+
+  it("pedida, trae las aristas laterales con su soporte y su fuerza", () => {
+    const { a, b } = parDeUso();
+
+    const body = call((res) => handleGraph(db, res, url("/api/graph?co_use=1"))).body;
+    const lateral = body.links.filter((l: { kind: string }) => l.kind === "co_use");
+
+    expect(lateral).toHaveLength(2);
+    const fuerte = lateral.find(
+      (l: { source: string; target: string }) =>
+        (l.source === a && l.target === b) || (l.source === b && l.target === a),
+    );
+    expect(fuerte).toMatchObject({ n: 2 });
+    expect(typeof fuerte.strength).toBe("number");
+  });
+
+  it("las verticales siguen saliendo sin campos nuevos", () => {
+    const { a } = parDeUso();
+    const trait = crystallize(db, { scope: "a", name: "rasgo", evidence_memory_ids: [a] });
+
+    const body = call((res) => handleGraph(db, res, url("/api/graph?co_use=1"))).body;
+
+    expect(body.links).toContainEqual({ source: a, target: trait.trait_id, kind: "evidence" });
+  });
+
+  it("el soporte mínimo saca los pares de una sola vez", () => {
+    const { a, b } = parDeUso();
+
+    const body = call((res) => handleGraph(db, res, url("/api/graph?co_use=1&co_use_min_n=2"))).body;
+    const lateral = body.links.filter((l: { kind: string }) => l.kind === "co_use");
+
+    expect(lateral).toHaveLength(1);
+    expect([lateral[0].source, lateral[0].target].sort()).toEqual([a, b].sort());
+  });
+
+  it("no deja aristas hacia nodos que no se dibujan", () => {
+    const { a, b } = parDeUso();
+    reinforce(db, { memory_ids: [a, memoryFrom("otro", "memoria de otro ámbito", ["e9"]).memoryId] });
+
+    const body = call((res) => handleGraph(db, res, url("/api/graph?scope=a&co_use=1"))).body;
+    const dibujados = new Set(body.nodes.map((n: { id: string }) => n.id));
+    const lateral = body.links.filter((l: { kind: string }) => l.kind === "co_use");
+
+    expect(lateral.length).toBeGreaterThan(0);
+    for (const l of lateral) {
+      expect(dibujados.has(l.source)).toBe(true);
+      expect(dibujados.has(l.target)).toBe(true);
+    }
+    expect([a, b].every((id) => dibujados.has(id))).toBe(true);
+  });
+
+  it("los nodos traen con qué iluminarse: grado y asociación acumulada", () => {
+    const { a } = parDeUso();
+
+    const body = call((res) => handleGraph(db, res, url("/api/graph?co_use=1"))).body;
+    const nodo = body.nodes.find((n: { id: string }) => n.id === a);
+
+    expect(nodo.co_use).toMatchObject({ degree: 2 });
+    expect(typeof nodo.co_use.strength).toBe("number");
+  });
+
+  it("el resumen propone por dónde entrar, ordenado por asociación y no por vecinos", () => {
+    // El que más vecinos tiene es el que se usa en todos los turnos: no orienta
+    // a ninguno. Si los costados lo ponen primero, el panel miente.
+    const siempre = memoryFrom("a", "hablamos en español y sin rodeos", ["e1"]).memoryId;
+    const v1 = memoryFrom("a", "el deploy usa docker compose", ["e2"]).memoryId;
+    const v2 = memoryFrom("a", "el backup corre a las tres", ["e3"]).memoryId;
+    const par1 = memoryFrom("a", "el ordenador de memoria tiene tres fases", ["e4"]).memoryId;
+    const par2 = memoryFrom("a", "la fase dos espera datos de co-uso", ["e5"]).memoryId;
+    for (let i = 0; i < 3; i++) reinforce(db, { memory_ids: [siempre, v1, v2] });
+    for (let i = 0; i < 9; i++) reinforce(db, { memory_ids: [siempre] });
+    for (let i = 0; i < 3; i++) reinforce(db, { memory_ids: [par1, par2] });
+
+    const body = call((res) => handleGraph(db, res, url("/api/graph?co_use=1"))).body;
+    const ranking: Array<{ id: string; degree: number; strength: number }> = body.connectome.hubs;
+
+    const puesto = (id: string): number => ranking.findIndex((h) => h.id === id);
+    const quien = (id: string) => ranking.find((h) => h.id === id)!;
+
+    // Lo que importa es el ORDEN: `siempre` tiene más vecinos que `par1`, así que
+    // por grado iría antes. Tiene que ir después.
+    expect(quien(siempre).degree).toBeGreaterThan(quien(par1).degree);
+    expect(puesto(par1)).toBeLessThan(puesto(siempre));
+    expect(ranking.map((h) => h.strength)).toEqual([...ranking.map((h) => h.strength)].sort((a, b) => b - a));
+  });
+
+  it("el resumen dice de qué tamaño es la muestra, para no mentir en los costados", () => {
+    // Con pocos turnos la fuerza es ruido: el panel tiene que poder decirlo.
+    parDeUso();
+
+    const body = call((res) => handleGraph(db, res, url("/api/graph?co_use=1&co_use_min_n=2"))).body;
+
+    expect(body.connectome).toMatchObject({ turns: 3, pairs: 2, shown: 1, min_n: 2 });
   });
 });

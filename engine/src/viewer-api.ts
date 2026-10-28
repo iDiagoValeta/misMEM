@@ -7,6 +7,11 @@
  *   GET /api/memory/:id      → la memoria, sus episodios de origen y los rasgos que la citan
  *   GET /api/trait/:id       → el rasgo y las memorias que lo sostienen
  *   GET /api/graph           → nodos y aristas episodio → memoria → rasgo (?scope=&episodes=1)
+ *                               con ?co_use=1 suma la capa lateral del conectoma: aristas
+ *                               memoria ↔ memoria con su soporte (`n`) y su fuerza de
+ *                               asociación, el grado de cada nodo y un resumen con el tamaño
+ *                               de la muestra. ?co_use_min_n=k pide soporte mínimo. Sin el
+ *                               parámetro la respuesta es la de siempre, sin campos nuevos.
  *
  * La salience que devuelve es la efectiva (con el decaimiento aplicado a hoy), la misma que
  * usa el recall. La guardada sólo es el valor del último checkpoint.
@@ -16,6 +21,7 @@ import type { Database as DB } from "better-sqlite3";
 import { excludeNoiseSql, isNoiseGist } from "./noise.js";
 import { effectiveSalience, type SalienceRow } from "./salience.js";
 import { clampLimit, json } from "./viewer.js";
+import { coUseEdges, hubs, turnsRegistered } from "./connectome.js";
 
 interface MemoryRow extends SalienceRow {
   id: string;
@@ -49,6 +55,7 @@ const MEMORY_COLUMNS =
 const GRAPH_MAX_MEMORIES = 400;
 const GRAPH_MAX_TRAITS = 200;
 const GRAPH_MAX_EPISODES = 2000;
+const GRAPH_MAX_HUBS = 20;
 const GRAPH_LABEL_CHARS = 120;
 
 export type DetailPath = { layer: "memory" | "trait"; id: string };
@@ -260,6 +267,10 @@ const label = (text: string): string =>
 export function handleGraph(db: DB, res: ServerResponse, url: URL, at = Date.now()): void {
   const scope = url.searchParams.get("scope");
   const withEpisodes = url.searchParams.get("episodes") === "1";
+  // La capa lateral se pide: sin el parámetro la respuesta es byte por byte la de
+  // antes, porque la interfaz ya consume este contrato.
+  const withCoUse = url.searchParams.get("co_use") === "1";
+  const minN = Math.max(1, Number(url.searchParams.get("co_use_min_n") ?? 1) || 1);
 
   const memories = (
     db
@@ -280,7 +291,11 @@ export function handleGraph(db: DB, res: ServerResponse, url: URL, at = Date.now
     .all({ scope, limit: GRAPH_MAX_TRAITS }) as TraitRow[];
 
   const nodes: Array<Record<string, unknown>> = [];
-  const links: Array<{ source: string; target: string; kind: "origin" | "evidence" }> = [];
+  // Las verticales salen sin campos nuevos: `n` y `strength` sólo existen en la lateral.
+  const links: Array<
+    | { source: string; target: string; kind: "origin" | "evidence" }
+    | { source: string; target: string; kind: "co_use"; n: number; strength: number }
+  > = [];
   const memoryIds = new Set(memories.map((m) => m.row.id));
 
   for (const { row, salience } of memories) {
@@ -306,5 +321,47 @@ export function handleGraph(db: DB, res: ServerResponse, url: URL, at = Date.now
     }
   }
 
-  json(res, 200, { nodes, links, truncated: { memories: memoryIds.size === GRAPH_MAX_MEMORIES } });
+  const truncated = { memories: memoryIds.size === GRAPH_MAX_MEMORIES };
+  if (!withCoUse) {
+    json(res, 200, { nodes, links, truncated });
+    return;
+  }
+
+  const drawn = [...memoryIds];
+  const todas = coUseEdges(db, { ids: drawn });
+  const visibles = todas.filter((e) => e.n >= minN);
+  const grado = new Map<string, { degree: number; strength: number }>();
+  for (const e of visibles) {
+    for (const id of [e.memory_a, e.memory_b]) {
+      const cur = grado.get(id) ?? { degree: 0, strength: 0 };
+      cur.degree += 1;
+      if (e.strength > 0) cur.strength += e.strength;
+      grado.set(id, cur);
+    }
+    links.push({
+      source: e.memory_a,
+      target: e.memory_b,
+      kind: "co_use",
+      n: e.n,
+      strength: e.strength,
+    });
+  }
+
+  json(res, 200, {
+    nodes: nodes.map((n) => {
+      const g = grado.get(n.id as string);
+      return g ? { ...n, co_use: g } : n;
+    }),
+    links,
+    truncated,
+    // Los costados no pueden presentar ruido como si fuera topología: con pocos
+    // turnos, un par visto una sola vez da fuerza máxima por construcción.
+    connectome: {
+      turns: turnsRegistered(db),
+      pairs: todas.length,
+      shown: visibles.length,
+      min_n: minN,
+      hubs: hubs(db, { ids: drawn, minN }).slice(0, GRAPH_MAX_HUBS),
+    },
+  });
 }

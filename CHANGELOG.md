@@ -2,6 +2,27 @@
 
 ## Sin publicar
 
+### El conectoma se puede mirar
+
+- `/api/graph?co_use=1` suma la **capa lateral**: aristas memoria ↔ memoria. Las que ya había
+  (`origin`, `evidence`) son verticales y van siempre hacia arriba —episodio → memoria → rasgo—;
+  el co-uso es la única horizontal, y es la que dice qué se usa junto con qué. Sin el parámetro
+  la respuesta no cambia en nada: verificado byte a byte sobre una copia de producción, porque
+  es el contrato que ya consume la interfaz.
+- El peso **no** es el conteo crudo, es NPMI. Un recuerdo que se usa en todos los turnos co-ocurre
+  con todo, así que por conteo sería el centro del grafo sin orientar a nada: el mismo error de la
+  saliencia midiendo recencia. Con NPMI, 0 significa "indistinguible del azar" y 1 "nunca aparecen
+  separados". Hay un test que construye el caso y falla si se ordena por grado.
+- Hacía falta un denominador y no existía: `meta` guarda el total de turnos de uso medido, y se
+  suma dentro de la misma transacción que los conteos para que no quede desfasado.
+- Con pocos datos la fuerza es ruido por construcción —dos recuerdos usados una sola vez, esa vez
+  juntos, dan 1—, así que las aristas viajan con su `n`, el resumen informa el tamaño de la
+  muestra y `?co_use_min_n=k` filtra. Nada se esconde.
+- Sobre la copia de producción: migración en 18 ms, `integrity_check` y `foreign_key_check` ok,
+  3.805 memorias y 216 rasgos intactos, y **las seis aristas existentes dan fuerza 0** porque el
+  contador nace ahora. Es correcto: son turnos que nadie midió, y el 0 dice "no sé" en vez de
+  inventar un número.
+
 ### El índice hebbiano empieza a existir
 
 - `reinforce` recibía los `memory_ids` **juntos** —sabe que esos recuerdos se usaron en el mismo
