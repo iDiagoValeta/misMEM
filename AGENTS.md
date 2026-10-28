@@ -57,13 +57,15 @@ Las tablas de la base, en `engine/src/db.ts`:
 
 ## Comandos
 
-Desde `engine/`, tras `pnpm install`. Antes de dar un cambio por hecho, lo mismo que corre CI en el job `test`:
+Desde `engine/`, tras `pnpm install --frozen-lockfile` (como CI). Antes de dar un cambio por hecho, lo mismo que corre CI en el job `test`:
 
 ```bash
 pnpm typecheck && pnpm test && pnpm knip && pnpm dup && pnpm lint && pnpm build
 ```
 
-- Un cambio en `scripts/` se comprueba además con `bash -n scripts/*.sh` y `shellcheck --severity=error scripts/*.sh`.
+- Los demás jobs de CI (scripts de shell, licencia y Dockerfile, imagen y `/healthz`, workflows, secretos) y cómo
+  reproducirlos en local: [Qué comprueba CI](CONTRIBUTING.md#qué-comprueba-ci). Un cambio en `scripts/`, en el
+  Dockerfile o en `.github/` los toca.
 - Un test suelto: `pnpm test tests/<área>.test.ts`.
 - Desarrollo: `pnpm dev` (MCP por stdio), `pnpm dev:http` (servidor en `:3200`, sin interfaz compilada) y
   `pnpm dev:ui` (la interfaz, con `/api` hacia el servidor de `MISMEM_DEV_API`, por defecto `:3200`).
@@ -77,10 +79,10 @@ pnpm typecheck && pnpm test && pnpm knip && pnpm dup && pnpm lint && pnpm build
 |---|---|
 | Nunca leer ni editar `.env*`, ni mostrar un secreto en una respuesta, un log o un issue | Ahí viven las claves de los proveedores y las credenciales del servidor; `.env.example` sólo lleva marcadores |
 | Sin `git push --force` ni reescribir la historia sin permiso expreso | Se mergea con merge commit y la historia publicada conserva el porqué de cada commit |
-| El esquema cambia sólo con migraciones aditivas en `migrate()` de `engine/src/db.ts`: se añade, nunca se borra ni se reescribe; cada paso comprueba el estado y se puede repetir. Con su test y su línea en el CHANGELOG | La base de cada persona ya existe y se abre con el código nuevo: un error rompe datos reales. `CODEOWNERS` pide revisión de los dos responsables |
-| Un cambio en el ranking o en los embeddings (`tools.ts`, `search.ts`, `embeddings/`) se mide con `mismem-bench` antes y después, y las cifras van en el PR (etiqueta `needs-bench`) | Un ranking que parece mejor sin medir suele mover la respuesta buena hacia abajo; `mismem-bench` no corre en CI |
-| Dependencias con versión exacta (sin `^` ni `~`) y publicada hace 14 días o más. Un script de instalación nuevo se lee, y sólo entonces se aprueba, uno a uno, en `allowBuilds` de `engine/pnpm-workspace.yaml` (hoy `better-sqlite3` y `esbuild`) | Cadena de suministro: lo recién publicado es lo que más se compromete, y un `postinstall` ejecuta código al instalar |
-| Los hooks `mismem-inject` y `mismem-used` nunca fallan ni bloquean un prompt: tope de tiempo, errores a stderr, salida sin error, y ante la duda no hacen nada | Corren en cada turno del cliente; un hook roto cuesta más que un recuerdo sin inyectar |
+| El esquema cambia sólo con migraciones aditivas en `migrate()` de `engine/src/db.ts`: se añaden columnas, índices y tablas, y cada paso comprueba el estado y se puede repetir. `migrate()` sí puede borrar y recrear disparadores heredados y rellenar columnas nuevas; nunca borra una tabla ni una columna con datos. Con su test y su línea en el CHANGELOG | La base de cada persona ya existe y se abre con el código nuevo: un error rompe datos reales. `CODEOWNERS` pide revisión de los dos responsables |
+| Quien toca el ranking o los embeddings (`tools.ts`, `search.ts`, `embeddings/`) corre `mismem-bench` antes y después y pone las cifras en el PR, con la etiqueta `needs-bench` ([Tests](docs/standards/tests.md)) | Sin esa medida no hay forma de saber si el cambio mejora el recall: los tests no la dan y el bench no corre en CI |
+| Toda dependencia que se añade o se sube entra con versión exacta (sin `^` ni `~`) y publicada hace 14 días o más; los `^` que ya hay se fijan la próxima vez que se suban ([Seguridad](docs/standards/security.md)). Un script de instalación nuevo se lee, y sólo entonces se aprueba, uno a uno, en `allowBuilds` de `engine/pnpm-workspace.yaml` (hoy `better-sqlite3` y `esbuild`) | Cadena de suministro: lo recién publicado es lo que más se compromete, y un `postinstall` ejecuta código al instalar |
+| Los hooks `mismem-inject` y `mismem-used` nunca fallan ni bloquean un prompt: errores a stderr, salida sin error, y ante la duda no hacen nada; contra un servidor remoto (`MISMEM_HOOK_URL`) llevan además un tope de tiempo | Corren en cada turno del cliente; un hook roto cuesta más que un recuerdo sin inyectar |
 | `engine/src/server-http.ts` escucha al importarse: su lógica va a módulos que se puedan importar y probar (`http-guard.ts`, `http-host.ts`, `http-body.ts`) | Un test no puede importarlo sin abrir un puerto; el test del servidor lo lanza como proceso hijo |
 | Datos de usuario nunca en tests, fixtures, capturas, documentación, issues ni logs | La memoria es personal. Los tests usan `openDb(":memory:")` o un directorio temporal propio y jamás tocan `~/.mismem` |
 | Las herramientas de la propia memoria (`capture`, `recall`) son para las notas del agente: nunca guardan secretos ni datos de terceros | Lo capturado queda en una base que se respalda, se consolida con un LLM externo y se lee desde el visor |
@@ -95,15 +97,17 @@ pnpm typecheck && pnpm test && pnpm knip && pnpm dup && pnpm lint && pnpm build
 - **Tipos y módulos**: sin `any`. Los imports relativos a `engine/src` llevan extensión `.js`, también
   en los tests; la interfaz no la lleva y usa el alias `@/`. Ids con `ulid`. Los writes múltiples, dentro de
   `db.transaction`.
-- **Zod en cada borde**: herramientas MCP (`schema.ts`), cuerpos POST del visor y respuestas del LLM. Un
-  argumento de CLI se valida en su `*-args.ts`.
+- **Zod en los bordes**: las entradas de las herramientas MCP (`schema.ts`), los cuerpos POST del visor, la
+  salida del LLM y el banco de `mismem-bench`. Los argumentos de un CLI se validan en su `*-args.ts`. La
+  entrada estándar de un hook y la respuesta del servidor remoto no pasan por Zod: se parsean a la defensiva
+  (`try/catch`, sin romper el turno).
 - **Funciones puras con dependencias inyectadas**: el reloj entra como `at`, el embedder como `embedFn`, el LLM
   como `distillFn`. Así un test no necesita red ni reloj real.
-- **Variables numéricas** de entorno: se leen con `engine/src/env.ts`, que trata como "sin definir" lo vacío,
-  lo no numérico y lo no positivo.
+- **Variables numéricas** de entorno: se leen con `engine/src/env.ts` (`envPositiveNumber`, que trata como "sin
+  definir" lo vacío, lo no numérico y lo no positivo), o con `envNonNegativeNumber` cuando el 0 es un valor válido.
 - **Un CLI con flags** son dos ficheros, `<cli>-cli.ts` (lo ejecuta) y `<cli>-args.ts` (lee los argumentos
-  sin tocar la base). Un argumento desconocido corta con `argumento desconocido: <x>` y código 64
-  (`EXIT_USAGE`); un fallo sale por stderr con el prefijo `ERROR:`. Excepciones: `inject-cli.ts` y
+  sin tocar la base). Un error de uso (por ejemplo `argumento desconocido: <x>`) imprime `[<cli>] <mensaje>` por stderr y sale
+  con 64 (`EXIT_USAGE`); cualquier otro fallo sale con 1 y una línea de error por stderr, cuyo formato varía entre CLIs. Excepciones: `inject-cli.ts` y
   `used-cli.ts` son hooks y leen sus argumentos en línea ignorando lo que no entienden; `obsidian-cli.ts`
   los lee estrictos, también en línea. Un binario nuevo se declara en `bin` y se llama `mismem-<cosa>`.
 - **Tests**: `engine/tests/<área>.test.ts`, fixtures ficticios en `engine/tests/fixtures/`. Un cambio de
@@ -129,10 +133,13 @@ pnpm typecheck && pnpm test && pnpm knip && pnpm dup && pnpm lint && pnpm build
   Una búsqueda que nadie pidió (el hook de inyección, el visor, el bench) pasa `reinforce: false`; sólo
   `reinforce` escribe `use_count` y `co_use`.
 - **Los marcadores de ruido** (`[noise] ...`, `[pareto:l0] ...`) no compiten en el recall ni gastan un
-  embedding: toda consulta de memorias que alimenta una búsqueda o una lista usa `excludeNoiseSql`.
-  `forget` y el visor sí los ven.
+  embedding: las consultas que alimentan al modelo y las listas de la interfaz los excluyen con
+  `excludeNoiseSql`. `forget` los ve, y el endpoint en bruto `/api/recent?layer=memory` también.
 - **Los alias `mem_*`** (`engine/src/engram-compat.ts`) tienen que seguir funcionando: hay clientes que
-  vienen de Engram y no se reconfiguran.
+  vienen de Engram y no se reconfiguran. No todos delegan en las seis herramientas: `mem_save`, `mem_search`,
+  `mem_session_summary` y `mem_save_prompt` sí; `mem_context`, `mem_get_observation` y `mem_update` leen o
+  escriben con SQL propio, y `mem_suggest_topic_key`, `mem_session_start` y `mem_session_end` son una
+  heurística y dos no-ops.
 - **Dos sitios para cada herramienta**: los `inputSchema` de `server-core.ts` se escriben a mano y reflejan
   los de `schema.ts`; `engine/tests/tool-schemas.test.ts` falla si se separan.
 - **Borrar desde el visor** está apagado salvo con `MISMEM_VIEWER_ALLOW_DELETE=1`, y aun así va en dos
