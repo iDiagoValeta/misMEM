@@ -29,7 +29,7 @@ export interface ChatGPTStats {
   skipped: number;
 }
 
-function flattenConversation(conv: ChatGPTConversation): string {
+function flattenConversation(conv: ChatGPTConversation): string | null {
   const lines: string[] = [];
   const title = conv.title ?? "(sin título)";
   const created = conv.create_time ? new Date(conv.create_time * 1000).toISOString() : "?";
@@ -43,6 +43,7 @@ function flattenConversation(conv: ChatGPTConversation): string {
     .filter((m) => m.author?.role !== "system" && m.author?.role !== "tool")
     .sort((a, b) => (a.create_time ?? 0) - (b.create_time ?? 0));
 
+  let hasText = false;
   for (const m of messages) {
     const role = m.author?.role ?? "unknown";
     const parts = m.content?.parts ?? [];
@@ -52,7 +53,11 @@ function flattenConversation(conv: ChatGPTConversation): string {
       .join("\n");
     if (!text.trim()) continue;
     lines.push(`## ${role}`, text, "");
+    hasText = true;
   }
+  // The header alone is not memory: a conversation with only empty, system or tool
+  // messages has nothing to capture, so the caller must be able to skip it.
+  if (!hasText) return null;
   return lines.join("\n");
 }
 
@@ -74,7 +79,7 @@ export async function ingestChatGPTExport(
       if (!conv?.mapping) { stats.skipped++; continue; }
       const id = conv.conversation_id ?? conv.id ?? "unknown";
       const text = flattenConversation(conv);
-      if (!text.trim()) { stats.skipped++; continue; }
+      if (!text) { stats.skipped++; continue; }
 
       const chunks = chunkText(text);
       for (let i = 0; i < chunks.length; i++) {

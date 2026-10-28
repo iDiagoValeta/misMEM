@@ -1,0 +1,90 @@
+[
+  {
+    "id": "conv-empty",
+    "title": "Conversation without text",
+    "create_time": 1700000100,
+    "mapping": {
+      "root": {
+        "message": null,
+        "parent": null,
+        "children": [
+          "sys"
+        ]
+      },
+      "sys": {
+        "message": {
+          "id": "sys",
+          "author": {
+            "role": "system"
+          },
+          "content": {
+            "content_type": "text",
+            "parts": [
+              "SYSTEM-ONLY-MARKER"
+            ]
+          },
+          "create_time": 1
+        },
+        "parent": "root",
+        "children": [
+          "e1"
+        ]
+      },
+      "e1": {
+        "message": {
+          "id": "e1",
+          "author": {
+            "role": "user"
+          },
+          "content": {
+            "content_type": "text",
+            "parts": []
+          },
+          "create_time": 2
+        },
+        "parent": "sys",
+        "children": [
+          "e2"
+        ]
+      },
+      "e2": {
+        "message": {
+          "id": "e2",
+          "author": {
+            "role": "assistant"
+          },
+          "content": {
+            "content_type": "multimodal_text",
+            "parts": [
+              {
+                "asset": "no text here"
+              }
+            ]
+          },
+          "create_time": 3
+        },
+        "parent": "e1",
+        "children": [
+          "e3"
+        ]
+      },
+      "e3": {
+        "message": {
+          "id": "e3",
+          "author": {
+            "role": "user"
+          },
+          "content": {
+            "content_type": "text",
+            "parts": [
+              "   "
+            ]
+          },
+          "create_time": 4
+        },
+        "parent": "e2",
+        "children": []
+      }
+    }
+  }
+]
