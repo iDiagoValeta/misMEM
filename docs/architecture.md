@@ -103,6 +103,27 @@ ordenar por saliencia pone arriba lo nuevo, no lo importante. Es la primera fase
 memoria*, una capa derivada que compacta los aspectos principales para que el modelo sepa por dónde
 empezar sin tomar contexto.
 
+### Mirarlo: la capa lateral del grafo
+
+`origin` (episodio → memoria) y `evidence` (memoria → rasgo) son aristas **verticales**: van hacia
+arriba y dicen de dónde salió cada cosa. Las dos laterales unen memoria ↔ memoria y no dicen lo mismo:
+
+| arista | sale de | se pide con |
+|---|---|---|
+| `related` | lo que cada memoria **dice** (coseno de sus vectores) | `?related=1` |
+| `co_use` | lo que un turno **hizo** (se usaron juntas) | `?co_use=1` |
+
+El peso de `co_use` **no** es el conteo crudo, es NPMI: un recuerdo que se usa en todos los turnos
+co-ocurre con todo, así que por conteo sería el centro del grafo sin orientar a ninguno —el mismo error
+de la saliencia midiendo recencia—. En NPMI, `0` es "indistinguible del azar" y `1` es "nunca aparecen
+separados". El denominador es el total de turnos de uso medido, que vive en la tabla `meta`.
+
+Con pocos datos la fuerza es ruido por construcción: dos recuerdos usados una sola vez, esa vez juntos,
+dan 1. Por eso cada arista viaja con su soporte (`n`), `?co_use_min_n=k` lo filtra y la respuesta incluye
+`connectome: { turns, pairs, shown, min_n, hubs }` para que quien dibuja pueda decir *"esto todavía no
+significa nada"* en vez de pintar ruido. `hubs` va ordenado por asociación acumulada y no por grado:
+el grado es popularidad.
+
 ## Stack
 
 - **Engine**: TypeScript estricto, ES2022, ESM, Node 22 o superior.

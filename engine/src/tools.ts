@@ -119,8 +119,8 @@ function registrarUso(db: DB, memoryIds: readonly string[], at: number): void {
   );
 
   db.transaction(() => {
-    // El turno entra en la misma transacción que los conteos: el denominador no
-    // puede quedar desfasado de los numeradores ni por un error a mitad de camino.
+    // The turn goes in the same transaction as the counts: the denominator must not
+    // fall out of step with the numerators, not even through a failure mid-way.
     registerTurn(db);
     for (const id of ids) contar.run(id);
     for (let i = 0; i < ids.length; i++) {

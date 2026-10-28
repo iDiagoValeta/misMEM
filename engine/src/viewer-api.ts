@@ -8,9 +8,9 @@
  *   GET /api/trait/:id       → el rasgo y las memorias que lo sostienen
  *   GET /api/graph           → nodos y aristas episodio → memoria → rasgo (?scope=&episodes=1),
  *                              memoria ↔ memoria por parecido (?related=1) y memoria ↔ memoria
- *                              por co-uso medido (?co_use=1, con ?co_use_min_n=k de soporte).
- *                              El co-uso suma además el grado de cada nodo y un resumen con el
- *                              tamaño de la muestra; sin el parámetro no aparece nada de eso.
+ *                              por co-uso medido (?co_use=1, soporte con ?co_use_min_n=k), que
+ *                              añade el grado de cada nodo y un resumen del tamaño de la
+ *                              muestra; sin el parámetro no aparece nada de eso
  *
  * La salience que devuelve es la efectiva (con el decaimiento aplicado a hoy), la misma que
  * usa el recall. La guardada sólo es el valor del último checkpoint.
@@ -272,8 +272,8 @@ export function handleGraph(
   const scope = url.searchParams.get("scope");
   const withEpisodes = url.searchParams.get("episodes") === "1";
   const withRelated = url.searchParams.get("related") === "1";
-  // La capa de co-uso se pide: sin el parámetro la respuesta no cambia en nada, porque
-  // es el contrato que ya consume la interfaz.
+  // The co-use layer is opt-in: without the parameter the response does not change at
+  // all, because this is the contract the interface already consumes.
   const withCoUse = url.searchParams.get("co_use") === "1";
   const coUseMinN = Math.max(1, Number(url.searchParams.get("co_use_min_n") ?? 1) || 1);
   const maxMemories = caps.memories ?? GRAPH_MAX_MEMORIES;
@@ -378,8 +378,8 @@ export function handleGraph(
     }),
     links,
     truncated,
-    // Los costados no pueden presentar ruido como si fuera topología: con pocos turnos,
-    // un par visto una sola vez da fuerza máxima por construcción.
+    // The side panels must not present noise as topology: with few turns, a pair seen
+    // once scores maximum strength by construction.
     connectome: {
       turns: turnsRegistered(db),
       pairs: coUseLinks(db, drawn, 1).length,
