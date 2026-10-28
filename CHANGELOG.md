@@ -7,6 +7,43 @@
 - `forget` borraba los episodios de una memoria de saliencia baja aunque alguno fuera más nuevo que `before_days`. Con los defaults de `mismem-forget` (90 y 30 días), un episodio de 40 días atado a una memoria olvidable se borraba antes de los 90 que promete `before_days`. Ahora la memoria sólo es olvidable cuando todos sus episodios ya superaron `before_days`; mientras quede uno más nuevo, la memoria y sus episodios esperan. Las memorias sin episodios o con todos viejos se borran igual que antes, y sus episodios con ellas para que `ON DELETE SET NULL` no los devuelva a pendientes.
 - El conteo de `dry_run` sale de las mismas consultas que el borrado, y un test compara lo que anuncia con lo que después borra.
 
+### Un estándar de contribución escrito, y comprobado
+
+- Contribuir no tenía forma: ni formularios de issue, ni plantillas de PR, ni normas escritas, y el
+  README mezclaba la presentación con material de referencia y con la historia de cada iteración. Ahora
+  `CONTRIBUTING.md` es la puerta de entrada (entorno, flujo trunk-based, estándar de issue y de PR,
+  etiquetas, releases) y `docs/standards/` fija ramas, commits, comentarios, estilo, tests, seguridad y
+  releases, cada norma con su forma de comprobarla. `docs/README.md` dice qué documento es para quién y
+  qué no se documenta.
+- `.github/` gana cuatro formularios de issue (error, mejora, documentación y medición de recall, cada
+  uno con su criterio de cierre), los issues en blanco desactivados con un enlace al reporte privado de
+  vulnerabilidades, una plantilla de PR por defecto y tres más (`release`, `dependency`, `documentation`),
+  `release.yml` para agrupar las notas por etiqueta y `CODEOWNERS`.
+- Las etiquetas que citan los formularios, las plantillas, `release.yml` y `CONTRIBUTING.md` se declaran
+  en `.github/labels.json`. `engine/tests/contribution-standard.test.ts` falla si alguno cita una que no
+  existe, o si un tipo se queda sin formulario ni excepción razonada; el workflow `labels.yml` compara
+  ese fichero con las etiquetas que tiene GitHub.
+- Dependabot deja de proponer saltos de versión mayor de `node` en el Dockerfile: los majors se mueven a
+  mano a una LTS.
+- El README pasa a ser una guía: qué es, un diagrama del sistema, el Quickstart primero y un mapa de la
+  documentación. Lo que era referencia se mueve sin perder nada: el comportamiento del recall y la
+  búsqueda por significado a `docs/recall.md`, los hooks a `docs/hooks.md`, y las capas, los componentes,
+  la saliencia y el índice hebbiano a `docs/architecture.md`. El roadmap por fases de `engine/README.md`
+  desaparece (la historia es este fichero) y la consolidación deja de repetir el despliegue de `DEPLOY.md`.
+
+### zod 4
+
+- zod pasa de 3.25.76 a 4.6.7 (versión exacta): `.int()` rechaza enteros fuera del rango seguro de JS (y el `inputSchema` de `forget` lo anuncia), los límites de longitud cuentan *code points* en vez de unidades UTF-16 y cambian los textos de `ZodError`; `tests/tool-schemas.test.ts` compara con `z.toJSONSchema` en vez de leer internos de zod 3.
+
+### Un solo diálogo de confirmación en el detalle
+
+- `MemoryView` y `TraitView` repetían el pie del diálogo de confirmación y la forma de sus props. Ambos viven ahora en `DetailParts.tsx` (`ConfirmDialog` y `DetailViewProps`), sin cambios visibles, y `pnpm dup` pasa a exigir umbral 0: ningún bloque copiado de 10 o más líneas.
+
+### `@vitejs/plugin-react` sube a 5.2.0
+
+- `@vitejs/plugin-react` pasa de 4.7.0 a 5.2.0, fijado exacto. `ui/vite.config.ts` llama a `react()`
+  sin opciones y la 5.x sólo deja de añadir `react`/`react-dom` a `resolve.dedupe`, que aquí sobra.
+
 ### Linter con Biome, y fuera las directivas de ESLint que no hacían nada
 
 - No había linter ni formateador. Ahora Biome 2 es el único, sólo como linter: `pnpm lint` y un step

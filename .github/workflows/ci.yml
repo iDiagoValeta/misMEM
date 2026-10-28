@@ -42,8 +42,8 @@ jobs:
       - run: pnpm test
       # Fails on unused files, exports and dependencies, so dead code cannot come back unnoticed.
       - run: pnpm knip
-      # Copied blocks of 10+ lines in src/ and ui/src may not grow past 0.2%, today's level:
-      # the two left are in Detail.tsx, which #88 splits; then the threshold drops to 0.
+      # Copied blocks of 10+ lines in src/ and ui/src are not allowed at all: the shared detail
+      # pieces live in DetailParts.tsx and every view reuses them.
       - run: pnpm dup
       # Biome lints src/, ui/src/ and tests/; formatting stays manual (see biome.json).
       - run: pnpm lint

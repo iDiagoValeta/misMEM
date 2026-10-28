@@ -10,9 +10,9 @@ import {
   ReinforceInput,
 } from "../src/schema.js";
 
-// The MCP inputSchema is hand-written, Zod is what validates. This derives what each Zod
-// field enforces and checks the advertised JSON schema says the same.
-const ZOD: Record<string, z.ZodObject<z.ZodRawShape>> = {
+// The MCP inputSchema is hand-written, Zod is what validates. Zod generates the JSON schema
+// it enforces and this checks the advertised one says the same.
+const ZOD: Record<string, z.ZodType> = {
   capture: CaptureInput,
   recall: RecallInput,
   reinforce: ReinforceInput,
@@ -21,69 +21,31 @@ const ZOD: Record<string, z.ZodObject<z.ZodRawShape>> = {
   forget: ForgetInput,
 };
 
-interface Constraints {
-  type: string;
-  minimum?: number;
-  maximum?: number;
-  minLength?: number;
-  maxLength?: number;
-  minItems?: number;
-  maxItems?: number;
-  enum?: string[];
-  items?: Constraints;
-}
+type Json = Record<string, unknown>;
 
-function derive(schema: z.ZodTypeAny): { optional: boolean; c: Constraints } {
-  let optional = false;
-  let s = schema;
-  for (;;) {
-    if (s instanceof z.ZodOptional) s = s.unwrap();
-    else if (s instanceof z.ZodDefault) s = s._def.innerType;
-    else break;
-    optional = true;
-  }
-  if (s instanceof z.ZodString) {
-    const c: Constraints = { type: "string" };
-    for (const k of s._def.checks) {
-      if (k.kind === "min") c.minLength = k.value;
-      if (k.kind === "max") c.maxLength = k.value;
-    }
-    return { optional, c };
-  }
-  if (s instanceof z.ZodNumber) {
-    const c: Constraints = { type: "number" };
-    for (const k of s._def.checks) {
-      if (k.kind === "int") c.type = "integer";
-    }
-    for (const k of s._def.checks) {
-      // .positive() is an exclusive bound at 0: the smallest integer allowed is 1.
-      if (k.kind === "min") c.minimum = k.inclusive ? k.value : c.type === "integer" ? k.value + 1 : undefined;
-      if (k.kind === "max") c.maximum = k.value;
-    }
-    return { optional, c };
-  }
-  if (s instanceof z.ZodBoolean) return { optional, c: { type: "boolean" } };
-  if (s instanceof z.ZodEnum) return { optional, c: { type: "string", enum: [...s.options] } };
-  if (s instanceof z.ZodArray) {
-    const c: Constraints = { type: "array", items: derive(s.element).c };
-    if (s._def.minLength) c.minItems = s._def.minLength.value;
-    if (s._def.maxLength) c.maxItems = s._def.maxLength.value;
-    return { optional, c };
-  }
-  throw new Error(`unhandled zod type ${s.constructor.name}`);
-}
+const KEYS = ["type", "minimum", "maximum", "minLength", "maxLength", "minItems", "maxItems", "enum"] as const;
 
-function advertised(json: Record<string, unknown>): Constraints {
-  const c: Constraints = { type: json.type as string };
-  for (const key of ["minimum", "maximum", "minLength", "maxLength", "minItems", "maxItems", "enum"] as const) {
-    if (json[key] !== undefined) (c as unknown as Record<string, unknown>)[key] = json[key];
+// Only the constraints that matter to a caller, in one canonical form for both sides.
+// Zod expresses .positive() as exclusiveMinimum 0 and .int() as safe-integer bounds,
+// while the hand-written schema says minimum 1; the safe-integer ceiling is advertised as is,
+// so a caller is never told that a value Zod rejects is valid.
+function constraints(json: Json): Json {
+  const c: Json = {};
+  for (const key of KEYS) if (json[key] !== undefined) c[key] = json[key];
+  if (c.type === "integer") {
+    if (typeof json.exclusiveMinimum === "number") c.minimum = json.exclusiveMinimum + 1;
+    if (c.minimum === Number.MIN_SAFE_INTEGER) delete c.minimum;
+  } else if (json.exclusiveMinimum !== undefined) {
+    throw new Error("exclusiveMinimum on a non-integer is not comparable to the advertised schema");
   }
-  if (json.items) c.items = advertised(json.items as Record<string, unknown>);
+  if (json.items) c.items = constraints(json.items as Json);
   return c;
 }
 
-function strip(c: Constraints): Constraints {
-  return JSON.parse(JSON.stringify(c)) as Constraints; // drops undefined keys
+// io "input" is what a caller sends: fields with a .default() are optional there.
+function generated(name: string): { properties: Record<string, Json>; required: string[] } {
+  const json = z.toJSONSchema(ZOD[name]!, { io: "input" }) as { properties: Record<string, Json>; required?: string[] };
+  return { properties: json.properties, required: json.required ?? [] };
 }
 
 describe("MCP inputSchema matches the Zod schema", () => {
@@ -93,17 +55,14 @@ describe("MCP inputSchema matches the Zod schema", () => {
 
   for (const tool of CANONICAL_TOOLS) {
     it(`${tool.name}: same fields, required set and constraints`, () => {
-      const shape = ZOD[tool.name]!.shape;
-      const props = tool.inputSchema.properties as unknown as Record<string, Record<string, unknown>>;
+      const zod = generated(tool.name);
+      const props = tool.inputSchema.properties as unknown as Record<string, Json>;
       const required = (tool.inputSchema as { required?: string[] }).required ?? [];
 
-      expect(Object.keys(props).sort()).toEqual(Object.keys(shape).sort());
-      const mustHave = Object.entries(shape)
-        .filter(([, v]) => !derive(v).optional)
-        .map(([k]) => k);
-      expect([...required].sort()).toEqual(mustHave.sort());
-      for (const [key, zodField] of Object.entries(shape)) {
-        expect(strip(advertised(props[key]!)), `${tool.name}.${key}`).toEqual(strip(derive(zodField).c));
+      expect(Object.keys(props).sort()).toEqual(Object.keys(zod.properties).sort());
+      expect([...required].sort()).toEqual([...zod.required].sort());
+      for (const [key, field] of Object.entries(zod.properties)) {
+        expect(constraints(props[key]!), `${tool.name}.${key}`).toEqual(constraints(field));
       }
     });
   }

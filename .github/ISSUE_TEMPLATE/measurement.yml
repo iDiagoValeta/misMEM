@@ -1,0 +1,45 @@
+name: Medición de recall
+description: Un resultado de mismem-bench o de otra medición de calidad, rendimiento o recursos, y lo que implica
+labels: ["performance"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Convenciones: [CONTRIBUTING.md](https://github.com/lucasmella-stack/misMEM/blob/main/CONTRIBUTING.md).
+        El banco de preguntas de `mismem-bench` es privado y sale de la propia memoria: **no pegarlo ni subirlo**. Los números sí.
+  - type: textarea
+    id: measured
+    attributes:
+      label: Qué se midió
+      description: El número primero y después el montaje. Con fecha, versión y comando. Una tabla gana a un párrafo cuando hay más de una cifra.
+      placeholder: |
+        | cuándo | configuración | MRR | 1ª | entre las 3 | noiseHits |
+        |---|---|---|---|---|---|
+    validations:
+      required: true
+  - type: textarea
+    id: setup
+    attributes:
+      label: Montaje
+      description: Modelo de embeddings y `MISMEM_EMBEDDING_MIN_SCORE`, número de memorias, versión o commit, máquina. Sin ellos la medición no se puede reproducir ni envejecer.
+    validations:
+      required: true
+  - type: textarea
+    id: implies
+    attributes:
+      label: Qué implica
+      description: "La consecuencia, dicha para poder discutirla. Si contradice algo escrito (un documento, otro issue), nombrarlo: esa contradicción suele ser el hallazgo."
+    validations:
+      required: true
+  - type: textarea
+    id: options
+    attributes:
+      label: Opciones
+      description: Numeradas, cada una con su coste, y hacia cuál se inclina quien abre el issue.
+  - type: textarea
+    id: closure
+    attributes:
+      label: Criterio de cierre
+      description: Una medición de vuelta en rango con el mismo banco, un test que reproduce el efecto y pasa, o una decisión escrita (incluido "no se hace") con su razonamiento.
+    validations:
+      required: true

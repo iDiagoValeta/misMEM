@@ -367,6 +367,23 @@ Los defaults son los del código (`engine/src`).
 | `MISMEM_HOOK_SERVER` | `mismem` | Nombre del servidor MCP dentro de esa config |
 | `MISMEM_DIST` | `<repo>/engine/dist` | Binarios que invoca el envoltorio |
 
+**Instalador (`scripts/install.sh`)**
+
+Las `MISMEM_INSTALL_*` contestan las preguntas del modo sin preguntas (`--yes`). Sin `--yes`, la base, el
+modelo y la URL base se proponen como respuesta por defecto, y `MISMEM_INSTALL_API_KEY` y
+`MISMEM_INSTALL_HOOKS` evitan su pregunta.
+
+| Var | Default | Descripción |
+|-----|---------|-------------|
+| `MISMEM_INSTALL_DB` | el `MISMEM_DB` de una instalación anterior, si no `~/.mismem/mem.db` | Dónde guardar la memoria |
+| `MISMEM_INSTALL_PROVIDER` | el de una instalación anterior, si no `none` | Proveedor de consolidación: `deepseek`, `openrouter`, `openai`, `compatible` o `none`. Otro valor corta con código 64 |
+| `MISMEM_INSTALL_API_KEY` | la clave de una instalación anterior | La clave del proveedor. Nunca por argumento: quedaría en el historial y en `ps`. Se guarda en `~/.config/mismem/env` con permisos 600 |
+| `MISMEM_INSTALL_MODEL` | el de una instalación anterior, si no vacío | Modelo de consolidación. Obligatorio con `openai` y `compatible`; con los otros, vacío usa el de misMEM |
+| `MISMEM_INSTALL_BASE_URL` | el de una instalación anterior, si no `http://127.0.0.1:11434/v1` | Con proveedor `compatible`, URL base del servidor (con `/v1`) |
+| `MISMEM_INSTALL_HOOKS` | `yes` con `--yes` | `yes` o `no` para los hooks de Claude Code. Si la versión instalada no trae `mismem-inject` y `mismem-used`, queda en `no` |
+| `MISMEM_INSTALL_VERSION` | `latest` | Al instalar desde npm (`--from-npm`), la versión del paquete |
+| `REPLACE_EXISTING` | `no` | Con `yes`, el instalador reemplaza un MCP `mismem` de opencode que ya tiene otro comando; sin ella lo deja como está y avisa. En Claude Code, Claude Desktop, VS Code y Cursor la entrada `mismem` se reescribe siempre, y unos hooks de misMEM de Claude Code configurados de otra forma nunca se tocan |
+
 **Interfaz en desarrollo (`pnpm dev:ui`)**
 
 | Var | Default | Descripción |
