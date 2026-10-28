@@ -1,5 +1,5 @@
 /**
- * Server core — registra las 5 tools canónicas + alias engram-compat.
+ * Server core — registra las 6 tools canónicas + alias engram-compat.
  * Reusado por `server.ts` (stdio) y `server-http.ts` (StreamableHTTP).
  */
 import { Server } from "@modelcontextprotocol/sdk/server/index.js";

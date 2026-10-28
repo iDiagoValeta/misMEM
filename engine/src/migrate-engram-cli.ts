@@ -86,9 +86,9 @@ function epochMs(iso: string): number {
 }
 
 function deterministicId(salt: string): string {
-  // ULID es time-ordered + random; para idempotencia usamos hash → 26 chars base32.
+  // ULID is time-ordered + random; idempotence here needs a stable hash instead.
   const hash = createHash("sha256").update(salt).digest();
-  // Tomamos 16 bytes y los codificamos a base32 (Crockford simplified).
+  // 26 hash bytes, one per character, each reduced mod 32 to index the alphabet.
   const alphabet = "0123456789ABCDEFGHJKMNPQRSTVWXYZ";
   let out = "";
   for (let i = 0; i < 26; i++) {

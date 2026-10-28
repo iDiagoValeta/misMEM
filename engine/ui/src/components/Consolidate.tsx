@@ -43,7 +43,8 @@ export function Consolidate({ open, scope, scopes, onClose }: Props) {
     queryFn: ({ signal }) => api.consolidation(signal),
     enabled: open,
     retry: false,
-    // D29: TanStack no solapa peticiones. D4: un fallo del poll corta el intervalo y se avisa.
+    // TanStack never overlaps requests, and a failing poll stops the interval instead of
+    // hammering the server; the error phase below tells the user.
     refetchInterval: (query) => (query.state.data?.running && !query.state.error ? POLL_MS : false),
   });
 
@@ -176,7 +177,8 @@ export function Consolidate({ open, scope, scopes, onClose }: Props) {
                 <dd className="tabular-nums text-ink-soft">{job.summary.scopes_failed}</dd>
               </dl>
             )}
-            {/* D16: el log visible no es región viva; abajo se anuncia sólo la última línea. */}
+            {/* The visible log is not a live region: announcing ten lines would flood a
+                screen reader, so only the last line goes to the sr-only paragraph. */}
             <pre className="max-h-40 overflow-auto rounded-md bg-field p-2 text-[11px] leading-relaxed text-ink-soft">
               {log.slice(-10).join("\n") || "Esperando la primera línea…"}
             </pre>
