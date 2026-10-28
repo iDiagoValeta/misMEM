@@ -1,0 +1,116 @@
+[
+  {
+    "id": "conv-main",
+    "title": "Fixture conversation",
+    "create_time": 1700000000,
+    "mapping": {
+      "root": {
+        "message": null,
+        "parent": null,
+        "children": [
+          "sys"
+        ]
+      },
+      "sys": {
+        "message": {
+          "id": "sys",
+          "author": {
+            "role": "system"
+          },
+          "content": {
+            "content_type": "text",
+            "parts": [
+              "SYSTEM-PROMPT-MARKER"
+            ]
+          },
+          "create_time": 1
+        },
+        "parent": "root",
+        "children": [
+          "u1"
+        ]
+      },
+      "u1": {
+        "message": {
+          "id": "u1",
+          "author": {
+            "role": "user"
+          },
+          "content": {
+            "content_type": "text",
+            "parts": [
+              "question about zebras"
+            ]
+          },
+          "create_time": 2
+        },
+        "parent": "sys",
+        "children": [
+          "a0"
+        ]
+      },
+      "a0": {
+        "message": {
+          "id": "a0",
+          "author": {
+            "role": "assistant"
+          },
+          "content": {
+            "content_type": "text",
+            "parts": []
+          },
+          "create_time": 3
+        },
+        "parent": "u1",
+        "children": [
+          "a1"
+        ]
+      },
+      "a1": {
+        "message": {
+          "id": "a1",
+          "author": {
+            "role": "assistant"
+          },
+          "content": {
+            "content_type": "multimodal_text",
+            "parts": [
+              {
+                "text": "answer about zebras"
+              },
+              {
+                "asset": "no text here"
+              }
+            ]
+          },
+          "create_time": 4
+        },
+        "parent": "a0",
+        "children": [
+          "t1"
+        ]
+      },
+      "t1": {
+        "message": {
+          "id": "t1",
+          "author": {
+            "role": "tool"
+          },
+          "content": {
+            "content_type": "text",
+            "parts": [
+              "TOOL-OUTPUT-MARKER"
+            ]
+          },
+          "create_time": 5
+        },
+        "parent": "a1",
+        "children": []
+      }
+    }
+  },
+  {
+    "id": "conv-no-mapping",
+    "title": "Not a conversation"
+  }
+]

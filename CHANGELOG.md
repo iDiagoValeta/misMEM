@@ -2,6 +2,34 @@
 
 ## Sin publicar
 
+### Ningún CLI se traga un flag mal escrito
+
+- `mismem-embed`, `mismem-bench`, `mismem-stats` y `mismem-migrate-engram` ignoraban los flags que no
+  entendían: un `--scop daimon` reindexaba o contaba todos los ámbitos, un `--jsn` dejaba la salida en
+  texto, un `--dryrun` migraba de verdad y un `--batch abc` caía al valor por defecto. `mismem-ingest`
+  hacía lo mismo con los posicionales de más. Ahora cada uno parsea en su `<cli>-args.ts`, como
+  `consolidate` y `forget`, y un flag o posicional inesperado corta con `argumento desconocido: <x>` y
+  exit 64. Un valor ausente (`--scope`, `--batch`, `--limit`, `--source`) también corta, un posicional
+  de ingest en blanco cuenta como ausente, y un subcomando de `mismem-ingest` que no existe se rechaza
+  en vez de imprimir la ayuda.
+- `mismem-stats` abría la base y, si una consulta fallaba, moría con la base abierta y sin mensaje.
+  Ahora la cierra en un `finally` y el fallo sale por stderr como `[stats] FATAL: ...` con exit 1.
+
+### La imagen y el paquete dejan de arrastrar lo que no usan
+
+- Sin `engine/.dockerignore`, un `docker build` local mandaba al daemon `node_modules`, `dist`,
+  `coverage` y cualquier `.db` que hubiera en `engine/`. El Dockerfile no los usa: sólo copia
+  `package.json`, `pnpm-lock.yaml`, `pnpm-workspace.yaml`, `tsconfig.json`, `src` y `ui`.
+- Las dos etapas fijaban la base por tag (`node:22-alpine`), así que un rebuild meses después
+  compilaba contra otra Alpine sin que nadie tocara el repositorio, y `better-sqlite3` es nativo.
+  Ahora van por digest, con el tag legible al lado.
+- La etapa runtime copiaba `node_modules` entero, con vite, typescript, react y vitest dentro de una
+  imagen que sólo ejecuta `dist/server-http.js`. Tras `pnpm build` se hace `pnpm prune --prod`;
+  `better-sqlite3` es dependencia de producción y se queda (probado con `docker build`).
+- El paquete npm declaraba `MIT` sin llevar el texto de la licencia. `engine/LICENSE` es copia
+  literal de la raíz y entra en `files`. En CI, `cmp LICENSE engine/LICENSE` falla si se separan, y
+  hadolint revisa el Dockerfile con la imagen fijada por digest.
+
 ### `mismem-http` escucha sólo en loopback por defecto
 
 - Sin `MISMEM_AUTH_*`, el servidor escuchaba en `0.0.0.0` y la guarda de `Host` sólo frena el
