@@ -6,13 +6,15 @@
  *   GET /api/memories        → memorias por salience efectiva (?scope=&limit=&offset=&noise=1)
  *   GET /api/memory/:id      → la memoria, sus episodios de origen y los rasgos que la citan
  *   GET /api/trait/:id       → el rasgo y las memorias que lo sostienen
- *   GET /api/graph           → nodos y aristas episodio → memoria → rasgo (?scope=&episodes=1)
+ *   GET /api/graph           → nodos y aristas episodio → memoria → rasgo (?scope=&episodes=1),
+ *                              y memoria ↔ memoria por parecido (?related=1)
  *
  * La salience que devuelve es la efectiva (con el decaimiento aplicado a hoy), la misma que
  * usa el recall. La guardada sólo es el valor del último checkpoint.
  */
 import type { ServerResponse } from "node:http";
 import type { Database as DB } from "better-sqlite3";
+import { cosine } from "./embeddings/index.js";
 import { excludeNoiseSql, isNoiseGist } from "./noise.js";
 import { effectiveSalience, type SalienceRow } from "./salience.js";
 import { clampLimit, json } from "./viewer.js";
@@ -50,6 +52,62 @@ const GRAPH_MAX_MEMORIES = 400;
 const GRAPH_MAX_TRAITS = 200;
 const GRAPH_MAX_EPISODES = 2000;
 const GRAPH_LABEL_CHARS = 120;
+// Con nomic-embed-text hasta lo que no tiene nada que ver da 0,6-0,7 de coseno: medido en
+// una base real (118 memorias), la vecina más cercana tiene mediana 0,795. Con 0,75 y tres
+// vecinas por memoria salen grupos; más bajo, todo se conecta con todo.
+const RELATED_MIN_SCORE = 0.75;
+const RELATED_PER_NODE = 3;
+
+/** Topes por capa; los tests los bajan para no sembrar cientos de filas. */
+export interface GraphCaps {
+  memories?: number;
+  traits?: number;
+  episodes?: number;
+}
+
+type GraphLink = { source: string; target: string; kind: "origin" | "evidence" | "related"; score?: number };
+
+/**
+ * Aristas entre memorias parecidas, con los vectores ya guardados (no llama al embedder).
+ * Cada memoria aporta sus vecinas más cercanas por encima del umbral; la arista no tiene
+ * sentido, así que a-b y b-a cuentan una vez. Sólo compara vectores del modelo más usado:
+ * los de modelos distintos no son comparables.
+ */
+export function relatedLinks(
+  db: DB,
+  memoryIds: readonly string[],
+  opts: { minScore?: number; perNode?: number } = {},
+): GraphLink[] {
+  const minScore = opts.minScore ?? RELATED_MIN_SCORE;
+  const perNode = opts.perNode ?? RELATED_PER_NODE;
+  const rows = db
+    .prepare(
+      `SELECT memory_id, model, vec FROM memory_embeddings
+       WHERE memory_id IN (SELECT value FROM json_each(?))`,
+    )
+    .all(JSON.stringify(memoryIds)) as Array<{ memory_id: string; model: string; vec: Buffer }>;
+  const byModel = new Map<string, number>();
+  for (const r of rows) byModel.set(r.model, (byModel.get(r.model) ?? 0) + 1);
+  const model = [...byModel.entries()].sort((a, b) => b[1] - a[1])[0]?.[0];
+  const vectors = rows
+    .filter((r) => r.model === model)
+    .map((r) => ({ id: r.memory_id, vec: new Float32Array(r.vec.buffer, r.vec.byteOffset, r.vec.byteLength / 4) }));
+
+  const links = new Map<string, GraphLink>();
+  for (const a of vectors) {
+    const nearest = vectors
+      .filter((b) => b !== a)
+      .map((b) => ({ id: b.id, score: cosine(a.vec, b.vec) }))
+      .filter((n) => n.score >= minScore)
+      .sort((x, y) => y.score - x.score)
+      .slice(0, perNode);
+    for (const n of nearest) {
+      const [source, target] = a.id < n.id ? [a.id, n.id] : [n.id, a.id];
+      links.set(`${source}|${target}`, { source, target, kind: "related", score: n.score });
+    }
+  }
+  return [...links.values()];
+}
 
 export type DetailPath = { layer: "memory" | "trait"; id: string };
 
@@ -257,30 +315,54 @@ export function handleTrait(db: DB, res: ServerResponse, id: string, at = Date.n
 const label = (text: string): string =>
   text.length > GRAPH_LABEL_CHARS ? `${text.slice(0, GRAPH_LABEL_CHARS - 1)}…` : text;
 
-export function handleGraph(db: DB, res: ServerResponse, url: URL, at = Date.now()): void {
+export function handleGraph(
+  db: DB,
+  res: ServerResponse,
+  url: URL,
+  at = Date.now(),
+  caps: GraphCaps = {},
+): void {
   const scope = url.searchParams.get("scope");
   const withEpisodes = url.searchParams.get("episodes") === "1";
+  const withRelated = url.searchParams.get("related") === "1";
+  const maxMemories = caps.memories ?? GRAPH_MAX_MEMORIES;
+  const maxTraits = caps.traits ?? GRAPH_MAX_TRAITS;
+  const maxEpisodes = caps.episodes ?? GRAPH_MAX_EPISODES;
 
+  // Los totales se cuentan antes de recortar: una capa truncada es la que tenía más filas
+  // que su tope, no la que justo lo llenaba.
+  const memoriesWhere = `(@scope IS NULL OR scope = @scope) AND ${excludeNoiseSql("m")}`;
+  const memoryTotal = (
+    db.prepare(`SELECT COUNT(*) AS n FROM memories m WHERE ${memoriesWhere}`).get({ scope }) as { n: number }
+  ).n;
   const memories = (
     db
-      .prepare(
-        `SELECT ${MEMORY_COLUMNS} FROM memories m
-         WHERE (@scope IS NULL OR scope = @scope) AND ${excludeNoiseSql("m")}`,
-      )
+      .prepare(`SELECT ${MEMORY_COLUMNS} FROM memories m WHERE ${memoriesWhere}`)
       .all({ scope }) as MemoryRow[]
   )
     .map((row) => ({ row, salience: effectiveSalience(row, at) }))
     .sort((a, b) => b.salience - a.salience)
-    .slice(0, GRAPH_MAX_MEMORIES);
+    .slice(0, maxMemories);
+  const traitTotal = (
+    db
+      .prepare(`SELECT COUNT(*) AS n FROM traits WHERE (@scope IS NULL OR scope = @scope)`)
+      .get({ scope }) as { n: number }
+  ).n;
   const traits = db
     .prepare(
       `SELECT id, scope, name, strength, polarity, evidence_memory_ids, created_at, updated_at FROM traits
        WHERE (@scope IS NULL OR scope = @scope) ORDER BY strength DESC LIMIT @limit`,
     )
-    .all({ scope, limit: GRAPH_MAX_TRAITS }) as TraitRow[];
+    .all({ scope, limit: maxTraits }) as TraitRow[];
+
+  const truncated = {
+    memories: memoryTotal > maxMemories,
+    traits: traitTotal > maxTraits,
+    episodes: false,
+  };
 
   const nodes: Array<Record<string, unknown>> = [];
-  const links: Array<{ source: string; target: string; kind: "origin" | "evidence" }> = [];
+  const links: GraphLink[] = [];
   const memoryIds = new Set(memories.map((m) => m.row.id));
 
   for (const { row, salience } of memories) {
@@ -293,18 +375,32 @@ export function handleGraph(db: DB, res: ServerResponse, url: URL, at = Date.now
     }
   }
   if (withEpisodes && memoryIds.size > 0) {
+    const idsJson = JSON.stringify([...memoryIds]);
+    // Los episodios del grafo son los que cuelgan de las memorias visibles; el recorte
+    // ocurre sobre ese conjunto, así que el total se cuenta con el mismo WHERE.
+    const episodeTotal = (
+      db
+        .prepare(
+          `SELECT COUNT(*) AS n FROM episodes
+           WHERE consolidated_into IN (SELECT value FROM json_each(?))`,
+        )
+        .get(idsJson) as { n: number }
+    ).n;
+    truncated.episodes = episodeTotal > maxEpisodes;
     const episodes = db
       .prepare(
         `SELECT id, scope, body, created_at, consolidated_into FROM episodes
          WHERE consolidated_into IN (SELECT value FROM json_each(?))
          ORDER BY created_at DESC LIMIT ?`,
       )
-      .all(JSON.stringify([...memoryIds]), GRAPH_MAX_EPISODES) as EpisodeRow[];
+      .all(idsJson, maxEpisodes) as EpisodeRow[];
     for (const e of episodes) {
       nodes.push({ id: e.id, layer: "episode", scope: e.scope, label: label(e.body) });
       links.push({ source: e.id, target: e.consolidated_into as string, kind: "origin" });
     }
   }
 
-  json(res, 200, { nodes, links, truncated: { memories: memoryIds.size === GRAPH_MAX_MEMORIES } });
+  if (withRelated) links.push(...relatedLinks(db, [...memoryIds]));
+
+  json(res, 200, { nodes, links, truncated });
 }

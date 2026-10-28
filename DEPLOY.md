@@ -321,6 +321,7 @@ Los defaults son los del código (`engine/src`).
 | `MISMEM_HTTP_HOST` | `0.0.0.0` | Bind address |
 | `MISMEM_ALLOWED_HOSTS` | — | Sin auth, el servidor sólo atiende `Host` de loopback (`localhost`, `127.0.0.1`, `[::1]`, `*.localhost`) y responde 403 al resto, contra DNS rebinding. Lista separada por comas para añadir otros nombres. Con auth no se filtra |
 | `MISMEM_HTTP_MAX_BODY_BYTES` | `4194304` (4 MiB) | Tope del cuerpo de `POST /mcp`; más grande responde 413 sin juntarlo en memoria |
+| `MISMEM_VIEWER_ALLOW_DELETE` | apagado | `1` deja que la interfaz olvide memorias y rasgos, siempre en dos pasos con confirmación. Apagado, esos dos POST responden 403; corregir, deshacer una consolidación y cristalizar no dependen de él |
 | `MISMEM_AUTH_USER` / `MISMEM_AUTH_PASS` | — | BasicAuth nativa. Sin ninguna, **sin auth**; con una sola, el servidor no arranca |
 | `MISMEM_SALIENCE_HALF_LIFE_DAYS` | `90` | Días en que una memoria sin uso pierde la mitad de su saliencia |
 | `MISMEM_REINFORCE_ON_RECALL` | `on` | `off` deja de reforzar lo que el recall devuelve; la saliencia pasa a subir sólo con `reinforce`. Ver "Refuerzo por uso" |

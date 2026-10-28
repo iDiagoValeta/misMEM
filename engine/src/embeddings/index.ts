@@ -111,7 +111,7 @@ export function saveMemoryEmbedding(
   ).run(memoryId, model, vec.length, Buffer.from(vec.buffer, vec.byteOffset, vec.byteLength), Date.now());
 }
 
-function cosine(a: Float32Array, b: Float32Array): number {
+export function cosine(a: Float32Array, b: Float32Array): number {
   if (a.length !== b.length) return -1;
   let dot = 0;
   let na = 0;

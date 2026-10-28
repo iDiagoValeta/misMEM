@@ -1,0 +1,131 @@
+@import "tailwindcss";
+@import "@fontsource-variable/jetbrains-mono";
+
+/* Los componentes de shadcn usan variantes dark:. El tema se elige con [data-theme] en
+   <html>, no con la clase .dark ni sólo con la preferencia del sistema, así que se
+   redefine la variante para que siga el atributo. */
+@custom-variant dark (&:where([data-theme="dark"], [data-theme="dark"] *));
+
+/*
+ * Lenguaje visual de localOllamaRAG: superficies neutras, tinta cálida y un rosa de marca.
+ * Los valores de los tokens son los de su index.css. Aquí se declaran también en @theme
+ * para que Tailwind genere utilidades (bg-surface, text-ink…); el tema se cambia con
+ * [data-theme] en <html>, sin recompilar ni remontar componentes.
+ */
+@theme {
+  --font-sans: "JetBrains Mono Variable", ui-monospace, monospace;
+  --font-mono: "JetBrains Mono Variable", ui-monospace, monospace;
+
+  --color-surface: #1a1917;
+  --color-surface-raised: #21201d;
+  --color-field: #100f0d;
+  --color-ink: #e8e4dc;
+  --color-ink-soft: #d2cec6;
+  --color-ink-muted: #a09c93;
+  --color-ink-faint: #6f6c64;
+  --color-edge: rgb(255 255 255 / 0.14);
+  --color-divider: rgb(255 255 255 / 0.24);
+  --color-brand: #f087ad;
+  --color-brand-text: #f087ad;
+  --color-brand-contrast: #141311;
+  --color-composer: #262421;
+  --color-composer-border: rgb(255 255 255 / 0.14);
+  --color-raster: rgb(255 255 255 / 0.028);
+  --color-danger: #e4948c;
+  --color-warning: #d9ab6a;
+  --color-ok: #8fbf9a;
+
+  --default-transition-duration: 200ms;
+  --default-transition-timing-function: cubic-bezier(0.22, 1, 0.36, 1);
+  --ease-out: cubic-bezier(0.22, 1, 0.36, 1);
+}
+
+/* Oscuro por defecto: el tema de partida del diseño. */
+:root,
+[data-theme="dark"] {
+  color-scheme: dark;
+  --color-surface: #1a1917;
+  --color-surface-raised: #21201d;
+  --color-field: #100f0d;
+  --color-ink: #e8e4dc;
+  --color-ink-soft: #d2cec6;
+  --color-ink-muted: #a09c93;
+  --color-ink-faint: #6f6c64;
+  --color-edge: rgb(255 255 255 / 0.14);
+  --color-divider: rgb(255 255 255 / 0.24);
+  --color-brand: #f087ad;
+  /* En oscuro el rosa de marca ya pasa AA sobre las dos superficies. */
+  --color-brand-text: #f087ad;
+  --color-brand-contrast: #141311;
+  --color-composer: #262421;
+  --color-composer-border: rgb(255 255 255 / 0.14);
+  --color-raster: rgb(255 255 255 / 0.028);
+  --color-danger: #e4948c;
+  --color-warning: #d9ab6a;
+  --color-ok: #8fbf9a;
+}
+
+[data-theme="light"] {
+  color-scheme: light;
+  --color-surface: #cbc9c3;
+  --color-surface-raised: #d6d3cc;
+  --color-field: #bcbab3;
+  --color-ink: #121114;
+  --color-ink-soft: #333236;
+  /* Oscurecer la tinta cuesta menos que aclarar `field`: los chips seguirían leyéndose
+     como campos. #56544e se quedaba en 3,90:1 sobre field (el fondo real de chips y
+     avisos), así que este tono sube el peor par a 4,63:1 y conserva 5,44:1 en surface. */
+  --color-ink-muted: #4b4943;
+  --color-ink-faint: #807d75;
+  --color-edge: rgb(0 0 0 / 0.12);
+  --color-divider: rgb(0 0 0 / 0.22);
+  --color-brand: #b23a76;
+  /* El #b23a76 de marca no pasa AA como texto. #8e2e5e pasaba sobre surface pero se
+     quedaba en 4,00:1 sobre field y 3,94:1 sobre brand/15; este tono da 4,78 y 4,71. */
+  --color-brand-text: #7c274f;
+  --color-brand-contrast: #ffffff;
+  --color-composer: #dbd8d1;
+  --color-composer-border: rgb(0 0 0 / 0.18);
+  --color-raster: rgb(0 0 0 / 0.028);
+  --color-danger: #842a1f;
+  --color-warning: #604516;
+  --color-ok: #2e513a;
+}
+
+/* shadcn nombra sus variables a su manera; estos son los tokens de arriba con esos nombres.
+   inline hace que las utilidades apunten a var(--color-*), así el cambio de tema repinta
+   sin volver a compilar y sin que React tenga que remontar nada. */
+@theme inline {
+  --color-background: var(--color-surface);
+  --color-foreground: var(--color-ink);
+  --color-card: var(--color-surface-raised);
+  --color-card-foreground: var(--color-ink);
+  --color-popover: var(--color-surface-raised);
+  --color-popover-foreground: var(--color-ink);
+  --color-primary: var(--color-brand);
+  --color-primary-foreground: var(--color-brand-contrast);
+  --color-secondary: var(--color-composer);
+  --color-secondary-foreground: var(--color-ink);
+  --color-muted: var(--color-surface-raised);
+  --color-muted-foreground: var(--color-ink-muted);
+  --color-accent: var(--color-composer);
+  --color-accent-foreground: var(--color-ink);
+  --color-destructive: var(--color-danger);
+  --color-destructive-foreground: var(--color-brand-contrast);
+  --color-border: var(--color-edge);
+  --color-input: var(--color-edge);
+  --color-ring: var(--color-brand);
+}
+
+html,
+body,
+#root {
+  height: 100%;
+}
+
+body {
+  background-color: var(--color-surface);
+  color: var(--color-ink);
+  font-family: var(--font-sans);
+  -webkit-font-smoothing: antialiased;
+}

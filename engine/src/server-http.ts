@@ -13,6 +13,7 @@
  *   MISMEM_DB            ruta SQLite (default ~/.mismem/mem.db)
  *   MISMEM_ALLOWED_HOSTS sin auth, nombres de Host aceptados además de loopback (coma)
  *   MISMEM_HTTP_MAX_BODY_BYTES  tope del cuerpo de POST /mcp (default 4 MiB); más, 413
+ *   MISMEM_VIEWER_ALLOW_DELETE  1 para que la interfaz pueda olvidar memorias y rasgos (default apagado)
  *
  * Endpoints:
  *   GET  /healthz   →  200 ok (liveness)
@@ -30,7 +31,6 @@ import { BodyTooLargeError, InvalidJsonError, isJsonContentType, loadMaxBodyByte
 import { loadAuth } from "./http-guard.js";
 import { createServer } from "./server-core.js";
 import {
-  handleViewerHtml,
   handleStats,
   handleRecent,
   handleSearch,
@@ -44,6 +44,15 @@ import {
   handleTrait,
   parseDetailPath,
 } from "./viewer-api.js";
+import { serveUi } from "./viewer-static.js";
+import {
+  ACTION_MAX_BODY_BYTES,
+  ForgetConfirmations,
+  handleAction,
+  loadAllowDelete,
+  writeGuard,
+} from "./viewer-actions.js";
+import { ConsolidationJob } from "./consolidation/job.js";
 
 const PORT = Number(process.env.MISMEM_HTTP_PORT ?? 3200);
 const HOST = process.env.MISMEM_HTTP_HOST ?? "0.0.0.0";
@@ -85,6 +94,10 @@ function send401(res: ServerResponse): void {
 }
 
 const db = openDefaultDb();
+// La corrida de consolidación que se lanza desde la interfaz: una a la vez por proceso.
+const consolidationJob = new ConsolidationJob(db);
+const ALLOW_DELETE = loadAllowDelete();
+const forgetConfirmations = new ForgetConfirmations();
 
 const httpServer = createHttpServer(async (req, res) => {
   try {
@@ -165,9 +178,10 @@ const httpServer = createHttpServer(async (req, res) => {
       return;
     }
 
-    // Read-only viewer + JSON API. Misma BasicAuth que /mcp.
+    // Viewer + su API. Misma BasicAuth que /mcp; las escrituras, además, con writeGuard.
     if (
       url.pathname === "/viewer" ||
+      url.pathname.startsWith("/viewer/") ||
       url.pathname === "/" ||
       url.pathname.startsWith("/api/")
     ) {
@@ -175,9 +189,36 @@ const httpServer = createHttpServer(async (req, res) => {
         send401(res);
         return;
       }
+      if (req.method === "POST" && url.pathname.startsWith("/api/")) {
+        const rejected = writeGuard(req);
+        if (rejected) {
+          res.statusCode = rejected.status;
+          res.setHeader("content-type", "application/json; charset=utf-8");
+          res.end(JSON.stringify({ error: rejected.error }));
+          return;
+        }
+        let body: unknown;
+        try {
+          body = await readJsonBody(req, ACTION_MAX_BODY_BYTES);
+        } catch (err) {
+          const tooLarge = err instanceof BodyTooLargeError;
+          if (!tooLarge && !(err instanceof InvalidJsonError)) throw err;
+          res.statusCode = tooLarge ? 413 : 400;
+          if (tooLarge) res.setHeader("connection", "close");
+          res.setHeader("content-type", "application/json; charset=utf-8");
+          res.end(JSON.stringify({ error: tooLarge ? "cuerpo demasiado grande" : "JSON inválido" }));
+          return;
+        }
+        const actionOpts = { job: consolidationJob, allowDelete: ALLOW_DELETE, confirmations: forgetConfirmations };
+        if (await handleAction(db, res, url.pathname, body, actionOpts)) return;
+        res.statusCode = 404;
+        res.setHeader("content-type", "application/json; charset=utf-8");
+        res.end(JSON.stringify({ error: `unknown action: ${url.pathname}` }));
+        return;
+      }
       if (req.method !== "GET") {
         res.statusCode = 405;
-        res.setHeader("allow", "GET");
+        res.setHeader("allow", "GET, POST");
         res.end("Method Not Allowed");
         return;
       }
@@ -188,6 +229,13 @@ const httpServer = createHttpServer(async (req, res) => {
         return;
       }
       if (url.pathname === "/api/scopes") return handleScopes(db, res);
+      if (url.pathname === "/api/consolidate") {
+        res.statusCode = 200;
+        res.setHeader("content-type", "application/json; charset=utf-8");
+        res.setHeader("cache-control", "no-store");
+        res.end(JSON.stringify(consolidationJob.state()));
+        return;
+      }
       if (url.pathname === "/api/memories") return handleMemories(db, res, url);
       if (url.pathname === "/api/graph") return handleGraph(db, res, url);
       const detail = parseDetailPath(url.pathname);
@@ -195,7 +243,13 @@ const httpServer = createHttpServer(async (req, res) => {
       if (detail) {
         return detail.layer === "memory" ? handleMemory(db, res, detail.id) : handleTrait(db, res, detail.id);
       }
-      return handleViewerHtml(res);
+      if (url.pathname.startsWith("/api/")) {
+        res.statusCode = 404;
+        res.setHeader("content-type", "application/json; charset=utf-8");
+        res.end(JSON.stringify({ error: `unknown endpoint: ${url.pathname}` }));
+        return;
+      }
+      return serveUi(res, url.pathname);
     }
 
     res.statusCode = 404;
