@@ -12,6 +12,24 @@
   coincidir con el paquete.
 - `DEPLOY.md` recuerda que los tags van anotados (`git tag -a vX.Y.Z -m 'misMEM X.Y.Z'`).
 
+### Higiene del repositorio: reportar en privado, dependencias y secretos
+
+- `SECURITY.md` dice cómo reportar una vulnerabilidad en privado (GitHub Private Vulnerability
+  Reporting), que sólo la última versión publicada recibe arreglos y qué cuenta como
+  vulnerabilidad acá: la autenticación del modo HTTP, y esa DB que tiene toda la memoria. Antes
+  no había ningún canal privado, así que el reporte terminaba en un issue público.
+- `AGENTS.md` (y `CLAUDE.md`, que lo importa) remite a `.github/copilot-instructions.md` como fuente única de convenciones.
+  `install.sh` configura Claude Code y opencode, y hasta ahora sólo Copilot cargaba esas
+  convenciones: los otros dos agentes trabajaban sin ellas. No las copia, para que no divergan.
+- `.github/dependabot.yml` saca la actualización de dependencias de la mano de nadie: npm en
+  `engine/` (minor y patch agrupados en un PR), los actions, que están fijados por SHA y sin
+  esto no se mueven nunca, y el `node:22-alpine` del Dockerfile.
+- El job `secret-scan` de CI corre gitleaks sobre todos los commits en cada PR y en cada push a
+  `main`, con la imagen fijada por digest. Nada buscaba una clave commiteada antes de que llegara
+  a `main`.
+- `.gitignore` cubre `*.db-journal`, el diario que SQLite deja al lado de la DB cuando no
+  trabaja en modo WAL.
+
 ### Ningún CLI se traga un flag mal escrito
 
 - `mismem-embed`, `mismem-bench`, `mismem-stats` y `mismem-migrate-engram` ignoraban los flags que no
