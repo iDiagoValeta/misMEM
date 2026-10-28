@@ -4,10 +4,10 @@ import { defaultDbPath, openDefaultDb } from "./db.js";
 import { walkAndIngest } from "./ingest/walk.js";
 import { ingestChatGPTExport } from "./ingest/chatgpt.js";
 import { ingestVSCodeTranscripts, ingestVSCodePrompts } from "./ingest/vscode.js";
+import { ArgsError, EXIT_USAGE } from "./cli-args.js";
+import { parseIngestArgs } from "./ingest-args.js";
 
 const DB_PATH = defaultDbPath();
-
-const [, , cmd, ...args] = process.argv;
 
 function help(): void {
   console.log(`misMEM ingest CLI
@@ -23,39 +23,42 @@ DB: ${DB_PATH}  (override with MISMEM_DB)`);
 }
 
 async function main(): Promise<void> {
-  if (!cmd || cmd === "help" || cmd === "--help") { help(); return; }
+  let parsed;
+  try {
+    parsed = parseIngestArgs(process.argv.slice(2));
+  } catch (err) {
+    if (!(err instanceof ArgsError)) throw err;
+    console.error(`[ingest] ${err.message}\n`);
+    help();
+    process.exit(EXIT_USAGE);
+  }
+  const { command } = parsed;
+  if (command === "help") { help(); return; }
+
   const db = openDefaultDb();
 
-  switch (cmd) {
+  switch (parsed.command) {
     case "walk": {
-      const [root, prefix] = args;
-      if (!root || !prefix) { help(); process.exit(1); }
-      const s = await walkAndIngest({ root: resolve(root), scopePrefix: prefix, db });
+      const s = await walkAndIngest({ root: resolve(parsed.root), scopePrefix: parsed.scopePrefix, db });
       console.log(JSON.stringify(s, null, 2));
       break;
     }
     case "file": {
-      const [path, scope] = args;
-      if (!path || !scope) { help(); process.exit(1); }
       const { readFile } = await import("node:fs/promises");
       const { capture } = await import("./tools.js");
-      const content = await readFile(resolve(path), "utf8");
-      const r = capture(db, { scope, body: content });
+      const content = await readFile(resolve(parsed.path), "utf8");
+      const r = capture(db, { scope: parsed.scope, body: content });
       console.log(JSON.stringify(r));
       break;
     }
     case "chatgpt": {
-      const [root] = args;
-      if (!root) { help(); process.exit(1); }
-      const s = await ingestChatGPTExport(db, resolve(root));
+      const s = await ingestChatGPTExport(db, resolve(parsed.root));
       console.log(JSON.stringify(s, null, 2));
       break;
     }
     case "vscode": {
-      const [userDir] = args;
-      if (!userDir) { help(); process.exit(1); }
-      const t = await ingestVSCodeTranscripts(db, resolve(userDir));
-      const p = await ingestVSCodePrompts(db, resolve(userDir));
+      const t = await ingestVSCodeTranscripts(db, resolve(parsed.userDir));
+      const p = await ingestVSCodePrompts(db, resolve(parsed.userDir));
       console.log(JSON.stringify({ transcripts: t, prompts: p }, null, 2));
       break;
     }
@@ -71,9 +74,6 @@ async function main(): Promise<void> {
       }, null, 2));
       break;
     }
-    default:
-      help();
-      process.exit(1);
   }
 }
 

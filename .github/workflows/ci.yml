@@ -58,6 +58,24 @@ jobs:
       - run: bash -n scripts/*.sh
       - run: shellcheck --severity=error scripts/*.sh
 
+  packaging:
+    # The Dockerfile and the npm tarball are what people actually receive. A license
+    # that drifts from the root copy, or a Dockerfile the linter rejects, would
+    # otherwise only show up at publish time.
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          # No later step pushes, so the token does not need to stay in .git/config.
+          persist-credentials: false
+      # engine/LICENSE travels inside the npm tarball, so it must stay byte
+      # identical to the root one: the package declares MIT and has to ship that text.
+      - run: cmp LICENSE engine/LICENSE
+      # hadolint pinned by digest; a new rule set must not fail a build that did not
+      # change. The image is read from stdin because it is the Dockerfile, not the context.
+      - run: docker run --rm -i hadolint/hadolint:v2.14.0@sha256:27086352fd5e1907ea2b934eb1023f217c5ae087992eb59fde121dce9c9ff21e < engine/Dockerfile.mismem-brain
+
   docker-build:
     # A broken Dockerfile would otherwise only surface when a tag is pushed. Pull
     # requests only; the release run (workflow_call from docker.yml) builds for real.
