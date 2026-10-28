@@ -41,6 +41,18 @@
 - Seis gestos, no cinco: faltaba `reinforce`, y `recall` ya no refuerza siempre.
 - Los binarios de los hooks (`mismem-inject`, `mismem-used`) y una sección que explica para qué
   sirven, qué no sale de la máquina y cómo se enciende el refuerzo por uso.
+- Dos lugares seguían diciendo cinco invocaciones mientras el título decía seis. Ahora los tres
+  dicen lo mismo.
+- El viewer: la API de sólo lectura ya expone los ámbitos, el origen de cada recuerdo, los rasgos
+  que lo citan y el grafo (`/api/{scopes,memories,memory/:id,trait/:id,graph}`), y el README
+  mencionaba sólo los tres endpoints originales.
+- La consolidación acepta OpenAI y cualquier servidor compatible desde #67, y tanto los
+  componentes como la sección de privacidad hablaban sólo de DeepSeek y OpenRouter. Importa
+  porque es lo que permite consolidar sin que el texto salga de la red propia.
+- Una sección para el índice hebbiano y un enlace al diseño del ordenador de memoria.
+- Una sección de agradecimiento con lo que trajo [@iDiagoValeta](https://github.com/iDiagoValeta),
+  que a esta altura es buena parte de lo que hace a misMEM instalable y auditable por alguien que
+  no sea su autor.
 
 ## 0.5.0 — 2026-10-23
 
