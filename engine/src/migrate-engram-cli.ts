@@ -13,13 +13,8 @@
 import Database from "better-sqlite3";
 import { createHash } from "node:crypto";
 import { openDefaultDb, defaultDbPath } from "./db.js";
-
-interface Args {
-  source: string;
-  dryRun: boolean;
-  scopePrefix: string;
-  help: boolean;
-}
+import { ArgsError, EXIT_USAGE } from "./cli-args.js";
+import { parseMigrateEngramArgs } from "./migrate-engram-args.js";
 
 interface ObsRow {
   id: number;
@@ -47,18 +42,6 @@ interface PromptRow {
   content: string;
   project: string | null;
   created_at: string;
-}
-
-function parseArgs(argv: string[]): Args {
-  const out: Args = { source: "", dryRun: false, scopePrefix: "engram", help: false };
-  for (let i = 0; i < argv.length; i++) {
-    const a = argv[i];
-    if (a === "--help" || a === "-h") out.help = true;
-    else if (a === "--dry-run") out.dryRun = true;
-    else if (a === "--source") out.source = argv[++i] ?? "";
-    else if (a === "--scope-prefix") out.scopePrefix = argv[++i] ?? out.scopePrefix;
-  }
-  return out;
 }
 
 function help(): void {
@@ -104,11 +87,24 @@ function buildScope(prefix: string, project: string | null | undefined, suffix?:
 }
 
 async function main(): Promise<void> {
-  const opts = parseArgs(process.argv.slice(2));
-  if (opts.help || !opts.source) {
+  let opts;
+  try {
+    opts = parseMigrateEngramArgs(process.argv.slice(2));
+  } catch (err) {
+    if (!(err instanceof ArgsError)) throw err;
+    console.error(`[migrate] ${err.message}\n`);
     help();
-    if (!opts.source && !opts.help) process.exit(2);
+    process.exit(EXIT_USAGE);
+  }
+  if (opts.help) {
+    help();
     return;
+  }
+  // Falta de un argumento obligatorio es error de uso, igual que dárselo sin valor.
+  if (!opts.source) {
+    console.error("[migrate] falta --source (ruta a engram.db)\n");
+    help();
+    process.exit(EXIT_USAGE);
   }
 
   const src = new Database(opts.source, { readonly: true });

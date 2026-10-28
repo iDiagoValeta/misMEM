@@ -2,6 +2,19 @@
 
 ## Sin publicar
 
+### Ningún CLI se traga un flag mal escrito
+
+- `mismem-embed`, `mismem-bench`, `mismem-stats` y `mismem-migrate-engram` ignoraban los flags que no
+  entendían: un `--scop daimon` reindexaba o contaba todos los ámbitos, un `--jsn` dejaba la salida en
+  texto, un `--dryrun` migraba de verdad y un `--batch abc` caía al valor por defecto. `mismem-ingest`
+  hacía lo mismo con los posicionales de más. Ahora cada uno parsea en su `<cli>-args.ts`, como
+  `consolidate` y `forget`, y un flag o posicional inesperado corta con `argumento desconocido: <x>` y
+  exit 64. Un valor ausente (`--scope`, `--batch`, `--limit`, `--source`) también corta, un posicional
+  de ingest en blanco cuenta como ausente, y un subcomando de `mismem-ingest` que no existe se rechaza
+  en vez de imprimir la ayuda.
+- `mismem-stats` abría la base y, si una consulta fallaba, moría con la base abierta y sin mensaje.
+  Ahora la cierra en un `finally` y el fallo sale por stderr como `[stats] FATAL: ...` con exit 1.
+
 ### `mismem-http` escucha sólo en loopback por defecto
 
 - Sin `MISMEM_AUTH_*`, el servidor escuchaba en `0.0.0.0` y la guarda de `Host` sólo frena el
