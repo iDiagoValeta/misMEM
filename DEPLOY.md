@@ -355,7 +355,7 @@ Los defaults son los del código (`engine/src`).
 | `MISMEM_HOOK_MAX_MEMORIES` | `3` | Cuántos recuerdos se adelantan como mucho |
 | `MISMEM_HOOK_MAX_CHARS` | `1200` | Presupuesto de texto inyectado |
 | `MISMEM_HOOK_MIN_PROMPT_TERMS` | `2` | Palabras con sustancia que necesita el prompt para que valga buscar |
-| `MISMEM_HOOK_TIMEOUT_MS` | `2500` | Espera por la búsqueda; si vence, no inyecta nada |
+| `MISMEM_HOOK_TIMEOUT_MS` | `2500` | Espera por la búsqueda contra el servidor remoto (`MISMEM_HOOK_URL`); si vence, no inyecta nada. Sin `MISMEM_HOOK_URL` no se aplica: la búsqueda local queda acotada sólo por `MISMEM_EMBEDDING_TIMEOUT_MS` |
 
 `MISMEM_HOOK_URL` y `MISMEM_HOOK_AUTH` las comparten los dos hooks.
 
@@ -383,6 +383,15 @@ modelo y la URL base se proponen como respuesta por defecto, y `MISMEM_INSTALL_A
 | `MISMEM_INSTALL_HOOKS` | `yes` con `--yes` | `yes` o `no` para los hooks de Claude Code. Si la versión instalada no trae `mismem-inject` y `mismem-used`, queda en `no` |
 | `MISMEM_INSTALL_VERSION` | `latest` | Al instalar desde npm (`--from-npm`), la versión del paquete |
 | `REPLACE_EXISTING` | `no` | Con `yes`, el instalador reemplaza un MCP `mismem` de opencode que ya tiene otro comando; sin ella lo deja como está y avisa. En Claude Code, Claude Desktop, VS Code y Cursor la entrada `mismem` se reescribe siempre, y unos hooks de misMEM de Claude Code configurados de otra forma nunca se tocan |
+
+**Respaldo desde Windows (`scripts/backup-mismem-from-server.ps1`)**
+
+Sin default: si falta una de las dos (como variable o como parámetro del script), el script se detiene.
+
+| Var | Default | Descripción |
+|-----|---------|-------------|
+| `MISMEM_SSH_HOST` | — | Alias SSH o `usuario@host` del servidor donde corre el contenedor `mismem-brain`. Equivale al parámetro `-SshHost` |
+| `MISMEM_HOST_VOLUME_DIR` | — | Ruta en el servidor que corresponde a `/data` dentro del contenedor (el directorio `_data` del volumen Docker). Equivale al parámetro `-HostVolumeDir` |
 
 **Interfaz en desarrollo (`pnpm dev:ui`)**
 

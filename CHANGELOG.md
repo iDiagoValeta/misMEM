@@ -7,6 +7,20 @@
 - `forget` borraba los episodios de una memoria de saliencia baja aunque alguno fuera más nuevo que `before_days`. Con los defaults de `mismem-forget` (90 y 30 días), un episodio de 40 días atado a una memoria olvidable se borraba antes de los 90 que promete `before_days`. Ahora la memoria sólo es olvidable cuando todos sus episodios ya superaron `before_days`; mientras quede uno más nuevo, la memoria y sus episodios esperan. Las memorias sin episodios o con todos viejos se borran igual que antes, y sus episodios con ellas para que `ON DELETE SET NULL` no los devuelva a pendientes.
 - El conteo de `dry_run` sale de las mismas consultas que el borrado, y un test compara lo que anuncia con lo que después borra.
 
+- El timeout de embeddings y el puerto HTTP dejan de aceptar valores imposibles: un negativo, basura, 0 o vacío vuelven a 3000 ms y a 3200 (antes `MISMEM_EMBEDDING_TIMEOUT_MS=-5` hacía que `AbortSignal.timeout` lanzara `RangeError` y un `MISMEM_HTTP_PORT` con basura llegaba a `listen` como `NaN`); `prepublishOnly` usa pnpm.
+
+### jscpd sube a 5.4.1, y sus dos clones de más desaparecen
+
+- `jscpd` pasa de 4.3.0 a 5.4.1 (versión exacta). La 5 compara dos bloques que la 4 no veía: `recall` y
+  `recallHybrid` montaban igual la lista de hits, ahora en `finalizeHits`, y `MemoryList`/`PendingList`
+  repetían el `<ul>` y el pie de "cargar más", ahora en `PagedList`. `pnpm dup` sigue con umbral 0 y no
+  encuentra clones; no hay cambios de comportamiento ni visibles.
+
+### `AGENTS.md` como contrato de trabajo
+
+- `AGENTS.md` deja de ser las antiguas instrucciones de Copilot: mapa del código actual, comandos, reglas duras con
+  su porqué, convenciones y trampas propias del repo, y enlaces al resto de la documentación en vez de copiarla.
+
 ### Un estándar de contribución escrito, y comprobado
 
 - Contribuir no tenía forma: ni formularios de issue, ni plantillas de PR, ni normas escritas, y el
