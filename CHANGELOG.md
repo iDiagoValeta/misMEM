@@ -18,9 +18,9 @@
   Reporting), que sólo la última versión publicada recibe arreglos y qué cuenta como
   vulnerabilidad acá: la autenticación del modo HTTP, y esa DB que tiene toda la memoria. Antes
   no había ningún canal privado, así que el reporte terminaba en un issue público.
-- `AGENTS.md` (y `CLAUDE.md`, que lo importa) remite a `.github/copilot-instructions.md` como fuente única de convenciones.
+- Las convenciones pasan de `.github/copilot-instructions.md` a `AGENTS.md`, que leen todos los agentes (Claude Code a través de `CLAUDE.md`, que lo importa); el fichero de Copilot desaparece.
   `install.sh` configura Claude Code y opencode, y hasta ahora sólo Copilot cargaba esas
-  convenciones: los otros dos agentes trabajaban sin ellas. No las copia, para que no divergan.
+  convenciones: los otros dos agentes trabajaban sin ellas.
 - `.github/dependabot.yml` saca la actualización de dependencias de la mano de nadie: npm en
   `engine/` (minor y patch agrupados en un PR), los actions, que están fijados por SHA y sin
   esto no se mueven nunca, y el `node:22-alpine` del Dockerfile.

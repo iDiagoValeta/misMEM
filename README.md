@@ -231,7 +231,7 @@ Inspirado en parte por *Initiation Into Hermetics* de Franz Bardon: el espejo qu
 
 ## Contribuir
 
-Issues y PRs bienvenidos. Antes de un PR: `pnpm typecheck && pnpm test` desde `engine/` (todo verde), commits convencionales (`feat:`, `fix:`, …). Las convenciones de código están en [.github/copilot-instructions.md](.github/copilot-instructions.md).
+Issues y PRs bienvenidos. Antes de un PR: `pnpm typecheck && pnpm test` desde `engine/` (todo verde), commits convencionales (`feat:`, `fix:`, …). Las convenciones de código están en [AGENTS.md](AGENTS.md).
 
 ## Gracias
 
