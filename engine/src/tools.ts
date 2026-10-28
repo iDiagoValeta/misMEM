@@ -194,10 +194,11 @@ function documentFrequency(db: DB, term: RelaxedTerm): number {
  * Descartarlo dejaba esos dos rescates vacíos en cuanto sus palabras no aparecían en
  * ninguna memoria, y con la tabla de memorias vacía pasaba siempre (instalación recién
  * nacida, sin capa semántica), que es justo el caso que el rescate tiene que cubrir.
- * El precio: con pocas memorias casi todo término es informativo, y un episodio que comparta
- * dos raíces con una pregunta ajena ("cambiar la configuración del móvil" frente a la del
- * servidor) se rescata. Es el camino degradado, donde traer algo flojo cuesta menos que no
- * traer nada; con muchas memorias, dos términos ausentes de todas ellas ya son señal.
+ * El precio: un episodio que comparta con una pregunta ajena dos palabras ausentes de todas
+ * las memorias se rescata ("cambiar la configuración del móvil" frente a la del servidor),
+ * tenga la base las memorias que tenga. Lo que lo frena es que esas palabras sean comunes
+ * en las memorias, por encima de `rare`. Es el camino degradado, donde traer algo flojo
+ * cuesta menos que no traer nada.
  *
  * Un término que sale en todas las memorias también entra: con el corpus diminuto de un
  * test o de una instalación recién nacida, "todos los documentos" no es ruido sino el

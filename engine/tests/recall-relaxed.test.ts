@@ -92,6 +92,14 @@ describe("recall léxico: frases normales", () => {
     ).toEqual([]);
   });
 
+  it("un episodio que sólo comparte palabras comunes en las memorias no se rescata", () => {
+    for (let i = 0; i < 10; i++) memory("dev", `cambiar la configuracion del proyecto ${i}`);
+    for (let i = 0; i < 10; i++) memory("dev", `nota suelta numero ${i}`);
+    const episode = capture(db, { scope: "dev", body: "cambiar la configuracion del servidor" }).id;
+    const hits = recall(db, { query: "cambiar la configuracion del movil", reinforce: false }).hits;
+    expect(hits.map((hit) => hit.id)).not.toContain(episode);
+  });
+
   it("el prefijo no casa con una palabra más corta que la consulta", () => {
     // `solar` recorta a `sola`, que es una palabra distinta. Sin la guarda de longitud, el
     // rescate la cuenta como si fuera una flexión y una pregunta de astronomía trae una
