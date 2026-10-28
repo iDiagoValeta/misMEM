@@ -2,6 +2,13 @@
 
 ## Sin publicar
 
+### jscpd sube a 5.4.1, y sus dos clones de más desaparecen
+
+- `jscpd` pasa de 4.3.0 a 5.4.1 (versión exacta). La 5 compara dos bloques que la 4 no veía: `recall` y
+  `recallHybrid` montaban igual la lista de hits, ahora en `finalizeHits`, y `MemoryList`/`PendingList`
+  repetían el `<ul>` y el pie de "cargar más", ahora en `PagedList`. `pnpm dup` sigue con umbral 0 y no
+  encuentra clones; no hay cambios de comportamiento ni visibles.
+
 ### `AGENTS.md` como contrato de trabajo
 
 - `AGENTS.md` deja de ser las antiguas instrucciones de Copilot: mapa del código actual, comandos, reglas duras con
