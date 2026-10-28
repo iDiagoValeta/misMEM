@@ -16,8 +16,12 @@
   como servicio de systemd de usuario (`mismem-embed`, en CPU; `--embeddings-gpu` o la pregunta
   interactiva lo pasan a la GPU) y escribe en `~/.config/mismem/env` el proveedor, los prefijos y el
   corte 0,65. `nomic-embed-text` por Ollama queda como alternativa ligera. Con `--yes` el modelo no
-  cambia salvo que se pida con `--embeddings gemma`; re-ejecutarlo conserva el que hubiera y no duplica
-  el servicio.
+  cambia salvo que se pida con `--embeddings gemma|nomic`: re-ejecutarlo conserva tal cual cualquier
+  configuración de embeddings que ya hubiera (otro modelo, otro servidor, prefijos, corte) y no duplica el
+  servicio. Si se vuelve a nomic, el servicio `mismem-embed` que montó el instalador se para y se
+  desactiva para no dejar ocupados el puerto y la memoria. Con EmbeddingGemma 2 elegido pero sin servidor
+  arrancado no se escribe `MISMEM_EMBEDDINGS=off`: la búsqueda degrada a palabras y se activa sola cuando
+  el servidor arranca.
 - README y `DEPLOY.md` dicen claro que con memorias que no estén en inglés la opción es EmbeddingGemma 2,
   que con `nomic-embed-text` el corte es 0,65 y no hay que esperar paráfrasis, y que el corte de
   EmbeddingGemma 2 recomendado pasa de 0,68 a 0,65 (misma efectividad medida, con más recuerdos por
