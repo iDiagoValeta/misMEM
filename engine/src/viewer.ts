@@ -1,13 +1,17 @@
 /**
- * misMEM viewer — read-only control panel.
+ * misMEM viewer — API de lectura y UI compilada.
  *
  * Endpoints (todos detrás de la misma BasicAuth de /mcp):
  *   GET /viewer            → la interfaz compilada (ui/ → dist/ui), ver viewer-static.ts
  *   GET /api/stats         → totales por capa + top scopes
  *   GET /api/recent        → últimas N filas de una capa (?layer=&scope=&limit=)
  *   GET /api/search        → recall híbrido read-only (?q=&scope=&limit=)
+ *   El resto de GET /api/* (scopes, memories, memory/:id, trait/:id, graph) vive en viewer-api.ts.
  *
- * Cero dependencias nuevas, cero escrituras desde el browser.
+ * Nada de acá escribe: las acciones (editar, desconsolidar, los dos forget en dos
+ * pasos, cristalizar, lanzar una consolidación) viven en viewer-actions.ts.
+ *
+ * Cero dependencias nuevas.
  */
 import type { ServerResponse } from "node:http";
 import type { Database as DB } from "better-sqlite3";

@@ -49,7 +49,7 @@ export async function ingestVSCodeTranscripts(
           const role = obj.role ?? "unknown";
           lines.push(`[${role}] ${text}`);
         } catch {
-          // skip malformed
+          // A truncated or interleaved line must not abort the whole file.
         }
       }
       if (!lines.length) { stats.skipped++; continue; }

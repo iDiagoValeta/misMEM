@@ -34,7 +34,8 @@ function flattenConversation(conv: ChatGPTConversation): string {
   const created = conv.create_time ? new Date(conv.create_time * 1000).toISOString() : "?";
   lines.push(`# ${title}`, `Created: ${created}`, "");
 
-  // Linearize via mapping ordered by create_time
+  // mapping is a tree, not a list: sorting by create_time approximates reading order
+  // (regenerated branches end up interleaved).
   const messages = Object.values(conv.mapping)
     .map((n) => n.message)
     .filter((m): m is ChatGPTMessage => m !== null && m !== undefined)
