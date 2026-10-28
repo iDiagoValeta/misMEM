@@ -8,7 +8,7 @@
 
 Cada instancia de un LLM nace sin memoria. Cada cliente (Copilot, Claude Desktop, Claude Code, ChatGPT) guarda lo suyo en silos incompatibles. El usuario repite contexto. La continuidad muere entre sesiones.
 
-misMEM resuelve esto con un solo gesto: **una base de datos SQLite + un protocolo MCP de 5 invocaciones**, accesible desde cualquier cliente que hable MCP.
+misMEM resuelve esto con un solo gesto: **una base de datos SQLite + un protocolo MCP de seis invocaciones**, accesible desde cualquier cliente que hable MCP.
 
 ## Arquitectura: 3 capas, como la memoria biológica
 
@@ -76,16 +76,21 @@ La DB se crea sola en el primer uso (default: `~/.mismem/mem.db`, configurable c
 
 ### Instancia remota (multi-cliente)
 
-Para acceder a la misma memoria desde varias máquinas, la imagen Docker oficial:
+Para acceder a la misma memoria desde varias máquinas, en Docker:
 
 ```bash
+git clone https://github.com/lucasmella-stack/misMEM.git && cd misMEM/engine
+docker build -t mismem-brain:latest -f Dockerfile.mismem-brain .
 docker run -d --name mismem-brain \
   -e MISMEM_AUTH_USER=brain -e MISMEM_AUTH_PASS=<pass> \
   -v mismem-data:/data -p 3200:3200 \
-  ghcr.io/lucasmella-stack/mismem-brain:latest
+  mismem-brain:latest
 ```
 
-Guía completa con Traefik + TLS en [DEPLOY.md](./DEPLOY.md).
+La imagen multi-arch publicada (`ghcr.io/lucasmella-stack/mismem-brain:latest`)
+**todavía no está disponible**: el workflow que la publica falla al empujar al
+registro. Mientras tanto, el build local es el camino. Guía completa con Traefik
++ TLS en [DEPLOY.md](./DEPLOY.md).
 
 ### Desde el código
 
@@ -103,8 +108,11 @@ Y en `mcp.json`: `"command": "node", "args": ["<ruta-al-repo>/misMEM/engine/dist
 
 - **`engine/src/server.ts`** — MCP server stdio (uso local).
 - **`engine/src/server-http.ts`** — Streamable HTTP para deploy remoto (BasicAuth opcional, `/healthz`). Ver [DEPLOY.md](./DEPLOY.md).
-- **`engine/src/viewer.ts`** — panel read-only en `/viewer` + `/api/{stats,recent,search}`.
-- **Consolidación LLM** — cron nocturno que destila episodios en memorias con DeepSeek directo u OpenRouter, con pre-filtro Pareto para descartar ruido. Ver [engine/src/consolidation/README.md](engine/src/consolidation/README.md).
+- **`engine/src/viewer.ts` + `engine/src/viewer-api.ts`** — panel read-only en `/viewer` y API de
+  sólo lectura: `/api/{stats,recent,search}` y, para ver de dónde sale cada recuerdo,
+  `/api/{scopes,memories,memory/:id,trait/:id,graph}`. La salience que devuelven es la efectiva,
+  con el decay aplicado a hoy, la misma que usa el recall.
+- **Consolidación LLM** — cron nocturno que destila episodios en memorias con DeepSeek, OpenRouter, OpenAI o cualquier servidor compatible, con pre-filtro Pareto para descartar ruido. Ver [engine/src/consolidation/README.md](engine/src/consolidation/README.md).
 - **CLIs** — `mismem-ingest` (exports de ChatGPT / transcripts de VS Code), `mismem-consolidate`, `mismem-forget`, `mismem-stats`, `mismem-embed`, `mismem-migrate-engram`, `mismem-bench` (mide el recall con un banco de preguntas propio, sin reforzar) y los dos hooks, `mismem-inject` y `mismem-used`.
 
 ## Stack
@@ -117,12 +125,13 @@ Y en `mcp.json`: `"command": "node", "args": ["<ruta-al-repo>/misMEM/engine/dist
 
 ## Estado
 
-- ✅ Engine MCP funcionando (5 invocaciones + capa engram-compat).
+- ✅ Engine MCP funcionando (seis invocaciones + capa engram-compat).
 - ✅ Salience con decay; refuerzo por aparición en `recall` o por uso real vía hook.
 - ✅ Scopes jerárquicos sin cross-scope leakage.
 - ✅ Servidor Streamable HTTP + deploy Docker/Traefik.
 - ✅ Consolidación LLM nocturna (episodes → memories).
-- ✅ Viewer read-only + CLIs de introspección.
+- ✅ Índice hebbiano: `use_count` por recuerdo y `co_use` por par usado en el mismo turno.
+- ✅ Viewer read-only, con el origen de cada recuerdo y el grafo de la memoria, + CLIs de introspección.
 - ✅ Dedup en captura/ingesta (re-ingestar es idempotente).
 - ✅ Recall híbrido: FTS5 + búsqueda semántica opcional vía [Ollama](https://ollama.com) o cualquier servidor compatible con OpenAI.
 - ✅ Hooks opcionales de cliente: adelantar recuerdos antes de responder y reforzar los que se usaron.
@@ -166,6 +175,26 @@ pendiente y después suma el refuerzo Hebbiano. `forget` elimina memories bajo
 el umbral solo después de su período de gracia; `--dry-run` calcula el
 resultado sin modificar la DB.
 
+### El índice hebbiano
+
+Dos recuerdos que se usan en el mismo turno tienen algo que ver entre sí, y eso
+es información que la saliencia por recuerdo no guarda. `reinforce` recibe los
+ids **juntos**, así que ahora los cuenta: `memories.use_count` suma los turnos
+en que cada recuerdo se usó de verdad, y `co_use(memory_a, memory_b, n, last_at)`
+cuenta cada par.
+
+Lo escribe sólo `reinforce`, nunca el camino de `recall`: aparecer en una
+búsqueda no es haberse usado. Con `MISMEM_REINFORCE_ON_RECALL=off` la señal
+arranca limpia. Los pares se van por cascada cuando el recuerdo se borra.
+
+Hace falta porque `salience` mide recencia más que uso —la pasada de decay toca
+todas las filas, así que ordenar por saliencia pone arriba lo nuevo, no lo
+importante—. Es la primera fase del *ordenador de memoria*, una capa derivada
+que compacta los aspectos principales para que el modelo sepa por dónde empezar
+sin tomar contexto. El diseño completo, con los papers y la evidencia medida,
+está en
+[docs/superpowers/specs/2026-10-27-ordenador-memoria-design.md](docs/superpowers/specs/2026-10-27-ordenador-memoria-design.md).
+
 ### Hooks del cliente (opcional)
 
 Dos binarios enganchan misMEM a [Claude Code](https://claude.com/claude-code) sin que el
@@ -191,7 +220,7 @@ Tu memoria es tuya. La DB (`*.db`), los dumps y los exports personales están en
 Dos funciones opcionales mandan texto fuera del proceso, y sólo si las configurás:
 
 - **Búsqueda por significado**: el servidor de embeddings recibe el texto de cada memoria y de cada consulta. Corrélo en tu máquina o en tu red interna.
-- **Consolidación LLM**: los episodios viajan textuales a DeepSeek (o a OpenRouter y al proveedor que haya detrás). Sin su clave no corre.
+- **Consolidación LLM**: los episodios viajan textuales al proveedor que configures (DeepSeek, OpenRouter, OpenAI o cualquier servidor compatible). Sin su clave no corre, y apuntándola a un servidor en tu propia red no sale nada de ella.
 
 ## Filosofía
 
@@ -202,6 +231,33 @@ Inspirado en parte por *Initiation Into Hermetics* de Franz Bardon: el espejo qu
 ## Contribuir
 
 Issues y PRs bienvenidos. Antes de un PR: `pnpm typecheck && pnpm test` desde `engine/` (todo verde), commits convencionales (`feat:`, `fix:`, …). Las convenciones de código están en [.github/copilot-instructions.md](.github/copilot-instructions.md).
+
+## Gracias
+
+misMEM lo arrancó una persona sola, pero no siguió así.
+[**@iDiagoValeta**](https://github.com/iDiagoValeta) trajo buena parte de lo que
+hoy lo hace usable por alguien que no sea su autor:
+
+- **Instalación de un comando en Linux** ([`scripts/install.sh`](scripts/install.sh), #69):
+  detecta los clientes, deja la clave fuera de sus configuraciones y re-ejecutarlo
+  actualiza sin duplicar.
+- **Ver de dónde sale cada recuerdo** (#52): la API de sólo lectura con los ámbitos, el
+  origen de cada memoria, los rasgos que la citan y el grafo de la memoria entera.
+- **Consolidar con el proveedor que quieras** (#67): OpenAI y cualquier servidor
+  compatible, además de DeepSeek y OpenRouter. Es lo que permite consolidar sin que el
+  texto salga de tu red.
+- **Que el servidor HTTP no se abra por descuido** (#31, #33, #35): no arranca con la auth a
+  medias, sin auth sólo atiende loopback, y el cuerpo de `POST /mcp` corta en 4 MiB.
+- **Que no se pierda memoria por un descuido** (#37, #39, #50): una preferencia corta llega
+  al LLM en vez de caer como ruido, una tanda sin señal suma un strike en vez de condenar el
+  episodio, y cada llamada al LLM tiene un tope de tiempo.
+- **Que un flag mal escrito corte en vez de hacer otra cosa** (#42, #44), que con `forget`
+  es la diferencia entre un error y una purga.
+- **El hallazgo de que el refuerzo por uso no veía lo que la inyección adelantaba** (#48),
+  que es el bug que hacía que la saliencia no midiera nada.
+
+Las revisiones de sus PRs están abiertas en el repo a propósito: las mediciones y los
+desacuerdos valen tanto como el código.
 
 ## Licencia
 

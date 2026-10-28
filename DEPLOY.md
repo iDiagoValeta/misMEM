@@ -40,13 +40,7 @@ Cliente MCP (VS Code / Claude Code / Claude Desktop / agente)
 
 ## Fase 1 — Obtener la imagen
 
-Opción A — imagen oficial multi-arch desde GHCR (recomendada):
-
-```bash
-docker pull ghcr.io/lucasmella-stack/mismem-brain:latest
-```
-
-Opción B — build en el servidor (arquitectura nativa):
+Opción A — build en el servidor (arquitectura nativa). **Es la que funciona hoy:**
 
 ```bash
 ssh <tu-servidor>
@@ -54,6 +48,18 @@ git clone https://github.com/lucasmella-stack/misMEM.git mismem
 cd mismem/engine
 docker build -t mismem-brain:latest -f Dockerfile.mismem-brain .
 ```
+
+Opción B — imagen multi-arch desde GHCR:
+
+```bash
+docker pull ghcr.io/lucasmella-stack/mismem-brain:latest
+```
+
+> **Todavía no está publicada.** Las tres corridas del workflow `docker.yml`
+> (v0.3.0 y dos de v0.5.0) fallan al empujar con `denied: permission_denied:
+> read_package`: el login entra pero el push no, así que el paquete nunca se
+> creó y el `pull` responde `denied`. Falta habilitarlo del lado de GitHub, no
+> en el repo. Hasta entonces, la opción A.
 
 ### Cómo se publica la imagen
 
@@ -80,7 +86,9 @@ no hay workflow que lo haga.
 
 ```yaml
   mismem-brain:
-    image: ghcr.io/lucasmella-stack/mismem-brain:latest
+    # Con la opción A, el tag local. Con la imagen publicada, en su lugar:
+    # ghcr.io/lucasmella-stack/mismem-brain:latest
+    image: mismem-brain:latest
     container_name: mismem-brain
     restart: unless-stopped
     environment:

@@ -499,6 +499,31 @@ function finalizeHits(
  * adelanta, así que mezclarlos dejaba esa alarma —la de "alguien manda ids inventados"—
  * sonando desde el primer día. Un rasgo gana fuerza al cristalizar, no al usarse.
  */
+/**
+ * Índice hebbiano: cuenta el uso de cada recuerdo y el co-uso de cada par que
+ * se usó en el mismo turno. Vive acá y no en `reinforceMemories` porque a esa
+ * la llama también el camino de recall, donde aparecer no es haberse usado.
+ */
+function registrarUso(db: DB, memoryIds: readonly string[], at: number): void {
+  const ids = [...new Set(memoryIds)].sort();
+  if (ids.length === 0) return;
+
+  const contar = db.prepare("UPDATE memories SET use_count = use_count + 1 WHERE id = ?");
+  const emparejar = db.prepare(
+    `INSERT INTO co_use (memory_a, memory_b, n, last_at) VALUES (?, ?, 1, ?)
+     ON CONFLICT(memory_a, memory_b) DO UPDATE SET n = n + 1, last_at = excluded.last_at`,
+  );
+
+  db.transaction(() => {
+    for (const id of ids) contar.run(id);
+    for (let i = 0; i < ids.length; i++) {
+      for (let j = i + 1; j < ids.length; j++) {
+        emparejar.run(ids[i], ids[j], at);
+      }
+    }
+  })();
+}
+
 export function reinforce(
   db: DB,
   raw: unknown,
@@ -518,6 +543,7 @@ export function reinforce(
   const traits = existentes("traits");
 
   reinforceMemories(db, known, { at: options.at, boost: input.boost });
+  registrarUso(db, known, options.at ?? now());
   return {
     reinforced: known.length,
     traits: traits.length,

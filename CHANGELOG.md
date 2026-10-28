@@ -2,6 +2,26 @@
 
 ## Sin publicar
 
+### El índice hebbiano empieza a existir
+
+- `reinforce` recibía los `memory_ids` **juntos** —sabe que esos recuerdos se usaron en el mismo
+  turno— y lo colapsaba en un bump de saliencia por recuerdo. Tiraba justo la co-ocurrencia, que
+  es la señal hebbiana de verdad. Ahora la guarda: `memories.use_count` cuenta los turnos en que
+  cada recuerdo se usó, y `co_use(memory_a, memory_b, n, last_at)` cuenta cada par que se usó junto.
+- Se escribe desde `reinforce` y **no** desde `reinforceMemories`, porque a esa última la llama
+  también el camino de recall, donde aparecer no es haberse usado. Con la reinyección por aparición
+  apagada (`MISMEM_REINFORCE_ON_RECALL=off`) la señal arranca limpia: `use_count` en 0 para todos.
+- Hacía falta porque `salience` hoy mide recencia, no uso: la pasada de decay escribe
+  `salience_updated_at` en las 3.738 memorias, así que el campo no distingue "se usó" de "se
+  marchitó". Medido sobre producción: de 1.351 memorias de más de 60 días sólo 14 tienen saliencia
+  por encima de 0,85, y entre ésas hay tres marcadores de ruido `[pareto:l0]`. Ordenar por
+  saliencia hoy pone arriba lo nuevo, no lo importante.
+- Migración aditiva, verificada sobre copia de la DB de producción: 15 ms, `integrity_check` y
+  `foreign_key_check` ok, 3.738 memorias y 216 rasgos intactos. Los pares se van por cascada
+  cuando el recuerdo se borra.
+- Para qué: es la fase 1 del ordenador de memoria, diseñado en
+  [docs/superpowers/specs/2026-10-27-ordenador-memoria-design.md](docs/superpowers/specs/2026-10-27-ordenador-memoria-design.md).
+
 ### El refuerzo por uso ve lo que la inyección adelantó
 
 - Los dos hooks no se enganchaban: `mismem-used` sólo reconocía resultados de `recall`, y lo que
@@ -21,6 +41,23 @@
 - Seis gestos, no cinco: faltaba `reinforce`, y `recall` ya no refuerza siempre.
 - Los binarios de los hooks (`mismem-inject`, `mismem-used`) y una sección que explica para qué
   sirven, qué no sale de la máquina y cómo se enciende el refuerzo por uso.
+- Dos lugares seguían diciendo cinco invocaciones mientras el título decía seis. Ahora los tres
+  dicen lo mismo.
+- El viewer: la API de sólo lectura ya expone los ámbitos, el origen de cada recuerdo, los rasgos
+  que lo citan y el grafo (`/api/{scopes,memories,memory/:id,trait/:id,graph}`), y el README
+  mencionaba sólo los tres endpoints originales.
+- La consolidación acepta OpenAI y cualquier servidor compatible desde #67, y tanto los
+  componentes como la sección de privacidad hablaban sólo de DeepSeek y OpenRouter. Importa
+  porque es lo que permite consolidar sin que el texto salga de la red propia.
+- Una sección para el índice hebbiano y un enlace al diseño del ordenador de memoria.
+- El README y DEPLOY.md mandaban a `docker pull ghcr.io/lucasmella-stack/mismem-brain:latest` como
+  camino recomendado, y esa imagen **nunca se publicó**: las tres corridas de `docker.yml` fallan
+  al empujar con `denied: permission_denied: read_package`, así que el `pull` responde `denied`.
+  Cualquiera que siguiera el README se chocaba con eso. Ahora el camino documentado es el build
+  local, que sí funciona, y la imagen publicada queda marcada como pendiente.
+- Una sección de agradecimiento con lo que trajo [@iDiagoValeta](https://github.com/iDiagoValeta),
+  que a esta altura es buena parte de lo que hace a misMEM instalable y auditable por alguien que
+  no sea su autor.
 
 ## 0.5.0 — 2026-10-23
 
