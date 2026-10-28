@@ -137,7 +137,7 @@ describe("co_use", () => {
       name: "prefiere docker compose",
       evidence_memory_ids: [a],
     });
-    const rasgoId = (rasgo as { trait_id?: string; id?: string }).trait_id ?? (rasgo as { id: string }).id;
+    const rasgoId = rasgo.trait_id;
 
     reinforce(db, { memory_ids: [a, rasgoId] });
 

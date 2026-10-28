@@ -10,7 +10,15 @@ permissions:
   packages: write
 
 jobs:
+  # Publishing must be gated on the same checks as CI (typecheck, tests, build, scripts).
+  ci:
+    uses: ./.github/workflows/ci.yml
+    # The tests never need to write packages; only build-push does.
+    permissions:
+      contents: read
+
   build-push:
+    needs: ci
     runs-on: ubuntu-latest
     steps:
       - uses: actions/checkout@v4

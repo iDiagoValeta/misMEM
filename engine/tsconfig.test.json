@@ -1,0 +1,17 @@
+{
+  // Tests were excluded from every tsc run, so a broken test file only failed at runtime
+  // (or never). DOM libs are needed because ui-*.test.ts import from ui/src.
+  "extends": "./tsconfig.json",
+  "compilerOptions": {
+    "lib": ["ES2022", "DOM", "DOM.Iterable"],
+    "jsx": "react-jsx",
+    "rootDir": ".",
+    "noEmit": true,
+    "declaration": false,
+    "sourceMap": false,
+    "types": ["node", "vite/client"],
+    "paths": { "@/*": ["./ui/src/*"] }
+  },
+  "include": ["tests/**/*", "src/**/*"],
+  "exclude": ["node_modules", "dist"]
+}
