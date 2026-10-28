@@ -60,7 +60,7 @@
     "typecheck": "tsc --noEmit && tsc --noEmit -p ui/tsconfig.json && tsc --noEmit -p tsconfig.test.json",
     "lint": "biome lint .",
     "knip": "knip",
-    "dup": "jscpd --min-lines 10 --threshold 0.2 --no-gitignore --ignore \"**/*.css\" --reporters console src ui/src",
+    "dup": "jscpd --min-lines 10 --threshold 0 --no-gitignore --ignore \"**/*.css\" --reporters console src ui/src",
     "prepublishOnly": "npm run typecheck && npm test && npm run build"
   },
   "dependencies": {
