@@ -2,6 +2,11 @@
 
 ## Sin publicar
 
+### `AGENTS.md` como contrato de trabajo
+
+- `AGENTS.md` deja de ser las antiguas instrucciones de Copilot: mapa del código actual, comandos, reglas duras con
+  su porqué, convenciones y trampas propias del repo, y enlaces al resto de la documentación en vez de copiarla.
+
 ### Un estándar de contribución escrito, y comprobado
 
 - Contribuir no tenía forma: ni formularios de issue, ni plantillas de PR, ni normas escritas, y el

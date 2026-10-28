@@ -39,8 +39,8 @@ persiste, lo cristalizado permanece.
 Ejemplo: "hoy PostgreSQL rindió mejor" es un episode; "PostgreSQL es preferible en este proyecto" es una
 memory; "priorizamos soluciones robustas para concurrencia" puede cristalizar como trait.
 
-El esquema (columnas, índices, tablas FTS5) está en [`AGENTS.md`](../AGENTS.md) y, de forma
-autoritativa, en `engine/src/db.ts`.
+El esquema (columnas, índices, tablas FTS5) está en `engine/src/db.ts`; [`AGENTS.md`](../AGENTS.md) sólo
+resume las tablas.
 
 ## Seis invocaciones
 
