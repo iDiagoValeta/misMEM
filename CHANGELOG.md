@@ -2,6 +2,10 @@
 
 ## Sin publicar
 
+### Un solo diálogo de confirmación en el detalle
+
+- `MemoryView` y `TraitView` repetían el pie del diálogo de confirmación y la forma de sus props. Ambos viven ahora en `DetailParts.tsx` (`ConfirmDialog` y `DetailViewProps`), sin cambios visibles, y `pnpm dup` pasa a exigir umbral 0: ningún bloque copiado de 10 o más líneas.
+
 ### Linter con Biome, y fuera las directivas de ESLint que no hacían nada
 
 - No había linter ni formateador. Ahora Biome 2 es el único, sólo como linter: `pnpm lint` y un step

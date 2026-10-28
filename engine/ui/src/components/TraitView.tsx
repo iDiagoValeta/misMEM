@@ -3,33 +3,12 @@ import { useEffect, useState } from "react";
 import { useQuery } from "@tanstack/react-query";
 import { toast } from "sonner";
 import { Button } from "@/components/ui/button";
-import {
-  AlertDialog,
-  AlertDialogAction,
-  AlertDialogCancel,
-  AlertDialogContent,
-  AlertDialogDescription,
-  AlertDialogFooter,
-  AlertDialogHeader,
-  AlertDialogTitle,
-} from "@/components/ui/alert-dialog";
 import { actions, api, isMissing, type ForgetChallenge } from "../api";
-import type { Selection } from "../App";
 import { ago, exact } from "../format";
 import { errorMessage } from "../lib/errors";
-import { DetailFailure, DetailLoading, SectionTitle, tint, truncate } from "./DetailParts";
+import { ConfirmDialog, DetailFailure, DetailLoading, SectionTitle, tint, truncate, type DetailViewProps } from "./DetailParts";
 
-export function TraitView({
-  id,
-  onSelect,
-  onChanged,
-  onAnnounce,
-}: {
-  id: string;
-  onSelect: (selection: Selection) => void;
-  onChanged: (next?: Selection | null) => void;
-  onAnnounce: (text: string) => void;
-}) {
+export function TraitView({ id, onSelect, onChanged, onAnnounce }: DetailViewProps) {
   const query = useQuery({ queryKey: ["trait", id], queryFn: ({ signal }) => api.trait(id, signal) });
   const [confirm, setConfirm] = useState(false);
   const [challenge, setChallenge] = useState<ForgetChallenge>();
@@ -136,47 +115,28 @@ export function TraitView({
         )}
       </section>
 
-      <AlertDialog
+      <ConfirmDialog
         open={confirm}
-        onOpenChange={(open) => {
-          if (!open) {
-            setConfirm(false);
-            setChallenge(undefined);
-            setActionError(undefined);
-          }
+        variant="destructive"
+        title="Olvidar este rasgo"
+        description={
+          challenge
+            ? "Se borra el rasgo. Las memorias que lo sostienen no se tocan. No se puede deshacer."
+            : actionError
+              ? "No se puede olvidar este rasgo ahora."
+              : "Mirando qué se perdería…"
+        }
+        confirmLabel="Olvidar rasgo"
+        busy={busy}
+        blocked={!challenge}
+        error={actionError}
+        onDismiss={() => {
+          setConfirm(false);
+          setChallenge(undefined);
+          setActionError(undefined);
         }}
-      >
-        <AlertDialogContent>
-          <AlertDialogHeader>
-            <AlertDialogTitle>Olvidar este rasgo</AlertDialogTitle>
-            <AlertDialogDescription>
-              {challenge
-                ? "Se borra el rasgo. Las memorias que lo sostienen no se tocan. No se puede deshacer."
-                : actionError
-                  ? "No se puede olvidar este rasgo ahora."
-                  : "Mirando qué se perdería…"}
-            </AlertDialogDescription>
-          </AlertDialogHeader>
-          {actionError && (
-            <p role="alert" className="text-sm text-danger">
-              No se pudo: {actionError}
-            </p>
-          )}
-          <AlertDialogFooter>
-            <AlertDialogCancel disabled={busy}>Cancelar</AlertDialogCancel>
-            <AlertDialogAction
-              variant="destructive"
-              disabled={busy || !challenge}
-              onClick={(event) => {
-                event.preventDefault();
-                void forget();
-              }}
-            >
-              {busy ? "Un momento…" : "Olvidar rasgo"}
-            </AlertDialogAction>
-          </AlertDialogFooter>
-        </AlertDialogContent>
-      </AlertDialog>
+        onConfirm={() => void forget()}
+      />
     </>
   );
 }
