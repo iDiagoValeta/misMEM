@@ -1,4 +1,5 @@
 import { afterEach, beforeEach, describe, expect, it } from "vitest";
+import { createHash } from "node:crypto";
 import { existsSync, mkdirSync, mkdtempSync, readFileSync, readdirSync, rmSync, writeFileSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
@@ -10,6 +11,10 @@ import { EXPORT_ROOT, exportObsidian, safeName } from "../src/obsidian.js";
 
 let db: DB;
 let vault: string;
+
+const manifestOf = (dir: string): { version: number; files: Record<string, { id: string; scope: string }> } =>
+  JSON.parse(readFileSync(join(dir, EXPORT_ROOT, ".mismem-export.json"), "utf8"));
+const scopeHash = (scope: string): string => createHash("sha256").update(scope, "utf8").digest("hex").slice(0, 6);
 
 beforeEach(() => {
   db = openDb(":memory:");
@@ -34,6 +39,11 @@ describe("safeName", () => {
     expect(safeName("una frase bastante larga que no entra", 20)).toBe("una frase bastante");
     expect(safeName("termina en punto.")).toBe("termina en punto");
     expect(safeName("///")).toBe("sin título");
+  });
+
+  it("quita los caracteres de control: un NUL revienta la escritura y los demás rompen el sync", () => {
+    expect(safeName("antes\u0000despues")).toBe("antes despues");
+    expect(safeName("control \u0001 y \u001b escape\u007f")).toBe("control y escape");
   });
 });
 
@@ -115,5 +125,106 @@ describe("exportObsidian", () => {
     const stats = exportObsidian(db, { dir: vault, dryRun: true });
     expect(stats).toMatchObject({ dry_run: true, written: 2 });
     expect(existsSync(join(vault, EXPORT_ROOT))).toBe(false);
+  });
+
+  it("--scope no borra ni pierde las notas de los demás ámbitos", () => {
+    memoryFrom("a", "una memoria de a", ["x"]);
+    const b = memoryFrom("b", "una memoria de b", ["y"]);
+    exportObsidian(db, { dir: vault });
+    const memories = notes("Memorias");
+    const scopes = notes("Ámbitos");
+
+    const scoped = exportObsidian(db, { dir: vault, scope: "a" });
+    expect(scoped).toMatchObject({ memories: 1, removed: 0, skipped: 0 });
+    expect(notes("Memorias")).toEqual(memories);
+    expect(notes("Ámbitos")).toEqual(scopes);
+    const manifest = manifestOf(vault);
+    expect(manifest.version).toBe(2);
+    expect(Object.values(manifest.files).map((e) => e.scope).sort()).toEqual(["a", "a", "b", "b"]);
+
+    // Aunque b ya no esté en la base, un export de a no puede llevarse su nota.
+    db.prepare("DELETE FROM episodes WHERE consolidated_into = ?").run(b);
+    db.prepare("DELETE FROM memories WHERE id = ?").run(b);
+    const again = exportObsidian(db, { dir: vault, scope: "a" });
+    expect(again).toMatchObject({ removed: 0 });
+    expect(notes("Memorias")).toEqual(memories);
+    expect(manifestOf(vault).files["Ámbitos/b.md"]).toEqual({ id: "b", scope: "b" });
+  });
+
+  it("no borra una nota ajena listada en el manifiesto", () => {
+    memoryFrom("a", "se queda", ["x"]);
+    exportObsidian(db, { dir: vault });
+    const foreign = join(vault, EXPORT_ROOT, "Memorias", "mi nota.md");
+    writeFileSync(foreign, "mía, sin id\n");
+    const manifest = manifestOf(vault);
+    manifest.files["Memorias/mi nota.md"] = { id: "ajeno", scope: "a" };
+    writeFileSync(join(vault, EXPORT_ROOT, ".mismem-export.json"), JSON.stringify(manifest));
+
+    const after = exportObsidian(db, { dir: vault });
+    expect(after).toMatchObject({ removed: 0, skipped: 1 });
+    expect(existsSync(foreign)).toBe(true);
+    expect(manifestOf(vault).files["Memorias/mi nota.md"]).toBeUndefined();
+  });
+
+  it("no borra una nota exportada a la que se le cambió el id, ni un manifiesto viejo manda", () => {
+    const gone = memoryFrom("a", "se va", ["x"]);
+    memoryFrom("a", "se queda", ["z"]);
+    exportObsidian(db, { dir: vault });
+    const edited = notes("Memorias").find((n) => n.startsWith("se va")) as string;
+    const editedPath = join(vault, EXPORT_ROOT, "Memorias", edited);
+    writeFileSync(editedPath, read("Memorias", edited).replace(/^id: .*$/m, 'id: "editado"'));
+    db.prepare("DELETE FROM episodes WHERE consolidated_into = ?").run(gone);
+    db.prepare("DELETE FROM memories WHERE id = ?").run(gone);
+
+    expect(exportObsidian(db, { dir: vault })).toMatchObject({ removed: 0, skipped: 1 });
+    expect(existsSync(editedPath)).toBe(true);
+
+    // Formato viejo (array de rutas): sin id no hay prueba de propiedad, así que no se borra.
+    writeFileSync(join(vault, EXPORT_ROOT, ".mismem-export.json"), JSON.stringify([`Memorias/${edited}`]));
+    const after = exportObsidian(db, { dir: vault });
+    expect(after).toMatchObject({ removed: 0, skipped: 1 });
+    expect(existsSync(editedPath)).toBe(true);
+  });
+
+  it("dos ámbitos que sanean al mismo nombre no comparten nota", () => {
+    const long = "x".repeat(60);
+    const alpha = `${long} alpha`;
+    const beta = `${long} beta`;
+    memoryFrom(alpha, "memoria alpha", ["a"]);
+    memoryFrom(beta, "memoria beta", ["b"]);
+    expect(exportObsidian(db, { dir: vault })).toMatchObject({ scopes: 2, removed: 0 });
+
+    expect(notes("Ámbitos").sort()).toEqual(
+      [`${long} (${scopeHash(alpha)}).md`, `${long} (${scopeHash(beta)}).md`].sort(),
+    );
+    expect(read("Ámbitos", `${long} (${scopeHash(alpha)}).md`)).toContain(`scope: "${alpha}"`);
+    expect(read("Ámbitos", `${long} (${scopeHash(beta)}).md`)).toContain(`scope: "${beta}"`);
+    const note = read("Memorias", notes("Memorias").find((n) => n.startsWith("memoria alpha")) as string);
+    expect(note).toContain(`Ámbito: [[Ámbitos/${long} (${scopeHash(alpha)})|${alpha}]]`);
+
+    // Exportar un solo ámbito no le quita el sufijo: la colisión se mide sobre toda la base.
+    expect(exportObsidian(db, { dir: vault, scope: alpha })).toMatchObject({ written: 0, removed: 0 });
+    expect(notes("Ámbitos")).toContain(`${long} (${scopeHash(alpha)}).md`);
+  });
+
+  it("un ámbito con nombre reservado de Windows lleva sufijo estable", () => {
+    memoryFrom("CON", "memoria", ["x"]);
+    exportObsidian(db, { dir: vault });
+    expect(notes("Ámbitos")).toEqual([`CON (${scopeHash("CON")}).md`]);
+    // Los que no colisionan ni son reservados se quedan como siempre.
+    memoryFrom("a", "otra", ["y"]);
+    exportObsidian(db, { dir: vault });
+    expect(notes("Ámbitos")).toContain("a.md");
+  });
+
+  it("las etiquetas de wikilink no rompen el enlace", () => {
+    const id = memoryFrom("a<b|c", "memoria", ["x"]);
+    crystallize(db, { scope: "a<b|c", name: "cuida <esto> y barra \\", evidence_memory_ids: [id] });
+    exportObsidian(db, { dir: vault });
+    const memory = read("Memorias", notes("Memorias")[0] as string);
+    expect(memory).toMatch(/\|cuida esto y barra\]\]/);
+    expect(memory).toContain("[[Ámbitos/a b c|a b c]]");
+    const scopeNote = read("Ámbitos", "a b c.md");
+    expect(scopeNote).toContain("|cuida esto y barra]]");
   });
 });

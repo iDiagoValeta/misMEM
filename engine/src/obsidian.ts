@@ -8,9 +8,12 @@
  *
  * Todo va dentro de <bóveda>/misMEM/ y se lleva un manifiesto de lo escrito: re-exportar
  * reescribe lo suyo y borra sólo las notas propias que ya no existen, nunca algo que la
- * persona haya escrito en la bóveda.
+ * persona haya escrito en la bóveda. "Propia" se comprueba, no se supone: antes de borrar,
+ * el frontmatter de la nota tiene que seguir declarando el id que apuntó el manifiesto.
+ * Con --scope sólo se tocan las entradas de ese ámbito; las demás se conservan.
  */
-import { mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { createHash } from "node:crypto";
+import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve, sep } from "node:path";
 import type { Database as DB } from "better-sqlite3";
 import { excludeNoiseSql } from "./noise.js";
@@ -42,6 +45,8 @@ export interface ExportStats {
   written: number;
   unchanged: number;
   removed: number;
+  /** Entradas del manifiesto que no se han borrado por no poder demostrar que son nuestras. */
+  skipped: number;
   dry_run: boolean;
 }
 
@@ -73,7 +78,9 @@ interface EpisodeRow {
 /** Un nombre de fichero válido en Obsidian y en Windows, legible y corto. */
 export function safeName(text: string, max = 60): string {
   const clean = text
-    .replace(/[\\/:*?"<>|#^[\]\n\r\t]+/g, " ")
+    // Los caracteres de control (incluidos \n\r\t y \0) rompen la escritura, la sincronización
+    // y algunos backups: un NUL en el nombre hace fallar el export entero.
+    .replace(/[\\/:*?"<>|#^[\]\u0000-\u001f\u007f]+/g, " ")
     .replace(/\s+/g, " ")
     .trim();
   const cut = clean.length <= max ? clean : clean.slice(0, max).replace(/\s+\S*$/, "");
@@ -129,11 +136,37 @@ export function exportObsidian(db: DB, opts: ExportOptions): ExportStats {
   const salience = new Map(memories.map((m) => [m.id, effectiveSalience(m, at)]));
   const memoryPath = new Map(memories.map((m) => [m.id, `Memorias/${safeName(m.gist)} (${shortId(m.id)})`]));
   const traitPath = new Map(traits.map((t) => [t.id, `Rasgos/${safeName(t.name)} (${shortId(t.id)})`]));
-  const scopePath = (s: string): string => `Ámbitos/${safeName(s.replace(/\//g, " - "))}`;
+  const scopes = [...new Set([...memories.map((m) => m.scope), ...traits.map((t) => t.scope)])].sort();
+  // Las notas de ámbito no llevan sufijo de id, así que dos ámbitos que sólo difieran por
+  // truncado, mayúsculas o normalización Unicode escribirían el mismo fichero y uno
+  // desaparecería sin error. El hash del scope los separa, y también desambigua los nombres
+  // reservados de Windows (CON, NUL...).
+  const scopeBase = (s: string): string => safeName(s.replace(/\//g, " - "));
+  const scopeKey = (s: string): string => scopeBase(s).normalize("NFC").toLowerCase();
+  // Las colisiones se cuentan sobre todos los ámbitos de la base, no sólo los de --scope: si
+  // no, exportar un ámbito suelto le quitaría el sufijo y rompería los enlaces que le apuntan.
+  const allScopes = (
+    db
+      .prepare(
+        `SELECT scope FROM memories m WHERE ${excludeNoiseSql("m")} UNION SELECT scope FROM traits`,
+      )
+      .all() as Array<{ scope: string }>
+  ).map((row) => row.scope);
+  const scopeCount = new Map<string, number>();
+  for (const s of allScopes) scopeCount.set(scopeKey(s), (scopeCount.get(scopeKey(s)) ?? 0) + 1);
+  const WINDOWS_RESERVED = /^(con|prn|aux|nul|com[1-9]|lpt[1-9])$/i;
+  const scopePath = (s: string): string => {
+    const base = scopeBase(s);
+    if ((scopeCount.get(scopeKey(s)) ?? 0) === 1 && !WINDOWS_RESERVED.test(base)) return `Ámbitos/${base}`;
+    const hash = createHash("sha256").update(s, "utf8").digest("hex").slice(0, 6);
+    return `Ámbitos/${base} (${hash})`;
+  };
   const episodePath = (e: EpisodeRow): string =>
     `Episodios/${day(e.created_at)} ${safeName(e.body, 40)} (${shortId(e.id)})`;
-  const link = (path: string, label?: string): string =>
-    label ? `[[${path}|${label.replace(/[[\]|]/g, " ")}]]` : `[[${path}]]`;
+  // Una etiqueta de wikilink no puede contener el cierre del enlace ni partir la línea: un
+  // `\` final escapaba el `]]` y un salto dejaba el enlace abierto en dos líneas.
+  const linkLabel = (label: string): string => label.replace(/[[\]|\\<>]/g, " ").replace(/\s+/g, " ").trim();
+  const link = (path: string, label?: string): string => (label ? `[[${path}|${linkLabel(label)}]]` : `[[${path}]]`);
 
   const byMemory = new Map<string, EpisodeRow[]>();
   for (const e of episodes) byMemory.set(e.consolidated_into, [...(byMemory.get(e.consolidated_into) ?? []), e]);
@@ -151,7 +184,7 @@ export function exportObsidian(db: DB, opts: ExportOptions): ExportStats {
     related.set(l.target, [...(related.get(l.target) ?? []), { id: l.source, score: l.score ?? 0 }]);
   }
 
-  const files = new Map<string, string>();
+  const files = new Map<string, WrittenFile>();
   const short = (text: string): string => safeName(text, 80);
 
   for (const m of memories) {
@@ -190,7 +223,7 @@ export function exportObsidian(db: DB, opts: ExportOptions): ExportStats {
       }
     }
     lines.push("", `Ámbito: ${link(scopePath(m.scope), m.scope)}`, "");
-    files.set(`${memoryPath.get(m.id)}.md`, lines.join("\n"));
+    files.set(`${memoryPath.get(m.id)}.md`, { content: lines.join("\n"), id: m.id, scope: m.scope });
   }
 
   for (const t of traits) {
@@ -215,7 +248,7 @@ export function exportObsidian(db: DB, opts: ExportOptions): ExportStats {
       lines.push(path && m ? `- ${link(path, short(m.gist))}` : `- Memoria olvidada (${id})`);
     }
     lines.push("", `Ámbito: ${link(scopePath(t.scope), t.scope)}`, "");
-    files.set(`${traitPath.get(t.id)}.md`, lines.join("\n"));
+    files.set(`${traitPath.get(t.id)}.md`, { content: lines.join("\n"), id: t.id, scope: t.scope });
   }
 
   if (opts.episodes) {
@@ -234,13 +267,21 @@ export function exportObsidian(db: DB, opts: ExportOptions): ExportStats {
         memory ? `Consolidado en ${link(memory)}` : "",
         "",
       ];
-      files.set(`${episodePath(e)}.md`, lines.join("\n"));
+      files.set(`${episodePath(e)}.md`, { content: lines.join("\n"), id: e.id, scope: e.scope });
     }
   }
 
-  const scopes = [...new Set([...memories.map((m) => m.scope), ...traits.map((t) => t.scope)])].sort();
   for (const s of scopes) {
-    const lines = ["---", `scope: ${yaml(s)}`, "tags: [mismem/ámbito]", "---", "", `# ${s}`, ""];
+    const lines = [
+      "---",
+      `id: ${yaml(s)}`,
+      `scope: ${yaml(s)}`,
+      "tags: [mismem/ámbito]",
+      "---",
+      "",
+      `# ${s}`,
+      "",
+    ];
     const ownTraits = traits.filter((t) => t.scope === s);
     if (ownTraits.length > 0) {
       lines.push("## Rasgos", "");
@@ -253,7 +294,7 @@ export function exportObsidian(db: DB, opts: ExportOptions): ExportStats {
       .sort((a, b) => (salience.get(b.id) ?? 0) - (salience.get(a.id) ?? 0))) {
       lines.push(`- ${link(memoryPath.get(m.id) as string, short(m.gist))}`);
     }
-    files.set(`${scopePath(s)}.md`, `${lines.join("\n")}\n`);
+    files.set(`${scopePath(s)}.md`, { content: `${lines.join("\n")}\n`, id: s, scope: s });
   }
 
   return writeVault(opts, files, {
@@ -264,20 +305,77 @@ export function exportObsidian(db: DB, opts: ExportOptions): ExportStats {
   });
 }
 
+/** Lo que se escribe de cada nota: su contenido y lo que el manifiesto necesitará después. */
+interface WrittenFile {
+  content: string;
+  /** Id completo del recuerdo, rasgo o episodio; en una nota de ámbito, el propio scope. */
+  id: string;
+  scope: string;
+}
+
+interface ManifestEntry {
+  id: string;
+  scope: string;
+}
+
+interface Manifest {
+  version: 2;
+  files: Record<string, ManifestEntry>;
+}
+
+/**
+ * Lee el manifiesto. `null` si no se puede interpretar (ilegible o con forma desconocida),
+ * que significa "no se borra nada". Un array es el formato viejo y se lee como entradas sin
+ * id ni scope: no hay forma de demostrar que esos ficheros son nuestros.
+ */
+function readManifest(path: string): Map<string, ManifestEntry | null> | null {
+  let parsed: unknown;
+  try {
+    parsed = JSON.parse(readFileSync(path, "utf8"));
+  } catch {
+    return null;
+  }
+  const entries = new Map<string, ManifestEntry | null>();
+  if (Array.isArray(parsed)) {
+    for (const rel of parsed) if (typeof rel === "string") entries.set(rel, null);
+    return entries;
+  }
+  if (!parsed || typeof parsed !== "object") return null;
+  const files: unknown = (parsed as { files?: unknown }).files;
+  if (!files || typeof files !== "object" || Array.isArray(files)) return null;
+  for (const [rel, meta] of Object.entries(files as Record<string, unknown>)) {
+    const entry = meta as Partial<ManifestEntry> | null;
+    entries.set(
+      rel,
+      entry && typeof entry.id === "string" && typeof entry.scope === "string"
+        ? { id: entry.id, scope: entry.scope }
+        : null,
+    );
+  }
+  return entries;
+}
+
+/** El fichero es nuestro sólo si su frontmatter sigue declarando el id que apuntó el manifiesto. */
+function ownedBy(file: string, id: string): boolean {
+  let content: string;
+  try {
+    content = readFileSync(file, "utf8");
+  } catch {
+    return false;
+  }
+  const end = content.indexOf("\n---", 3);
+  if (!content.startsWith("---\n") || end < 0) return false;
+  return content.slice(4, end).split("\n").includes(`id: ${yaml(id)}`);
+}
+
 function writeVault(
   opts: ExportOptions,
-  files: Map<string, string>,
+  files: Map<string, WrittenFile>,
   counts: Pick<ExportStats, "memories" | "traits" | "scopes" | "episodes">,
 ): ExportStats {
   const root = resolve(opts.dir, EXPORT_ROOT);
   const manifestPath = join(root, MANIFEST);
-  let previous: string[] = [];
-  try {
-    const parsed: unknown = JSON.parse(readFileSync(manifestPath, "utf8"));
-    if (Array.isArray(parsed)) previous = parsed.filter((p): p is string => typeof p === "string");
-  } catch {
-    /* primera exportación, o manifiesto ilegible: no se borra nada */
-  }
+  const previous = readManifest(manifestPath);
 
   const inside = (rel: string): string | null => {
     const file = resolve(root, rel);
@@ -286,7 +384,7 @@ function writeVault(
 
   let written = 0;
   let unchanged = 0;
-  for (const [rel, content] of files) {
+  for (const [rel, { content }] of files) {
     const file = inside(rel);
     if (!file) continue;
     let current: string | undefined;
@@ -305,20 +403,45 @@ function writeVault(
     writeFileSync(file, content);
   }
 
-  // Sólo lo que figura en el manifiesto: una nota que la persona puso ahí no se toca.
-  const stale = previous.filter((rel) => !files.has(rel));
+  // El manifiesto se fusiona con el anterior, no se reemplaza: con --scope, lo exportado
+  // antes para otros ámbitos sigue siendo nuestro y no puede quedar huérfano ni borrarse.
+  const manifest: Manifest = { version: 2, files: {} };
+  for (const [rel, { id, scope }] of files) manifest.files[rel] = { id, scope };
+
   let removed = 0;
-  for (const rel of stale) {
+  let skipped = 0;
+  for (const [rel, entry] of previous ?? []) {
+    if (files.has(rel)) continue;
+    // Formato viejo: sin id no hay forma de distinguir nuestra nota de una de la persona.
+    if (entry === null) {
+      skipped++;
+      continue;
+    }
+    if (opts.scope !== undefined && entry.scope !== opts.scope) {
+      manifest.files[rel] = entry;
+      continue;
+    }
     const file = inside(rel);
     if (!file) continue;
+    if (!existsSync(file)) {
+      // La nota ya no está: la entrada sobra, igual que antes.
+      removed++;
+      continue;
+    }
+    if (!ownedBy(file, entry.id)) {
+      skipped++;
+      continue;
+    }
     removed++;
     if (!opts.dryRun) rmSync(file, { force: true });
   }
 
   if (!opts.dryRun) {
     mkdirSync(root, { recursive: true });
-    writeFileSync(manifestPath, `${JSON.stringify([...files.keys()].sort(), null, 2)}\n`);
+    const sorted: Record<string, ManifestEntry> = {};
+    for (const rel of Object.keys(manifest.files).sort()) sorted[rel] = manifest.files[rel] as ManifestEntry;
+    writeFileSync(manifestPath, `${JSON.stringify({ version: 2, files: sorted }, null, 2)}\n`);
   }
 
-  return { dir: root, ...counts, written, unchanged, removed, dry_run: Boolean(opts.dryRun) };
+  return { dir: root, ...counts, written, unchanged, removed, skipped, dry_run: Boolean(opts.dryRun) };
 }

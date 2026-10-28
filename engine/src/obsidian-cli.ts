@@ -6,6 +6,7 @@
  *   mismem-obsidian --out ~/Obsidian/Memoria --scope daimon --episodes
  *   mismem-obsidian --out ~/Obsidian/Memoria --dry-run  # qué cambiaría, sin escribir
  */
+import { existsSync } from "node:fs";
 import { parseArgs } from "node:util";
 import { defaultDbPath, openDb } from "./db.js";
 import { EXPORT_ROOT, exportObsidian } from "./obsidian.js";
@@ -26,7 +27,7 @@ Opciones:
   --help           Esta ayuda
 
 Env:
-  MISMEM_DB        default ${defaultDbPath()}
+  MISMEM_DB        default ${defaultDbPath()} (debe existir: el export no crea la base)
 `;
 
 // EX_USAGE, como el resto de CLIs que validan sus flags.
@@ -60,7 +61,14 @@ function main(): void {
     process.exit(EXIT_USAGE);
   }
 
-  const db = openDb(process.env.MISMEM_DB ?? defaultDbPath());
+  const dbPath = defaultDbPath();
+  // openDb crea el fichero si falta: una ruta equivocada exportaría cero memorias y vaciaría
+  // la bóveda. Mejor negarse, también en --dry-run, que no debe escribir nada.
+  if (!existsSync(dbPath)) {
+    console.error(`[obsidian] la base de datos no existe: ${dbPath}\n\n${HELP}`);
+    process.exit(1);
+  }
+  const db = openDb(dbPath);
   try {
     const stats = exportObsidian(db, {
       dir: values.out,
