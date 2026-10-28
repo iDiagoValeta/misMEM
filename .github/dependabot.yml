@@ -1,18 +1,18 @@
 version: 2
+
+# Same shape as the owner's other repos: weekly on Monday, minor and patch grouped so a
+# review is one CI run, majors on their own because they are the ones that need reading.
 updates:
-  # Minor and patch arrive as one PR so a review covers the whole bump instead of a
-  # queue of one-line PRs; majors stay separate because they need a decision.
   - package-ecosystem: npm
     directory: /engine
     schedule:
       interval: weekly
+      day: monday
     open-pull-requests-limit: 5
     groups:
-      minor-and-patch:
-        applies-to: version-updates
-        update-types:
-          - minor
-          - patch
+      engine-minor:
+        patterns: ["*"]
+        update-types: [minor, patch]
 
   # Actions are pinned by SHA: Dependabot moves the SHA and its version comment together,
   # which is the only way a pinned workflow ever gets an update.
@@ -20,12 +20,17 @@ updates:
     directory: /
     schedule:
       interval: weekly
-    open-pull-requests-limit: 5
+      day: monday
+    open-pull-requests-limit: 3
+    groups:
+      actions:
+        patterns: ["*"]
 
-  # node:22-alpine is the one dependency nothing in the repo bumps, so a CVE fix in the
-  # base image would otherwise wait for a manual rebuild.
+  # node:22-alpine is pinned by digest in the Dockerfile; nothing else would bump it,
+  # so a CVE fix in the base image would wait for a manual rebuild.
   - package-ecosystem: docker
     directory: /engine
     schedule:
       interval: weekly
-    open-pull-requests-limit: 5
+      day: monday
+    open-pull-requests-limit: 2
