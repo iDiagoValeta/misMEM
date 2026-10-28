@@ -2,6 +2,16 @@
 
 ## Sin publicar
 
+### Una sola versión, y comprobada
+
+- La versión estaba escrita a mano en `engine/package.json`, `server.json` (dos campos) y
+  `engine/src/server-core.ts`, y nada comparaba las cuatro. Un release podía anunciar por MCP una
+  versión distinta de la publicada. Ahora `server-core.ts` lee `engine/package.json` al cargarse
+  (`createRequire`, que funciona igual desde `src/` con tsx que desde `dist/`), y `tests/version.test.ts`
+  falla si el `serverInfo` que ve un cliente MCP o cualquiera de los dos campos de `server.json` deja de
+  coincidir con el paquete.
+- `DEPLOY.md` recuerda que los tags van anotados (`git tag -a vX.Y.Z -m 'misMEM X.Y.Z'`).
+
 ### Higiene del repositorio: reportar en privado, dependencias y secretos
 
 - `SECURITY.md` dice cómo reportar una vulnerabilidad en privado (GitHub Private Vulnerability

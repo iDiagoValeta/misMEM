@@ -2,6 +2,7 @@
  * Server core — registra las 6 tools canónicas + alias engram-compat.
  * Reusado por `server.ts` (stdio) y `server-http.ts` (StreamableHTTP).
  */
+import { createRequire } from "node:module";
 import { Server } from "@modelcontextprotocol/sdk/server/index.js";
 import {
   CallToolRequestSchema,
@@ -129,9 +130,16 @@ const CANONICAL_TOOLS = [
 
 const ALL_TOOLS = [...CANONICAL_TOOLS, ...ENGRAM_TOOLS];
 
+// package.json is the only source of the version. It is read at runtime because the
+// build compiles src/ to dist/ with rootDir ./src, so a JSON import from ../ would fall
+// outside it; ../package.json resolves from both src/ (tsx) and dist/ (Docker, npm).
+const { version } = createRequire(import.meta.url)("../package.json") as {
+  version: string;
+};
+
 export function createServer(db: DB): Server {
   const server = new Server(
-    { name: "mismem", version: "0.5.0" },
+    { name: "mismem", version },
     { capabilities: { tools: {} } },
   );
 

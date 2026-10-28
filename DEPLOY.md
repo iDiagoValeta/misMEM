@@ -79,7 +79,7 @@ Actions access* → agregar el repositorio `misMEM` con rol **Write**. Después,
 relanzar el workflow con `workflow_dispatch` sobre el tag; no hace falta re-taggear.
 
 El paquete npm `@lucasmella/mismem` se publica a mano (`pnpm publish` desde `engine/`):
-no hay workflow que lo haga.
+no hay workflow que lo haga. Tags anotados: `git tag -a vX.Y.Z -m 'misMEM X.Y.Z'`.
 
 ---
 
