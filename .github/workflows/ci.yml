@@ -4,6 +4,9 @@ on:
   push:
     branches: [main]
   pull_request:
+  # Lets docker.yml run this exact suite before publishing an image: a tag must not
+  # ship code that the main CI would have rejected.
+  workflow_call:
 
 jobs:
   test:
@@ -30,3 +33,13 @@ jobs:
       - run: pnpm typecheck
       - run: pnpm test
       - run: pnpm build
+
+  scripts:
+    # Nothing else parses the shell scripts, so a syntax error would only show up
+    # on a user's machine. shellcheck is limited to errors to avoid style noise.
+    runs-on: ubuntu-latest
+    name: shell-scripts
+    steps:
+      - uses: actions/checkout@v4
+      - run: bash -n scripts/*.sh
+      - run: shellcheck --severity=error scripts/*.sh

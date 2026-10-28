@@ -572,7 +572,7 @@ describe("runConsolidation", () => {
     });
 
     expect(distillFn).toHaveBeenCalledTimes(1);
-    expect(distillFn.mock.calls[0][2]).toContain("usar pnpm, no npm");
+    expect(distillFn.mock.calls[0]?.[2]).toContain("usar pnpm, no npm");
     expect(summary.episodes_dropped_pareto_l0).toBe(1);
     const row = db.prepare("SELECT m.gist FROM episodes e JOIN memories m ON m.id = e.consolidated_into WHERE e.id = ?").get(fact) as { gist: string };
     expect(row.gist).toBe("Se usa pnpm en vez de npm");
