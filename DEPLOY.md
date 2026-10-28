@@ -68,7 +68,8 @@ El workflow `docker.yml` corre al pushear un tag `v*` y publica
 sólo desde el tag estable más alto, `latest`. Una pre-release (`v1.0.0-rc1`) nunca
 se lleva `latest`, y un tag puesto en retrospectiva tampoco: así un `v0.4.0` tardío
 no publica el árbol viejo encima del último release. Para republicar sin mover el
-tag, `workflow_dispatch` sobre el tag que corresponda.
+tag, `workflow_dispatch` sobre el tag que corresponda; lanzado desde una rama falla
+al arrancar, para no publicar código sin release.
 
 **Si el push a GHCR falla con `denied: permission_denied: read_package`**, el paquete
 existe pero no le da escritura a este repositorio. El workflow ya declara
