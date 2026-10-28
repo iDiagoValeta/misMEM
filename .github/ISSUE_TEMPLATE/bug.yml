@@ -1,0 +1,80 @@
+name: Error
+description: Algo que misMEM hace mal (servidor MCP, HTTP, CLI, hooks, interfaz, instalación)
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Convenciones: [CONTRIBUTING.md](https://github.com/lucasmella-stack/misMEM/blob/main/CONTRIBUTING.md).
+        Un issue existe para poder cerrarse con evidencia: el criterio de cierre va en el primer mensaje.
+
+        **Una vulnerabilidad o una clave filtrada no va aquí.** Se reporta en privado (SECURITY.md).
+        No pegar contenido de la memoria ni claves: ni en el texto ni en los logs.
+  - type: textarea
+    id: what
+    attributes:
+      label: Qué pasó
+      description: El comando o la llamada exacta, qué se esperaba y qué ocurrió. Pegar el error completo, no un resumen.
+    validations:
+      required: true
+  - type: textarea
+    id: reproduction
+    attributes:
+      label: Reproducción
+      description: Pasos mínimos desde un estado limpio. Si hace falta una base o una variable concreta, decir cuál.
+    validations:
+      required: true
+  - type: textarea
+    id: evidence
+    attributes:
+      label: Evidencia
+      description: Logs, salida de `mismem-stats --json`, capturas. Sin texto de memorias ni claves.
+  - type: input
+    id: version
+    attributes:
+      label: Versión de misMEM
+      description: La de `engine/package.json`, o el commit si se corre desde un checkout.
+      placeholder: "0.5.0"
+    validations:
+      required: true
+  - type: dropdown
+    id: install_mode
+    attributes:
+      label: Modo de instalación
+      options:
+        - install.sh
+        - Docker
+        - npm (npx)
+        - checkout (desde el código)
+    validations:
+      required: true
+  - type: input
+    id: node
+    attributes:
+      label: Versión de Node
+      description: Salida de `node --version` (en Docker, la de la imagen).
+      placeholder: "v22.12.0"
+    validations:
+      required: true
+  - type: dropdown
+    id: client
+    attributes:
+      label: Cliente
+      description: El que habla con misMEM cuando falla.
+      options:
+        - Claude Code
+        - opencode
+        - Cursor
+        - Claude Desktop
+        - VS Code
+        - CLI o HTTP directo (sin cliente)
+        - Otro (indicarlo en la descripción)
+    validations:
+      required: true
+  - type: textarea
+    id: closure
+    attributes:
+      label: Criterio de cierre
+      description: El hecho observable que lo cierra, por ejemplo un test que lo reproduce y pasa, o un número de `mismem-bench` otra vez en rango.
+    validations:
+      required: true

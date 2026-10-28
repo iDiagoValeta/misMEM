@@ -1,0 +1,30 @@
+name: Mejora
+description: Una capacidad nueva, un cambio de comportamiento o una limpieza
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Convenciones: [CONTRIBUTING.md](https://github.com/lucasmella-stack/misMEM/blob/main/CONTRIBUTING.md).
+        Una limpieza (`cleanup`) o una investigación (`research`) también entra por aquí: quien tria cambia la etiqueta.
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problema
+      description: Qué no se puede hacer hoy, o qué está medido y mal. Los números pesan más que los adjetivos.
+    validations:
+      required: true
+  - type: textarea
+    id: direction
+    attributes:
+      label: Dirección propuesta
+      description: La forma del cambio y su coste. Si toca una herramienta MCP, un flag, una variable o una respuesta HTTP, decirlo (cuenta como `breaking`).
+    validations:
+      required: true
+  - type: textarea
+    id: closure
+    attributes:
+      label: Criterio de cierre
+      description: El hecho observable que lo cierra, por ejemplo qué queda funcionando, con qué tests, o qué medición (`mismem-bench`) lo confirma.
+    validations:
+      required: true

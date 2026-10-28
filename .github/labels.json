@@ -1,0 +1,215 @@
+{
+  "_comment": [
+    "The declared label set for this repository: one source, so CONTRIBUTING.md and the issue",
+    "templates cannot cite a label that does not exist. `kind`: type (exactly one per issue),",
+    "modifier (optional), area (zero or more), priority (at most one), github-default (created by",
+    "GitHub or Dependabot, kept so this is a complete inventory). Colours are hex without '#'.",
+    ".github/workflows/labels.yml checks this file against the labels GitHub actually holds."
+  ],
+  "labels": [
+    {
+      "name": "bug",
+      "color": "d73a4a",
+      "description": "Something isn't working",
+      "kind": "type"
+    },
+    {
+      "name": "enhancement",
+      "color": "a2eeef",
+      "description": "New feature or request",
+      "kind": "type"
+    },
+    {
+      "name": "documentation",
+      "color": "0075ca",
+      "description": "Improvements or additions to documentation",
+      "kind": "type"
+    },
+    {
+      "name": "performance",
+      "color": "0e8a16",
+      "description": "Latency, recall quality or resource use",
+      "kind": "type"
+    },
+    {
+      "name": "security",
+      "color": "b60205",
+      "description": "Hardening or a vulnerability; suspected leaks go through SECURITY.md",
+      "kind": "type"
+    },
+    {
+      "name": "cleanup",
+      "color": "fef2c0",
+      "description": "Removing dead weight from the repo",
+      "kind": "type"
+    },
+    {
+      "name": "research",
+      "color": "5319e7",
+      "description": "Exploration with a written conclusion",
+      "kind": "type"
+    },
+    {
+      "name": "dependencies",
+      "color": "0366d6",
+      "description": "Pull requests that update a dependency file",
+      "kind": "type"
+    },
+    {
+      "name": "needs-decision",
+      "color": "d93f0b",
+      "description": "Waits on an owner decision (design choice or protected area)",
+      "kind": "modifier"
+    },
+    {
+      "name": "blocked",
+      "color": "6e7681",
+      "description": "Cannot move until something external happens; the issue says what",
+      "kind": "modifier"
+    },
+    {
+      "name": "needs-bench",
+      "color": "fbca04",
+      "description": "Touches recall ranking or embeddings: run mismem-bench before and after",
+      "kind": "modifier"
+    },
+    {
+      "name": "breaking",
+      "color": "b60205",
+      "description": "Changes a CLI flag, env var, MCP tool contract or HTTP response",
+      "kind": "modifier"
+    },
+    {
+      "name": "area:mcp",
+      "color": "c5def5",
+      "description": "MCP server, the six tools and the engram-compat aliases",
+      "kind": "area"
+    },
+    {
+      "name": "area:search",
+      "color": "c5def5",
+      "description": "Lexical and semantic recall, ranking and embeddings",
+      "kind": "area"
+    },
+    {
+      "name": "area:consolidation",
+      "color": "c5def5",
+      "description": "LLM consolidation, Pareto prefilter and forget",
+      "kind": "area"
+    },
+    {
+      "name": "area:http",
+      "color": "c5def5",
+      "description": "HTTP server, auth, Host guard and request limits",
+      "kind": "area"
+    },
+    {
+      "name": "area:viewer",
+      "color": "c5def5",
+      "description": "Viewer API and the React interface",
+      "kind": "area"
+    },
+    {
+      "name": "area:ingest",
+      "color": "c5def5",
+      "description": "Importers: ChatGPT, VS Code, file walks, Engram migration",
+      "kind": "area"
+    },
+    {
+      "name": "area:cli",
+      "color": "c5def5",
+      "description": "Command-line tools and their argument parsing",
+      "kind": "area"
+    },
+    {
+      "name": "area:hooks",
+      "color": "c5def5",
+      "description": "Client hooks: inject and used",
+      "kind": "area"
+    },
+    {
+      "name": "area:deploy",
+      "color": "c5def5",
+      "description": "Docker image, install.sh and deployment",
+      "kind": "area"
+    },
+    {
+      "name": "area:ci",
+      "color": "c5def5",
+      "description": "Workflows, tooling and repository configuration",
+      "kind": "area"
+    },
+    {
+      "name": "priority:high",
+      "color": "b60205",
+      "description": "Do before anything else: data loss, wrong recall or a broken release",
+      "kind": "priority"
+    },
+    {
+      "name": "priority:medium",
+      "color": "fbca04",
+      "description": "Planned work with no deadline pressure",
+      "kind": "priority"
+    },
+    {
+      "name": "priority:low",
+      "color": "c2e0c6",
+      "description": "Worth doing when adjacent work is open",
+      "kind": "priority"
+    },
+    {
+      "name": "duplicate",
+      "color": "cfd3d7",
+      "description": "This issue or pull request already exists",
+      "kind": "github-default"
+    },
+    {
+      "name": "good first issue",
+      "color": "7057ff",
+      "description": "Good for newcomers",
+      "kind": "github-default"
+    },
+    {
+      "name": "help wanted",
+      "color": "008672",
+      "description": "Extra attention is needed",
+      "kind": "github-default"
+    },
+    {
+      "name": "invalid",
+      "color": "e4e669",
+      "description": "This doesn't seem right",
+      "kind": "github-default"
+    },
+    {
+      "name": "question",
+      "color": "d876e3",
+      "description": "Further information is requested",
+      "kind": "github-default"
+    },
+    {
+      "name": "wontfix",
+      "color": "ffffff",
+      "description": "This will not be worked on",
+      "kind": "github-default"
+    },
+    {
+      "name": "docker",
+      "color": "21ceff",
+      "description": "Pull requests that update docker code",
+      "kind": "github-default"
+    },
+    {
+      "name": "github_actions",
+      "color": "000000",
+      "description": "Pull requests that update GitHub Actions code",
+      "kind": "github-default"
+    },
+    {
+      "name": "javascript",
+      "color": "168700",
+      "description": "Pull requests that update javascript code",
+      "kind": "github-default"
+    }
+  ]
+}
