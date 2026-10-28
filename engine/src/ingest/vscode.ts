@@ -4,14 +4,13 @@ import { createInterface } from "node:readline";
 import { createReadStream, existsSync, statSync } from "node:fs";
 import type { Database as DB } from "better-sqlite3";
 import { capture } from "../tools.js";
+import { chunkText } from "./walk.js";
 
 export interface JsonlStats {
   files: number;
   records: number;
   skipped: number;
 }
-
-const MAX_BODY = 80_000;
 
 /**
  * Walks VS Code workspaceStorage looking for Copilot transcript .jsonl files.
@@ -49,17 +48,14 @@ export async function ingestVSCodeTranscripts(
           const role = obj.role ?? "unknown";
           lines.push(`[${role}] ${text}`);
         } catch {
-          // skip malformed
+          // A truncated or interleaved line must not abort the whole file.
         }
       }
       if (!lines.length) { stats.skipped++; continue; }
 
       const body = `# transcript ${ws.name}/${file}\n\n${lines.join("\n\n")}`;
-      for (let i = 0; i < body.length; i += MAX_BODY) {
-        capture(db, {
-          scope: `vscode/transcripts/${ws.name}`,
-          body: body.slice(i, i + MAX_BODY),
-        });
+      for (const chunk of chunkText(body)) {
+        capture(db, { scope: `vscode/transcripts/${ws.name}`, body: chunk });
       }
       stats.files++;
       stats.records += lines.length;

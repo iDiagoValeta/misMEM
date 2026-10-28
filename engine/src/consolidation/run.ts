@@ -1,5 +1,6 @@
 import type { Database as DB } from "better-sqlite3";
 import { consolidate } from "../tools.js";
+import { envNonNegativeNumber, envPositiveNumber } from "../env.js";
 import { embedPendingMemories } from "../embeddings/index.js";
 import { classify } from "../pareto/classifier.js";
 import {
@@ -13,7 +14,7 @@ import {
 } from "./llm.js";
 import { SYSTEM_PROMPT, buildUserPrompt, type EpisodeForPrompt } from "./prompts.js";
 
-export type DistillFn = (
+type DistillFn = (
   cfg: LlmConfig,
   systemPrompt: string,
   userPrompt: string,
@@ -79,11 +80,6 @@ const DEFAULT_QUIET_DAYS = 14;
 // de una tanda que ya se paga, no una llamada extra.
 const DEFAULT_UNCITED_STRIKES = 3;
 
-function envNumber(name: string, fallback: number): number {
-  const value = Number(process.env[name]);
-  return Number.isFinite(value) && value > 0 ? value : fallback;
-}
-
 export function truncateEpisode(body: string, max: number): string {
   if (body.length <= max) return body;
   const room = max - TRUNCATION_MARK.length;
@@ -110,16 +106,16 @@ export async function runConsolidation(
   opts: RunOptions = {},
 ): Promise<RunSummary> {
   const t0 = Date.now();
-  const minAgeHours = opts.minAgeHours ?? Number(process.env.MISMEM_CONSOLIDATION_MIN_AGE_HOURS ?? 24);
-  const minEpisodes = opts.minEpisodesPerScope ?? Number(process.env.MISMEM_CONSOLIDATION_MIN_EPISODES ?? 3);
-  const quietDays = opts.quietDays ?? envNumber("MISMEM_CONSOLIDATION_QUIET_DAYS", DEFAULT_QUIET_DAYS);
+  const minAgeHours = opts.minAgeHours ?? envNonNegativeNumber("MISMEM_CONSOLIDATION_MIN_AGE_HOURS", 24);
+  const minEpisodes = opts.minEpisodesPerScope ?? envPositiveNumber("MISMEM_CONSOLIDATION_MIN_EPISODES", 3);
+  const quietDays = opts.quietDays ?? envPositiveNumber("MISMEM_CONSOLIDATION_QUIET_DAYS", DEFAULT_QUIET_DAYS);
   const quietBefore = Date.now() - quietDays * 86_400_000;
-  const uncitedStrikes = opts.uncitedStrikes ?? envNumber("MISMEM_CONSOLIDATION_UNCITED_STRIKES", DEFAULT_UNCITED_STRIKES);
+  const uncitedStrikes = opts.uncitedStrikes ?? envPositiveNumber("MISMEM_CONSOLIDATION_UNCITED_STRIKES", DEFAULT_UNCITED_STRIKES);
   const limits: Limits = {
-    maxBatch: opts.maxEpisodesPerBatch ?? envNumber("MISMEM_CONSOLIDATION_MAX_BATCH", 60),
-    maxPromptChars: opts.maxPromptChars ?? envNumber("MISMEM_CONSOLIDATION_MAX_PROMPT_CHARS", 60_000),
-    maxEpisodeChars: opts.maxEpisodeChars ?? envNumber("MISMEM_CONSOLIDATION_MAX_EPISODE_CHARS", 12_000),
-    maxCalls: opts.maxCalls ?? envNumber("MISMEM_CONSOLIDATION_MAX_CALLS", 60),
+    maxBatch: opts.maxEpisodesPerBatch ?? envPositiveNumber("MISMEM_CONSOLIDATION_MAX_BATCH", 60),
+    maxPromptChars: opts.maxPromptChars ?? envPositiveNumber("MISMEM_CONSOLIDATION_MAX_PROMPT_CHARS", 60_000),
+    maxEpisodeChars: opts.maxEpisodeChars ?? envPositiveNumber("MISMEM_CONSOLIDATION_MAX_EPISODE_CHARS", 12_000),
+    maxCalls: opts.maxCalls ?? envPositiveNumber("MISMEM_CONSOLIDATION_MAX_CALLS", 60),
   };
   const log = opts.log ?? ((m) => console.log(m));
   const cutoff = Date.now() - minAgeHours * 3600 * 1000;
@@ -162,7 +158,7 @@ export async function runConsolidation(
      WHERE scope = @scope AND consolidated_into IS NULL AND created_at < @cutoff`,
   );
 
-  scopeLoop: for (const { scope, n, newest } of scopes) {
+  for (const { scope, n, newest } of scopes) {
     if (n < minEpisodes && newest >= quietBefore) {
       summary.scopes_skipped_too_few++;
       log(`[consolidation] skip scope="${scope}" (${n} < ${minEpisodes})`);
@@ -207,7 +203,7 @@ export async function runConsolidation(
       if (err instanceof LlmFatalError) {
         summary.aborted = true;
         log("[consolidation] el proveedor rechazó la clave o no hay saldo: corrida cortada");
-        break scopeLoop;
+        break;
       }
     }
   }

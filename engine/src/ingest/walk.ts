@@ -1,5 +1,6 @@
 import { readdir, stat, readFile } from "node:fs/promises";
 import { join, relative, extname, basename } from "node:path";
+import type { Dirent } from "node:fs";
 import type { Database as DB } from "better-sqlite3";
 import { capture } from "../tools.js";
 
@@ -14,7 +15,8 @@ const SKIP_DIRS = new Set([
   "out", ".nuxt", ".svelte-kit", "target", ".gradle", ".idea",
 ]);
 const MAX_FILE_BYTES = 500_000;
-const CHUNK_BYTES = 80_000;
+// Characters, not bytes, despite the name: capture() bodies are sliced by string length.
+export const CHUNK_BYTES = 80_000;
 
 export interface WalkOptions {
   root: string;
@@ -35,12 +37,12 @@ export interface WalkStats {
 function shouldIngest(path: string): boolean {
   const ext = extname(path).toLowerCase();
   if (TEXT_EXT.has(ext)) return true;
-  // Accept known config dotfiles without extension
+  // These carry project config, but their names have no extension TEXT_EXT can match.
   const name = basename(path).toLowerCase();
   return ["dockerfile", ".gitignore", ".npmrc", ".editorconfig", ".env.example"].includes(name);
 }
 
-function chunkText(text: string): string[] {
+export function chunkText(text: string): string[] {
   if (text.length <= CHUNK_BYTES) return [text];
   const chunks: string[] = [];
   for (let i = 0; i < text.length; i += CHUNK_BYTES) {
@@ -56,7 +58,7 @@ export async function walkAndIngest(opts: WalkOptions): Promise<WalkStats> {
   };
 
   async function walk(dir: string): Promise<void> {
-    let entries;
+    let entries: Dirent[];
     try {
       entries = await readdir(dir, { withFileTypes: true });
     } catch (e) {

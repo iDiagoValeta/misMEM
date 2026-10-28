@@ -9,36 +9,11 @@
 import { readFileSync } from "node:fs";
 import { defaultDbPath, openDb } from "./db.js";
 import { meanRank, mrr, parseBank, recallAt, runBench, type Score } from "./bench.js";
-
-interface Args {
-  db?: string;
-  bank?: string;
-  offTopic?: string;
-  groups: string[];
-  limit: number;
-  json: boolean;
-  help: boolean;
-}
-
-const DEFAULT_LIMIT = 5;
-
-function parseArgs(argv: string[]): Args {
-  const out: Args = { groups: [], limit: DEFAULT_LIMIT, json: false, help: false };
-  for (let i = 0; i < argv.length; i++) {
-    const a = argv[i];
-    if (a === "--help" || a === "-h") out.help = true;
-    else if (a === "--json") out.json = true;
-    else if (a === "--db") out.db = argv[++i];
-    else if (a === "--bank") out.bank = argv[++i];
-    else if (a === "--off-topic") out.offTopic = argv[++i];
-    else if (a === "--group") out.groups = (argv[++i] ?? "").split(",").filter(Boolean);
-    else if (a === "--limit") out.limit = Number(argv[++i]) || DEFAULT_LIMIT;
-  }
-  return out;
-}
+import { ArgsError, EXIT_USAGE } from "./cli-args.js";
+import { BENCH_DEFAULT_LIMIT, parseBenchArgs } from "./bench-args.js";
 
 function help(): void {
-  console.log(`mismem-bench --bank <banco.jsonl> [--db <base.db>] [--limit ${DEFAULT_LIMIT}]
+  console.log(`mismem-bench --bank <banco.jsonl> [--db <base.db>] [--limit ${BENCH_DEFAULT_LIMIT}]
              [--group lang,tema] [--off-topic <ajenas.txt>] [--json]
 
 Banco: una línea JSON por pregunta. "id" es la memoria esperada; las claves de
@@ -52,7 +27,7 @@ cuántos recuerdos devuelve por pregunta (el modelo los lee todos) y un aviso si
 algún marcador de ruido llegó al tope.
 
 DB: ${defaultDbPath()} (override con --db o MISMEM_DB). No refuerza ni escribe memorias.
-Env: las mismas MISMEM_EMBEDDING_* que el servidor.`);
+Variables: las mismas MISMEM_EMBEDDING_* que el servidor.`);
 }
 
 const percent = (score: Score): string =>
@@ -69,7 +44,15 @@ const positions = (score: Score): string =>
     .join(" ") || "ninguna";
 
 async function main(): Promise<void> {
-  const args = parseArgs(process.argv.slice(2));
+  let args: ReturnType<typeof parseBenchArgs>;
+  try {
+    args = parseBenchArgs(process.argv.slice(2));
+  } catch (err) {
+    if (!(err instanceof ArgsError)) throw err;
+    console.error(`[bench] ${err.message}\n`);
+    help();
+    process.exit(EXIT_USAGE);
+  }
   if (args.help || !args.bank) {
     help();
     process.exit(args.help ? 0 : 1);

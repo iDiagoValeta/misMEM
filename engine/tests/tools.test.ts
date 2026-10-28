@@ -168,7 +168,7 @@ describe("reinforce", () => {
       name: "prefiere docker compose",
       evidence_memory_ids: [real],
     });
-    const rasgoId = (rasgo as { trait_id?: string; id?: string }).trait_id ?? (rasgo as { id: string }).id;
+    const rasgoId = rasgo.trait_id;
 
     const result = reinforce(db, { memory_ids: [real, rasgoId, "01INVENTADO000000000000000"] });
 

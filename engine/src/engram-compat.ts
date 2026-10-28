@@ -1,15 +1,16 @@
 /**
  * Engram-compatibility layer.
  *
- * Expone alias `mem_*` (Engram MCP tools) que mapean a las 5 canónicas
- * de misMEM (capture/recall/consolidate/crystallize/forget). Permite
+ * Expone alias `mem_*` (Engram MCP tools) que mapean a las 6 canónicas
+ * de misMEM (capture/recall/reinforce/consolidate/crystallize/forget). Permite
  * que clientes existentes (agentes, CLAUDE.md, mcp.json) sigan
  * funcionando sin cambios al migrar de Engram a misMEM.
  *
  * Mapeo:
  *   mem_save             → capture
  *   mem_search           → recall
- *   mem_context          → recall sobre los más recientes
+ *   mem_context          → SELECT directo de los episodios sin consolidar más
+ *                          recientes; no llama a recall ni ordena por relevancia
  *   mem_get_observation  → SELECT por id en episodes/memories/traits
  *   mem_session_summary  → capture (scope=session)
  *   mem_save_prompt      → capture (scope=prompts)
@@ -19,7 +20,7 @@
  *   mem_session_end      → no-op informativo
  */
 import type { Database as DB } from "better-sqlite3";
-import { capture, recallHybrid } from "./tools.js";
+import { capture, pendingEpisodes, recallHybrid } from "./tools.js";
 import type { EmbedFn } from "./embeddings/index.js";
 
 export interface EngramToolDef {
@@ -36,7 +37,7 @@ export const ENGRAM_TOOLS: EngramToolDef[] = [
   {
     name: "mem_save",
     description:
-      "[engram-compat] Save a memory. Maps to capture(). Use 'scope' or fallback to 'project'/'personal'.",
+      "[engram-compat] Save a memory. Maps to capture() with scope 'engram-compat' unless 'scope' is given.",
     inputSchema: {
       type: "object",
       required: ["title", "content"],
@@ -48,7 +49,7 @@ export const ENGRAM_TOOLS: EngramToolDef[] = [
           description:
             "bugfix | decision | architecture | discovery | pattern | config | preference",
         },
-        scope: { type: "string", description: "project (default) | personal" },
+        scope: { type: "string", description: "engram-compat (default) | any other scope name" },
         topic_key: { type: "string" },
       },
     },
@@ -70,7 +71,7 @@ export const ENGRAM_TOOLS: EngramToolDef[] = [
   {
     name: "mem_context",
     description:
-      "[engram-compat] Recent session context. Returns latest N episodes (any scope or filtered).",
+      "[engram-compat] Recent session context. Direct SELECT of the latest unconsolidated episodes (any scope or filtered); no recall, no ranking.",
     inputSchema: {
       type: "object",
       properties: {
@@ -222,24 +223,20 @@ export function dispatchEngramTool(
     case "mem_context": {
       const scope = args.scope ? asString(args.scope) : null;
       const limit = Math.min(50, Math.max(1, Number(args.limit) || 10));
-      // rowid DESC as tiebreaker → deterministic order even when several
-      // episodes share the same created_at millisecond.
-      const rows = db
-        .prepare(
-          `SELECT id, scope, body AS text, created_at
-           FROM episodes
-           WHERE consolidated_into IS NULL
-             AND (@scope IS NULL OR scope = @scope)
-           ORDER BY created_at DESC, rowid DESC
-           LIMIT @limit`,
-        )
-        .all({ scope, limit });
-      return { hits: (rows as unknown[]).map((r) => ({ ...(r as object), layer: "episode" })) };
+      // Same rows as the viewer's pending list, minus consolidated_into (always null here).
+      const hits = pendingEpisodes(db, scope, limit).map(({ id, scope: s, text, created_at }) => ({
+        id,
+        scope: s,
+        text,
+        created_at,
+        layer: "episode",
+      }));
+      return { hits };
     }
 
     case "mem_get_observation": {
       const id = asString(args.id);
-      if (!id) throw new Error("mem_get_observation: 'id' is required");
+      if (!id) throw new Error("mem_get_observation: falta 'id'");
       const ep = db
         .prepare(
           "SELECT id, scope, body AS text, created_at FROM episodes WHERE id = ?",
@@ -258,7 +255,7 @@ export function dispatchEngramTool(
         )
         .get(id);
       if (tr) return { layer: "trait", ...tr };
-      throw new Error(`mem_get_observation: id not found: ${id}`);
+      throw new Error(`mem_get_observation: no existe el id: ${id}`);
     }
 
     case "mem_session_summary": {
@@ -274,7 +271,7 @@ export function dispatchEngramTool(
     case "mem_update": {
       const id = asString(args.id);
       const content = asString(args.content);
-      if (!id || !content) throw new Error("mem_update: 'id' and 'content' required");
+      if (!id || !content) throw new Error("mem_update: faltan 'id' y 'content'");
       const updMem = db
         .prepare("UPDATE memories SET gist = ? WHERE id = ?")
         .run(content, id);
@@ -301,16 +298,16 @@ export function dispatchEngramTool(
     }
 
     case "mem_session_start":
-      return { ok: true, note: "misMEM is stateless; no session to start." };
+      return { ok: true, note: "misMEM no guarda estado; no hay sesión que iniciar." };
 
     case "mem_session_end":
       return {
         ok: true,
-        note: "Use mem_session_summary to persist end-of-session notes.",
+        note: "Usa mem_session_summary para guardar las notas de fin de sesión.",
       };
 
     default:
-      throw new Error(`Unknown engram-compat tool: ${name}`);
+      throw new Error(`herramienta engram-compat desconocida: ${name}`);
   }
 }
 

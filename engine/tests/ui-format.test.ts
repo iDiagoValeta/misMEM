@@ -1,0 +1,36 @@
+import { describe, expect, it } from "vitest";
+import { ago, exact, percent } from "../ui/src/format";
+
+const DAY = 86_400_000;
+const NOW = Date.UTC(2026, 9, 25, 12, 0, 0);
+
+/** Las fechas relativas son la información útil; la exacta va en el `title`. */
+describe("ago", () => {
+  it("con now fijo, hace 3 días da 'hace 3 días'", () => {
+    expect(ago(NOW - 3 * DAY, NOW)).toBe("hace 3 días");
+  });
+
+  it("sin fecha conocida da 'nunca'", () => {
+    expect(ago(null, NOW)).toBe("nunca");
+    expect(ago(undefined, NOW)).toBe("nunca");
+  });
+
+  it("lo que acaba de pasar da 'ahora'", () => {
+    expect(ago(NOW - 1_000, NOW)).toBe("ahora");
+  });
+});
+
+describe("exact", () => {
+  it("devuelve una fecha legible en castellano", () => {
+    const value = exact(NOW);
+    expect(value).toContain("2026");
+    expect(value.length).toBeGreaterThan(0);
+  });
+});
+
+describe("percent", () => {
+  it("redondea la fracción y añade la unidad", () => {
+    expect(percent(0.426)).toBe("43 %");
+    expect(percent(1)).toBe("100 %");
+  });
+});

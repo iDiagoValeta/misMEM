@@ -44,8 +44,8 @@ describe("semantic store + search", () => {
 
     const hits = semanticSearchMemories(db, fakeVec("finanzas"), { limit: 5 });
     expect(hits).toHaveLength(1);
-    expect(hits[0].id).toBe(m1);
-    expect(hits[0].score).toBeCloseTo(1.0);
+    expect(hits[0]?.id).toBe(m1);
+    expect(hits[0]?.score).toBeCloseTo(1.0);
 
     const scoped = semanticSearchMemories(db, fakeVec("finanzas"), {
       scope: "estudio",
@@ -205,8 +205,8 @@ describe("recallHybrid", () => {
     // ...pero el híbrido sí, vía embedding.
     const hybrid = await recallHybrid(db, { query: "finanzas" }, fakeEmbed);
     expect(hybrid.hits).toHaveLength(1);
-    expect(hybrid.hits[0].id).toBe(m1);
-    expect(hybrid.hits[0].via).toBe("semantic");
+    expect(hybrid.hits[0]?.id).toBe(m1);
+    expect(hybrid.hits[0]?.via).toBe("semantic");
   });
 
   it("no duplica hits que el FTS ya encontró", async () => {
@@ -221,7 +221,7 @@ describe("recallHybrid", () => {
     makeMemory("vida", "deploy en docker del servidor");
     const hybrid = await recallHybrid(db, { query: "docker" }, deadEmbed);
     expect(hybrid.hits).toHaveLength(1);
-    expect(hybrid.hits[0].via).toBeUndefined();
+    expect(hybrid.hits[0]?.via).toBeUndefined();
   });
 
   it("refuerza salience de hits semánticos (Hebb)", async () => {

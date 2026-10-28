@@ -18,7 +18,7 @@ import { contentTerms } from "../terms.js";
 /** Palabras con contenido desde las que un texto corto deja de ser muletilla. */
 const MIN_FACT_TERMS = 3;
 
-export interface ParetoScores {
+interface ParetoScores {
   density: number;
   novelty: number;
   loss_proxy: number;

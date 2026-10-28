@@ -1,12 +1,10 @@
 import type { Database as DB } from "better-sqlite3";
+import { envPositiveNumber } from "./env.js";
 
-export const DEFAULT_SALIENCE_HALF_LIFE_DAYS = 90;
+const DEFAULT_SALIENCE_HALF_LIFE_DAYS = 90;
 
-export function loadSalienceHalfLifeDays(): number {
-  const value = Number(process.env.MISMEM_SALIENCE_HALF_LIFE_DAYS);
-  return Number.isFinite(value) && value > 0
-    ? value
-    : DEFAULT_SALIENCE_HALF_LIFE_DAYS;
+function loadSalienceHalfLifeDays(): number {
+  return envPositiveNumber("MISMEM_SALIENCE_HALF_LIFE_DAYS", DEFAULT_SALIENCE_HALF_LIFE_DAYS);
 }
 
 export function decayedSalience(

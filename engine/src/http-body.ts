@@ -8,7 +8,7 @@
 import type { IncomingMessage } from "node:http";
 
 /** De sobra para una tool call; la ingesta masiva va por `mismem-ingest`, no por HTTP. */
-export const DEFAULT_MAX_BODY_BYTES = 4 * 1024 * 1024;
+const DEFAULT_MAX_BODY_BYTES = 4 * 1024 * 1024;
 
 export class BodyTooLargeError extends Error {
   override name = "BodyTooLargeError";
@@ -31,7 +31,7 @@ export function loadMaxBodyBytes(env: NodeJS.ProcessEnv = process.env): number {
  * que el SDK los rechace igual.
  */
 export function isJsonContentType(header: string | undefined): boolean {
-  return header !== undefined && header.includes("application/json");
+  return header?.includes("application/json") === true;
 }
 
 export function readJsonBody(req: IncomingMessage, maxBytes: number): Promise<unknown> {

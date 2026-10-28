@@ -1,4 +1,5 @@
 import { z } from "zod";
+import { envPositiveNumber } from "../env.js";
 
 const MAX_GIST_CHARS = 500;
 
@@ -8,10 +9,6 @@ const MemorySchema = z.object({
   evidence_episode_ids: z.array(z.string()).min(1),
   type: z.string().min(1).max(40).optional(),
   confidence: z.number().min(0).max(1).optional(),
-});
-
-const ResponseSchema = z.object({
-  memories: z.array(MemorySchema),
 });
 
 export type DistilledMemory = z.infer<typeof MemorySchema>;
@@ -49,16 +46,14 @@ export class LlmInvalidJsonError extends Error {
 const DEFAULT_TIMEOUT_MS = 120_000;
 
 function loadTimeoutMs(): number {
-  const value = Number(process.env.MISMEM_CONSOLIDATION_TIMEOUT_MS);
-  return Number.isFinite(value) && value > 0 ? value : DEFAULT_TIMEOUT_MS;
+  return envPositiveNumber("MISMEM_CONSOLIDATION_TIMEOUT_MS", DEFAULT_TIMEOUT_MS);
 }
 
 function loadMaxTokens(): number {
-  const value = Number(process.env.MISMEM_CONSOLIDATION_MAX_TOKENS);
-  return Number.isFinite(value) && value > 0 ? value : DEFAULT_MAX_TOKENS;
+  return envPositiveNumber("MISMEM_CONSOLIDATION_MAX_TOKENS", DEFAULT_MAX_TOKENS);
 }
 
-export type LlmProvider = "deepseek" | "openrouter" | "openai" | "compatible";
+type LlmProvider = "deepseek" | "openrouter" | "openai" | "compatible";
 
 const PROVIDERS: readonly LlmProvider[] = ["deepseek", "openrouter", "openai", "compatible"];
 

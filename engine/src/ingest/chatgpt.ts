@@ -3,6 +3,7 @@ import { readdir } from "node:fs/promises";
 import { join } from "node:path";
 import type { Database as DB } from "better-sqlite3";
 import { capture } from "../tools.js";
+import { chunkText } from "./walk.js";
 
 interface ChatGPTMessage {
   id: string;
@@ -28,19 +29,21 @@ export interface ChatGPTStats {
   skipped: number;
 }
 
-function flattenConversation(conv: ChatGPTConversation): string {
+function flattenConversation(conv: ChatGPTConversation): string | null {
   const lines: string[] = [];
   const title = conv.title ?? "(sin título)";
   const created = conv.create_time ? new Date(conv.create_time * 1000).toISOString() : "?";
   lines.push(`# ${title}`, `Created: ${created}`, "");
 
-  // Linearize via mapping ordered by create_time
+  // mapping is a tree, not a list: sorting by create_time approximates reading order
+  // (regenerated branches end up interleaved).
   const messages = Object.values(conv.mapping)
     .map((n) => n.message)
     .filter((m): m is ChatGPTMessage => m !== null && m !== undefined)
     .filter((m) => m.author?.role !== "system" && m.author?.role !== "tool")
     .sort((a, b) => (a.create_time ?? 0) - (b.create_time ?? 0));
 
+  let hasText = false;
   for (const m of messages) {
     const role = m.author?.role ?? "unknown";
     const parts = m.content?.parts ?? [];
@@ -50,11 +53,13 @@ function flattenConversation(conv: ChatGPTConversation): string {
       .join("\n");
     if (!text.trim()) continue;
     lines.push(`## ${role}`, text, "");
+    hasText = true;
   }
+  // The header alone is not memory: a conversation with only empty, system or tool
+  // messages has nothing to capture, so the caller must be able to skip it.
+  if (!hasText) return null;
   return lines.join("\n");
 }
-
-const MAX_BYTES_PER_CONV = 80_000;
 
 export async function ingestChatGPTExport(
   db: DB, exportRoot: string,
@@ -74,12 +79,9 @@ export async function ingestChatGPTExport(
       if (!conv?.mapping) { stats.skipped++; continue; }
       const id = conv.conversation_id ?? conv.id ?? "unknown";
       const text = flattenConversation(conv);
-      if (!text.trim()) { stats.skipped++; continue; }
+      if (!text) { stats.skipped++; continue; }
 
-      const chunks: string[] = [];
-      for (let i = 0; i < text.length; i += MAX_BYTES_PER_CONV) {
-        chunks.push(text.slice(i, i + MAX_BYTES_PER_CONV));
-      }
+      const chunks = chunkText(text);
       for (let i = 0; i < chunks.length; i++) {
         const tag = chunks.length > 1 ? ` [${i + 1}/${chunks.length}]` : "";
         capture(db, {

@@ -1,4 +1,4 @@
-import { describe, it, expect, beforeEach, vi } from "vitest";
+import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import type { Database as DB } from "better-sqlite3";
 import { openDb } from "../src/db.js";
 import { capture } from "../src/tools.js";
@@ -41,6 +41,45 @@ describe("runConsolidation", () => {
     expect(distillFn).not.toHaveBeenCalled();
     expect(summary.scopes_skipped_too_few).toBe(1);
     expect(summary.memories_created).toBe(0);
+  });
+
+  describe("MISMEM_CONSOLIDATION_MIN_AGE_HOURS / MIN_EPISODES from the environment", () => {
+    const run = async (): Promise<number> => {
+      const distillFn = vi.fn(async (_cfg: unknown, _sys: string, user: string) => {
+        const id = /[0-9A-HJKMNP-TV-Z]{26}/.exec(user)?.[0] ?? "";
+        return [{ gist: "g", evidence_episode_ids: [id] }];
+      });
+      const summary = await runConsolidation(db, { llm: llmCfg, distillFn, paretoPrefilter: false, log: () => {} });
+      return summary.memories_created;
+    };
+    afterEach(() => vi.unstubAllEnvs());
+
+    it("a garbage MIN_AGE_HOURS falls back to 24 instead of silently consolidating nothing", async () => {
+      for (const n of ["a", "b", "c"]) captureOld("s", `episodio ${n}`, 48);
+      vi.stubEnv("MISMEM_CONSOLIDATION_MIN_AGE_HOURS", "abc");
+      expect(await run()).toBeGreaterThan(0);
+    });
+
+    it("MIN_AGE_HOURS=0 is honoured: a brand-new episode is eligible", async () => {
+      // One second old: with age 0 the episode and the cutoff can share a millisecond, and
+      // the query is strictly `created_at < cutoff`.
+      for (const n of ["a", "b", "c"]) captureOld("s", `episodio ${n}`, 1 / 3600);
+      expect(pendingScopes()).toEqual(["s"]);
+      expect(await run()).toBe(0); // default 24h: too young
+      vi.stubEnv("MISMEM_CONSOLIDATION_MIN_AGE_HOURS", "0");
+      expect(await run()).toBeGreaterThan(0);
+    });
+
+    it("a garbage or zero MIN_EPISODES falls back to 3", async () => {
+      captureOld("s", "uno", 48);
+      captureOld("s", "dos", 48);
+      for (const raw of ["abc", "0"]) {
+        vi.stubEnv("MISMEM_CONSOLIDATION_MIN_EPISODES", raw);
+        expect(await run()).toBe(0);
+      }
+      vi.stubEnv("MISMEM_CONSOLIDATION_MIN_EPISODES", "2");
+      expect(await run()).toBeGreaterThan(0);
+    });
   });
 
   it("un ámbito chico que lleva tiempo quieto se consolida igual: si no, queda pendiente para siempre", async () => {
@@ -572,7 +611,7 @@ describe("runConsolidation", () => {
     });
 
     expect(distillFn).toHaveBeenCalledTimes(1);
-    expect(distillFn.mock.calls[0][2]).toContain("usar pnpm, no npm");
+    expect(distillFn.mock.calls[0]?.[2]).toContain("usar pnpm, no npm");
     expect(summary.episodes_dropped_pareto_l0).toBe(1);
     const row = db.prepare("SELECT m.gist FROM episodes e JOIN memories m ON m.id = e.consolidated_into WHERE e.id = ?").get(fact) as { gist: string };
     expect(row.gist).toBe("Se usa pnpm en vez de npm");

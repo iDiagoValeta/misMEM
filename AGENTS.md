@@ -1,4 +1,6 @@
-# Copilot Instructions — misMEM
+# AGENTS.md — misMEM
+
+Convenciones para cualquier agente (Claude Code vía `CLAUDE.md`, Copilot, opencode) y para quien contribuya.
 
 Sistema de memoria persistente con MCP (3 capas: episodes → memories → traits).
 
@@ -17,11 +19,12 @@ Sistema de memoria persistente con MCP (3 capas: episodes → memories → trait
 - IDs: ULID (libreria `ulid`)
 - DB: better-sqlite3 sincrónico, todo dentro de `db.transaction(() => ...)`
 - Comentarios solo PARA QUÉ, nunca QUÉ
-- Nombres y código en inglés; mensajes de log/UI en español
+- Identificadores, claves JSON y comentarios nuevos o reescritos en inglés (los comentarios en español que ya existen no se traducen en masa); mensajes de cara al usuario (errores, logs, ayuda del CLI, UI) en español; documentación en Markdown en español; commits en Conventional Commits en inglés
 
 ## Esquema (resumen)
 - `episodes(id, scope, body, created_at, consolidated_into, content_hash, uncited_count)` — verbatim, body NO `text`
-- `memories(id, scope, gist, details, source_episode_ids JSON, salience, created_at, last_accessed_at, salience_updated_at)`
+- `memories(id, scope, gist, details, source_episode_ids JSON, salience, created_at, last_accessed_at, salience_updated_at, use_count)`
+- `co_use(memory_a, memory_b, n, last_at)` — índice hebbiano: pares que se usaron en el mismo turno, sólo lo escribe `reinforce`
 - `memory_embeddings(memory_id, model, dims, vec BLOB, created_at)` — un vector por memoria
 - `traits(id, scope, name, evidence_memory_ids JSON, strength, polarity, created_at, updated_at)`
 - FTS5 virtual: `episodes_fts(body)`, `memories_fts(gist, details)`, `traits_fts(name)`
@@ -37,7 +40,7 @@ Sistema de memoria persistente con MCP (3 capas: episodes → memories → trait
 ## Reglas de seguridad
 - **NUNCA** leer/editar `.env*`. Tampoco mostrar secrets en respuestas
 - **NUNCA** ejecutar `git push --force`, `git reset --hard`, `Remove-Item -Recurse` sin pedir
-- **NUNCA** modificar `schema.ts` sin migration plan (rompe DB en producción)
+- **NUNCA** modificar `engine/src/db.ts` (el `SCHEMA` y las migraciones aditivas) sin migration plan (rompe DB en producción)
 - Validar inputs en bordes (Zod en MCP handlers, ya hecho)
 
 ## Flujo de trabajo típico

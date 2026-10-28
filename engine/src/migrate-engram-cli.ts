@@ -11,16 +11,10 @@
  * Idempotente: usa hash determinístico como id-prefix → si re-corres, salta dups.
  */
 import Database from "better-sqlite3";
-import { ulid } from "ulid";
 import { createHash } from "node:crypto";
 import { openDefaultDb, defaultDbPath } from "./db.js";
-
-interface Args {
-  source: string;
-  dryRun: boolean;
-  scopePrefix: string;
-  help: boolean;
-}
+import { ArgsError, EXIT_USAGE } from "./cli-args.js";
+import { parseMigrateEngramArgs } from "./migrate-engram-args.js";
 
 interface ObsRow {
   id: number;
@@ -50,24 +44,12 @@ interface PromptRow {
   created_at: string;
 }
 
-function parseArgs(argv: string[]): Args {
-  const out: Args = { source: "", dryRun: false, scopePrefix: "engram", help: false };
-  for (let i = 0; i < argv.length; i++) {
-    const a = argv[i];
-    if (a === "--help" || a === "-h") out.help = true;
-    else if (a === "--dry-run") out.dryRun = true;
-    else if (a === "--source") out.source = argv[++i] ?? "";
-    else if (a === "--scope-prefix") out.scopePrefix = argv[++i] ?? out.scopePrefix;
-  }
-  return out;
-}
-
 function help(): void {
   console.log(`mismem-migrate-engram
 
 Migra una DB de engram (sessions/observations/user_prompts) a mismem episodes.
 
-Usage:
+Uso:
   mismem-migrate-engram --source /path/engram.db [opciones]
 
 Opciones:
@@ -76,7 +58,7 @@ Opciones:
   --dry-run                Mostrar conteo sin escribir
   --help
 
-Env:
+Variables:
   MISMEM_DB                target DB (default ${defaultDbPath()})
 `);
 }
@@ -87,9 +69,9 @@ function epochMs(iso: string): number {
 }
 
 function deterministicId(salt: string): string {
-  // ULID es time-ordered + random; para idempotencia usamos hash → 26 chars base32.
+  // ULID is time-ordered + random; idempotence here needs a stable hash instead.
   const hash = createHash("sha256").update(salt).digest();
-  // Tomamos 16 bytes y los codificamos a base32 (Crockford simplified).
+  // 26 hash bytes, one per character, each reduced mod 32 to index the alphabet.
   const alphabet = "0123456789ABCDEFGHJKMNPQRSTVWXYZ";
   let out = "";
   for (let i = 0; i < 26; i++) {
@@ -105,11 +87,24 @@ function buildScope(prefix: string, project: string | null | undefined, suffix?:
 }
 
 async function main(): Promise<void> {
-  const opts = parseArgs(process.argv.slice(2));
-  if (opts.help || !opts.source) {
+  let opts: ReturnType<typeof parseMigrateEngramArgs>;
+  try {
+    opts = parseMigrateEngramArgs(process.argv.slice(2));
+  } catch (err) {
+    if (!(err instanceof ArgsError)) throw err;
+    console.error(`[migrate] ${err.message}\n`);
     help();
-    if (!opts.source && !opts.help) process.exit(2);
+    process.exit(EXIT_USAGE);
+  }
+  if (opts.help) {
+    help();
     return;
+  }
+  // Falta de un argumento obligatorio es error de uso, igual que dárselo sin valor.
+  if (!opts.source) {
+    console.error("[migrate] falta --source (ruta a engram.db)\n");
+    help();
+    process.exit(EXIT_USAGE);
   }
 
   const src = new Database(opts.source, { readonly: true });
@@ -128,11 +123,11 @@ async function main(): Promise<void> {
 
   const prompts = src.prepare(`SELECT id, content, project, created_at FROM user_prompts`).all() as PromptRow[];
 
-  console.log(`[migrate] source: ${opts.source}`);
-  console.log(`[migrate] observations=${observations.length} sessions(w/summary)=${sessions.length} prompts=${prompts.length}`);
+  console.log(`[migrate] origen: ${opts.source}`);
+  console.log(`[migrate] observaciones=${observations.length} sesiones(con resumen)=${sessions.length} prompts=${prompts.length}`);
 
   if (opts.dryRun) {
-    console.log("[migrate] dry-run, exit");
+    console.log("[migrate] dry-run, saliendo");
     src.close();
     dst.close();
     return;
@@ -172,15 +167,13 @@ async function main(): Promise<void> {
   });
 
   tx();
-  console.log(`[migrate] DONE inserted=${inserted} skipped(dups)=${skipped}`);
-  // ULID variable noted to silence unused import warning.
-  void ulid;
+  console.log(`[migrate] HECHO insertados=${inserted} omitidos(duplicados)=${skipped}`);
 
   src.close();
   dst.close();
 }
 
 main().catch((err) => {
-  console.error("[migrate] FATAL:", err instanceof Error ? err.message : err);
+  console.error("[migrate] ERROR:", err instanceof Error ? err.message : err);
   process.exit(1);
 });

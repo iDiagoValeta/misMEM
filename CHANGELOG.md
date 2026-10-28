@@ -4,24 +4,152 @@
 
 ### El conectoma se puede mirar
 
-- `/api/graph?co_use=1` suma la **capa lateral**: aristas memoria ↔ memoria. Las que ya había
-  (`origin`, `evidence`) son verticales y van siempre hacia arriba —episodio → memoria → rasgo—;
-  el co-uso es la única horizontal, y es la que dice qué se usa junto con qué. Sin el parámetro
-  la respuesta no cambia en nada: verificado byte a byte sobre una copia de producción, porque
-  es el contrato que ya consume la interfaz.
+- `/api/graph?co_use=1` suma una segunda capa lateral. La que ya había, `?related=1`, une memorias
+  **parecidas**: sale de lo que cada una dice. Esta sale de lo que **pasó**: qué recuerdos usó junto
+  un mismo turno. Las dos juntas valen más que cada una —parecidas que nunca se usan juntas son
+  candidatas a que una reemplace a la otra— pero eso es otra entrada.
 - El peso **no** es el conteo crudo, es NPMI. Un recuerdo que se usa en todos los turnos co-ocurre
   con todo, así que por conteo sería el centro del grafo sin orientar a nada: el mismo error de la
-  saliencia midiendo recencia. Con NPMI, 0 significa "indistinguible del azar" y 1 "nunca aparecen
-  separados". Hay un test que construye el caso y falla si se ordena por grado.
-- Hacía falta un denominador y no existía: `meta` guarda el total de turnos de uso medido, y se
-  suma dentro de la misma transacción que los conteos para que no quede desfasado.
+  saliencia midiendo recencia. Con NPMI, 0 es "indistinguible del azar" y 1 "nunca aparecen
+  separados". Hay un test que construye el caso y falla si el ranking se ordena por grado;
+  comprobado mutando el comparador.
+- Hacía falta un denominador y no existía: la tabla `meta` guarda el total de turnos de uso medido,
+  y se suma dentro de la misma transacción que los conteos de `co_use` para que no pueda quedar
+  desfasado. Migración aditiva.
 - Con pocos datos la fuerza es ruido por construcción —dos recuerdos usados una sola vez, esa vez
-  juntos, dan 1—, así que las aristas viajan con su `n`, el resumen informa el tamaño de la
-  muestra y `?co_use_min_n=k` filtra. Nada se esconde.
-- Sobre la copia de producción: migración en 18 ms, `integrity_check` y `foreign_key_check` ok,
-  3.805 memorias y 216 rasgos intactos, y **las seis aristas existentes dan fuerza 0** porque el
-  contador nace ahora. Es correcto: son turnos que nadie midió, y el 0 dice "no sé" en vez de
-  inventar un número.
+  juntos, dan 1—, así que cada arista viaja con su `n`, `?co_use_min_n=k` filtra por soporte y el
+  resumen informa el tamaño de la muestra. Los costados de la interfaz tienen que poder decir "esto
+  todavía no significa nada" en vez de pintar ruido.
+- Sin el parámetro la respuesta no cambia: las aristas verticales no reciben campos nuevos y hay un
+  test que compara las dos respuestas.
+- Sobre copia de producción: migración en 18 ms, `integrity_check` y `foreign_key_check` ok, 3.805
+  memorias y 216 rasgos intactos, y las seis aristas existentes dan fuerza 0 porque el contador nace
+  ahora. Es correcto: son turnos que nadie midió, y 0 dice "no sé" en vez de inventar un número.
+
+
+### Linter con Biome, y fuera las directivas de ESLint que no hacían nada
+
+- No había linter ni formateador. Ahora Biome 2 es el único, sólo como linter: `pnpm lint` y un step
+  de CI justo después de `pnpm dup`. El formato no se toca a propósito. `biome.json` limita el
+  análisis a `src/`, `ui/src/` y `tests/` en TypeScript, y deja fuera `ui/src/components/ui`, que es
+  shadcn vendorizado, además de CSS, JSON y fixtures.
+- Las cinco directivas de supresión de ESLint no desactivaban nada: cuatro `no-console` en
+  `server-http.ts` y `used-cli.ts`, y un `no-explicit-any` en `viewer-api.test.ts`. Ese `any`
+  escondía dos huecos: el mock no implementa `ServerResponse` y el cuerpo de la respuesta no tenía
+  tipo. Ahora el mock se ensancha una sola vez al pasarlo al handler y el cuerpo tiene `ApiBody`.
+- Reglas recomendadas desactivadas, todas por patrones deliberados del repo: `noNonNullAssertion`
+  (los guardas y los tests afirman con `!` justo después de comprobar longitud o nulidad; reescribir
+  los 24 usos serían cambios cosméticos), `useSemanticElements` (los roles `search`, `group` y
+  `meter` son ARIA válido sobre elementos con estilos; cambiarlos por `fieldset`, `meter` o
+  `search` cambiaría el marcado y el CSS sin arreglar nada) y `noAutofocus` (el formulario de
+  edición enfoca el campo al abrirse). `useExhaustiveDependencies` sigue activa pero no avisa de
+  dependencias de más: `GraphView` repite `size.width` a propósito para reaplicar el estado cuando
+  el canvas termina de montarse. `biome.json` es JSON estricto y Biome no acepta comentarios ahí,
+  así que el porqué queda en esta entrada.
+- Los errores que sí eran defectos, arreglados: ocho `let` sin tipo en los CLI y el `entries` de
+  `walk.ts`, tres `return` que devolvían un `void` en `viewer-static.ts`, la comprobación de
+  `content-type` sin cadena opcional en `http-body.ts`, un `break` con etiqueta que no hacía nada en
+  `consolidation/run.ts`, los `any` de los tests y las claves por índice de los esqueletos de carga.
+
+### Errores, claves y ayudas en el idioma del producto
+
+- Los errores que ven un cliente MCP o el viewer salían en inglés (`Unknown tool`, `not found`,
+  `is required`, `invalid layer`) mientras el resto del producto responde en español. Ahora están en
+  español, con el mismo contenido y el mismo código de estado.
+- La confirmación de olvido mezclaba claves en los dos idiomas (`impacto`, `memorias_que_cita`,
+  `rasgos_que_la_citan`, `episodios`). Pasan a `impact`, `memories_cited`, `traits_citing` y
+  `episodes`; la UI y los tests leen las nuevas claves.
+- Las ayudas de `mismem-consolidate`, `mismem-forget`, `mismem-stats`, `mismem-migrate-engram`,
+  `mismem-obsidian` y `mismem-embed` usan los encabezados `Uso:` y `Variables:`, y la de
+  `mismem-ingest`, que estaba entera en inglés, también está en español. Los encabezados de las ayudas
+  pasan a `misMEM: CLI de ...`, el progreso de `mismem-migrate-engram` y la cabecera de `mismem-stats`
+  están traducidos, y los fallos de todos los CLIs salen con el prefijo `ERROR:` en vez de `FATAL:` o
+  `Error:`. Los flags y lo que hace cada comando no cambian.
+- El servidor HTTP responde en español el 415 de `/mcp`, el error de parseo de JSON-RPC (mismo
+  `-32700`), las acciones y endpoints desconocidos y los 404, también los del viewer. Los códigos de
+  estado, los identificadores y los nombres de tools no cambian.
+
+### Una conversación de ChatGPT sin texto no se importa
+
+- `ingestChatGPTExport` decidía si saltarse una conversación mirando la cadena ya montada, y
+  `flattenConversation` siempre emite la cabecera `# título` y `Created:`. Una conversación con
+  todos los mensajes vacíos o de sistema se importaba como un episodio con sólo título y fecha.
+  Ahora la decisión se toma sobre los mensajes con texto y esa conversación cuenta como `skipped`.
+
+### Una sola versión, y comprobada
+
+- La versión estaba escrita a mano en `engine/package.json`, `server.json` (dos campos) y
+  `engine/src/server-core.ts`, y nada comparaba las cuatro. Un release podía anunciar por MCP una
+  versión distinta de la publicada. Ahora `server-core.ts` lee `engine/package.json` al cargarse
+  (`createRequire`, que funciona igual desde `src/` con tsx que desde `dist/`), y `tests/version.test.ts`
+  falla si el `serverInfo` que ve un cliente MCP o cualquiera de los dos campos de `server.json` deja de
+  coincidir con el paquete.
+- `DEPLOY.md` recuerda que los tags van anotados (`git tag -a vX.Y.Z -m 'misMEM X.Y.Z'`).
+
+### Higiene del repositorio: reportar en privado, dependencias y secretos
+
+- `SECURITY.md` dice cómo reportar una vulnerabilidad en privado (GitHub Private Vulnerability
+  Reporting), que sólo la última versión publicada recibe arreglos y qué cuenta como
+  vulnerabilidad acá: la autenticación del modo HTTP, y esa DB que tiene toda la memoria. Antes
+  no había ningún canal privado, así que el reporte terminaba en un issue público.
+- Las convenciones pasan de `.github/copilot-instructions.md` a `AGENTS.md`, que leen todos los agentes (Claude Code a través de `CLAUDE.md`, que lo importa); el fichero de Copilot desaparece.
+  `install.sh` configura Claude Code y opencode, y hasta ahora sólo Copilot cargaba esas
+  convenciones: los otros dos agentes trabajaban sin ellas.
+- `.github/dependabot.yml` saca la actualización de dependencias de la mano de nadie: npm en
+  `engine/` (minor y patch agrupados en un PR), los actions, que están fijados por SHA y sin
+  esto no se mueven nunca, y el `node:22-alpine` del Dockerfile.
+- El job `secret-scan` de CI corre gitleaks sobre todos los commits en cada PR y en cada push a
+  `main`, con la imagen fijada por digest. Nada buscaba una clave commiteada antes de que llegara
+  a `main`.
+- `.gitignore` cubre `*.db-journal`, el diario que SQLite deja al lado de la DB cuando no
+  trabaja en modo WAL.
+
+### Ningún CLI se traga un flag mal escrito
+
+- `mismem-embed`, `mismem-bench`, `mismem-stats` y `mismem-migrate-engram` ignoraban los flags que no
+  entendían: un `--scop daimon` reindexaba o contaba todos los ámbitos, un `--jsn` dejaba la salida en
+  texto, un `--dryrun` migraba de verdad y un `--batch abc` caía al valor por defecto. `mismem-ingest`
+  hacía lo mismo con los posicionales de más. Ahora cada uno parsea en su `<cli>-args.ts`, como
+  `consolidate` y `forget`, y un flag o posicional inesperado corta con `argumento desconocido: <x>` y
+  exit 64. Un valor ausente (`--scope`, `--batch`, `--limit`, `--source`) también corta, un posicional
+  de ingest en blanco cuenta como ausente, y un subcomando de `mismem-ingest` que no existe se rechaza
+  en vez de imprimir la ayuda.
+- `mismem-stats` abría la base y, si una consulta fallaba, moría con la base abierta y sin mensaje.
+  Ahora la cierra en un `finally` y el fallo sale por stderr como `[stats] FATAL: ...` con exit 1.
+
+### La imagen y el paquete dejan de arrastrar lo que no usan
+
+- Sin `engine/.dockerignore`, un `docker build` local mandaba al daemon `node_modules`, `dist`,
+  `coverage` y cualquier `.db` que hubiera en `engine/`. El Dockerfile no los usa: sólo copia
+  `package.json`, `pnpm-lock.yaml`, `pnpm-workspace.yaml`, `tsconfig.json`, `src` y `ui`.
+- Las dos etapas fijaban la base por tag (`node:22-alpine`), así que un rebuild meses después
+  compilaba contra otra Alpine sin que nadie tocara el repositorio, y `better-sqlite3` es nativo.
+  Ahora van por digest, con el tag legible al lado.
+- La etapa runtime copiaba `node_modules` entero, con vite, typescript, react y vitest dentro de una
+  imagen que sólo ejecuta `dist/server-http.js`. Tras `pnpm build` se hace `pnpm prune --prod`;
+  `better-sqlite3` es dependencia de producción y se queda (probado con `docker build`).
+- El paquete npm declaraba `MIT` sin llevar el texto de la licencia. `engine/LICENSE` es copia
+  literal de la raíz y entra en `files`. En CI, `cmp LICENSE engine/LICENSE` falla si se separan, y
+  hadolint revisa el Dockerfile con la imagen fijada por digest.
+
+### `mismem-http` escucha sólo en loopback por defecto
+
+- Sin `MISMEM_AUTH_*`, el servidor escuchaba en `0.0.0.0` y la guarda de `Host` sólo frena el
+  DNS rebinding del navegador: cualquier cliente de la LAN puede mandar `Host: localhost`. Ahora el
+  valor por defecto de `MISMEM_HTTP_HOST` es `127.0.0.1`. Para mantener el comportamiento anterior,
+  `MISMEM_HTTP_HOST=0.0.0.0` junto con `MISMEM_AUTH_USER` y `MISMEM_AUTH_PASS`. Los contenedores no
+  cambian: el Dockerfile y el ejemplo de compose ya fijan `0.0.0.0`.
+- El fichero SQLite, con toda la memoria, se creaba con el umask por defecto. Ahora queda en `0600`
+  (y sus `-wal` y `-shm`), y el directorio, si lo crea mismem, en `0700`. Un directorio que ya existía
+  no se toca.
+
+### Fuera el código muerto
+
+- Se retiran `src/tools/dump-engram.ts`, `ingest-engram-dump.ts` y `smoke-recall.ts`: scripts de una sola vez
+  que nada importaba ni documentaba, pero se compilaban dentro del paquete npm, y uno apagaba la
+  verificación TLS antes de mandar la cabecera `Authorization`. Para migrar desde Engram sigue
+  `mismem-migrate-engram`, que lee un `engram.db`. `ENGRAM_URL` y `ENGRAM_AUTH` salen de `.env.example`.
+- `pnpm knip` corre en CI: falla con ficheros, exports o dependencias sin uso.
 
 ### El índice hebbiano empieza a existir
 
@@ -40,8 +168,7 @@
 - Migración aditiva, verificada sobre copia de la DB de producción: 15 ms, `integrity_check` y
   `foreign_key_check` ok, 3.738 memorias y 216 rasgos intactos. Los pares se van por cascada
   cuando el recuerdo se borra.
-- Para qué: es la fase 1 del ordenador de memoria, diseñado en
-  [docs/superpowers/specs/2026-10-27-ordenador-memoria-design.md](docs/superpowers/specs/2026-10-27-ordenador-memoria-design.md).
+- Para qué: es la fase 1 del ordenador de memoria.
 
 ### El refuerzo por uso ve lo que la inyección adelantó
 
@@ -70,7 +197,7 @@
 - La consolidación acepta OpenAI y cualquier servidor compatible desde #67, y tanto los
   componentes como la sección de privacidad hablaban sólo de DeepSeek y OpenRouter. Importa
   porque es lo que permite consolidar sin que el texto salga de la red propia.
-- Una sección para el índice hebbiano y un enlace al diseño del ordenador de memoria.
+- Una sección para el índice hebbiano.
 - El README y DEPLOY.md mandaban a `docker pull ghcr.io/lucasmella-stack/mismem-brain:latest` como
   camino recomendado, y esa imagen **nunca se publicó**: las tres corridas de `docker.yml` fallan
   al empujar con `denied: permission_denied: read_package`, así que el `pull` responde `denied`.
@@ -79,6 +206,45 @@
 - Una sección de agradecimiento con lo que trajo [@iDiagoValeta](https://github.com/iDiagoValeta),
   que a esta altura es buena parte de lo que hace a misMEM instalable y auditable por alguien que
   no sea su autor.
+
+### La memoria se puede exportar como bóveda de Obsidian
+
+- `mismem-obsidian` escribe la memoria como bóveda en `<bóveda>/misMEM/`: una nota por memoria,
+  rasgo y ámbito, enlazadas por origen y por parecido.
+- Re-exportar sólo borra las notas cuyo frontmatter sigue declarando el id del manifiesto, y se
+  niega si la base no tiene nada que exportar o el manifiesto no se puede leer: así una bóveda
+  migrada a mano no se vacía por error.
+
+### La interfaz deja de ser de sólo lectura
+
+- UI React con shadcn y TanStack Query: listas, detalle, grafo 2D con filtros y búsqueda dentro
+  del grafo.
+- `viewer-actions.ts` expone POST desde el propio origen para corregir una memoria, deshacer su
+  consolidación, cristalizar y lanzar una consolidación.
+- Olvidar una memoria (con sus episodios) o un rasgo exige `MISMEM_VIEWER_ALLOW_DELETE=1` y dos
+  pasos: el primero devuelve qué se perdería y un token de 60 s, y borra el segundo.
+
+### La búsqueda léxica rescata paráfrasis
+
+- Sin capa semántica, una consulta estricta (todas las palabras) que no encontraba nada dejaba
+  fuera la paráfrasis que sí estaba. Ahora `recall` reintenta con una consulta OR y conserva sólo
+  los candidatos que comparten al menos dos términos informativos (una con una consulta de una
+  palabra, el 30 % en las largas), con un tope de 3 por capa (rasgos, episodios y memorias).
+- El rescate sólo entra cuando la estricta no devolvió nada y no hay vectores comparables que
+  puntuar, para no alterar una búsqueda que ya funcionaba.
+
+### Instalación en Linux con un solo script
+
+- `scripts/install.sh` instala y configura misMEM: elige dónde vive la DB y con qué proveedor
+  consolidar, guarda la clave en `~/.config/mismem/env` con permisos 600 y deja los clientes
+  llamando a `~/.local/bin/mismem-run`, sin credenciales en su configuración.
+
+### El servidor HTTP se protege sin auth
+
+- `MISMEM_ALLOWED_HOSTS`: sin auth, sólo se atienden `Host` de loopback y el resto responde 403,
+  contra DNS rebinding.
+- `MISMEM_HTTP_MAX_BODY_BYTES`: `POST /mcp` corta el cuerpo en 4 MiB con 413 sin juntarlo en
+  memoria, y un `Content-Type` que no es JSON responde 415 antes de leer.
 
 ## 0.5.0 — 2026-10-23
 

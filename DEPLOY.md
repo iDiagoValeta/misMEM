@@ -17,7 +17,7 @@ Cliente MCP (VS Code / Claude Code / Claude Desktop / agente)
  mismem-brain :3200  ──  SQLite en volumen `mismem-data`
         │
         ├──▶ servidor de embeddings (opcional, red interna): Ollama o llama-server
-        └──▶ LLM de consolidación (opcional, sale a internet): DeepSeek u OpenRouter
+        └──▶ LLM de consolidación (opcional): DeepSeek, OpenRouter, OpenAI o un servidor compatible
 ```
 
 - Transporte: **Streamable HTTP** (stateless: server+transport por request).
@@ -68,7 +68,8 @@ El workflow `docker.yml` corre al pushear un tag `v*` y publica
 sólo desde el tag estable más alto, `latest`. Una pre-release (`v1.0.0-rc1`) nunca
 se lleva `latest`, y un tag puesto en retrospectiva tampoco: así un `v0.4.0` tardío
 no publica el árbol viejo encima del último release. Para republicar sin mover el
-tag, `workflow_dispatch` sobre el tag que corresponda.
+tag, `workflow_dispatch` sobre el tag que corresponda; lanzado desde una rama falla
+al arrancar, para no publicar código sin release.
 
 **Si el push a GHCR falla con `denied: permission_denied: read_package`**, el paquete
 existe pero no le da escritura a este repositorio. El workflow ya declara
@@ -78,7 +79,7 @@ Actions access* → agregar el repositorio `misMEM` con rol **Write**. Después,
 relanzar el workflow con `workflow_dispatch` sobre el tag; no hace falta re-taggear.
 
 El paquete npm `@lucasmella/mismem` se publica a mano (`pnpm publish` desde `engine/`):
-no hay workflow que lo haga.
+no hay workflow que lo haga. Tags anotados: `git tag -a vX.Y.Z -m 'misMEM X.Y.Z'`.
 
 ---
 
@@ -211,8 +212,15 @@ docker start mismem-brain
 docker logs --tail 20 mismem-brain
 ```
 
-Alternativa: exportar desde otra fuente a JSONL e ingestar con
-`node dist/ingest-cli.js` (soporta exports de ChatGPT y transcripts de VS Code).
+Alternativa: ingestar un export de ChatGPT (el directorio con los
+`conversations-*.json`) o los transcripts de VS Code dentro del contenedor:
+
+```bash
+docker cp <export-root> mismem-brain:/tmp/chatgpt
+docker exec mismem-brain node dist/ingest-cli.js chatgpt /tmp/chatgpt
+docker cp <user-dir> mismem-brain:/tmp/vscode
+docker exec mismem-brain node dist/ingest-cli.js vscode /tmp/vscode
+```
 
 ---
 
@@ -300,10 +308,11 @@ El banco es privado: no lo subas a ningún repo.
 - La base vive en el volumen del servidor y no sale de ahí.
 - El servidor de embeddings recibe el texto de cada memoria y de cada consulta:
   por eso va en la red interna.
-- **La consolidación manda episodios textuales a un tercero** (DeepSeek, u
-  OpenRouter y el proveedor que haya detrás): hasta 60.000 caracteres por
-  llamada, con el nombre del ámbito. Es opcional: sin `DEEPSEEK_API_KEY` ni
-  `OPENROUTER_API_KEY` no corre.
+- **La consolidación manda episodios textuales a un proveedor externo**
+  (DeepSeek, OpenRouter u OpenAI) o al servidor compatible que configures:
+  hasta 60.000 caracteres por llamada, con el nombre del ámbito. Es opcional:
+  sin `DEEPSEEK_API_KEY`, `OPENROUTER_API_KEY`, `OPENAI_API_KEY` ni
+  `MISMEM_LLM_BASE_URL` no corre.
 
 ---
 
@@ -318,9 +327,10 @@ Los defaults son los del código (`engine/src`).
 |-----|---------|-------------|
 | `MISMEM_DB` | `~/.mismem/mem.db` (en la imagen: `/data/mem.db`) | Ruta SQLite |
 | `MISMEM_HTTP_PORT` | `3200` | Puerto HTTP |
-| `MISMEM_HTTP_HOST` | `0.0.0.0` | Bind address |
+| `MISMEM_HTTP_HOST` | `127.0.0.1` | Bind address. Por defecto sólo loopback; los contenedores fijan `0.0.0.0` a propósito (Dockerfile y ejemplo de compose), y con esa dirección conviene definir `MISMEM_AUTH_*` |
 | `MISMEM_ALLOWED_HOSTS` | — | Sin auth, el servidor sólo atiende `Host` de loopback (`localhost`, `127.0.0.1`, `[::1]`, `*.localhost`) y responde 403 al resto, contra DNS rebinding. Lista separada por comas para añadir otros nombres. Con auth no se filtra |
 | `MISMEM_HTTP_MAX_BODY_BYTES` | `4194304` (4 MiB) | Tope del cuerpo de `POST /mcp`; más grande responde 413 sin juntarlo en memoria |
+| `MISMEM_VIEWER_ALLOW_DELETE` | apagado | `1` deja que la interfaz olvide memorias y rasgos, siempre en dos pasos con confirmación. Apagado, esos dos POST responden 403; corregir, deshacer una consolidación y cristalizar no dependen de él |
 | `MISMEM_AUTH_USER` / `MISMEM_AUTH_PASS` | — | BasicAuth nativa. Sin ninguna, **sin auth**; con una sola, el servidor no arranca |
 | `MISMEM_SALIENCE_HALF_LIFE_DAYS` | `90` | Días en que una memoria sin uso pierde la mitad de su saliencia |
 | `MISMEM_REINFORCE_ON_RECALL` | `on` | `off` deja de reforzar lo que el recall devuelve; la saliencia pasa a subir sólo con `reinforce`. Ver "Refuerzo por uso" |
@@ -347,6 +357,20 @@ Los defaults son los del código (`engine/src`).
 | `MISMEM_HOOK_TIMEOUT_MS` | `2500` | Espera por la búsqueda; si vence, no inyecta nada |
 
 `MISMEM_HOOK_URL` y `MISMEM_HOOK_AUTH` las comparten los dos hooks.
+
+**Envoltorio de los hooks (`scripts/mismem-hook.sh`)**
+
+| Var | Default | Descripción |
+|-----|---------|-------------|
+| `MISMEM_HOOK_CONFIG` | `~/.claude.json` | Config MCP del cliente de donde saca la URL y el `Authorization`. Acepta config global o por proyecto |
+| `MISMEM_HOOK_SERVER` | `mismem` | Nombre del servidor MCP dentro de esa config |
+| `MISMEM_DIST` | `<repo>/engine/dist` | Binarios que invoca el envoltorio |
+
+**Interfaz en desarrollo (`pnpm dev:ui`)**
+
+| Var | Default | Descripción |
+|-----|---------|-------------|
+| `MISMEM_DEV_API` | `http://127.0.0.1:3200` | Destino del proxy `/api` de Vite mientras la interfaz corre fuera de `server-http` |
 
 **Búsqueda por significado**
 
@@ -400,9 +424,9 @@ Los defaults son los del código (`engine/src`).
 ## Refuerzo por uso (hook del cliente)
 
 Por defecto, `recall` refuerza todo lo que devuelve. Eso premia al recuerdo que aparece
-siempre y no sirve nunca: medido sobre 573 recuerdos devueltos en turnos reales, la
-mediana de solapamiento entre el recuerdo y la respuesta es **0,07**. La enorme mayoría
-de lo que se refuerza no se usó.
+siempre y no sirve nunca: en la medición de la 0.5.0, sobre 573 recuerdos devueltos en turnos
+reales de Claude Code, la mediana de solapamiento entre el recuerdo y la respuesta es
+**0,07**. La enorme mayoría de lo que se refuerza no se usó.
 
 Con el hook `Stop` de Claude Code, la saliencia pasa a seguir el uso real:
 
@@ -436,7 +460,8 @@ Mirá primero qué reforzaría, sin escribir nada:
 mismem-used --transcript ~/.claude/projects/<proyecto>/<sesión>.jsonl --dry-run
 ```
 
-**Con los umbrales por defecto cuenta como usado el 9 % de lo devuelto.** Es la señal que
+**Con los umbrales por defecto cuenta como usado el 9 % de lo devuelto (en la misma
+medición, sobre esos 573 casos).** Es la señal que
 se busca, pero cambia el balance con el olvido: si casi nada se refuerza, el decaimiento
 manda y `forget` empieza a borrar memorias que antes se salvaban por aparecer. Conviene
 dejar `MISMEM_REINFORCE_ON_RECALL=on` unos días, mirar los `--dry-run`, y recién después

@@ -14,10 +14,16 @@
 #   MISMEM_DB         (default /data/mem.db dentro del contenedor)
 
 # ---------- builder ----------
-FROM node:22-alpine AS builder
+# The digest pins the base image. With the tag alone, a rebuild months later would
+# silently pick another Alpine or Node release and recompile the native modules
+# against it.
+FROM node:22-alpine@sha256:fe4f6d74e20370acb04ad889077d14d0f64a9c8ea6a42bc60cddf1e844699914 AS builder
 WORKDIR /app
 
 # better-sqlite3 requiere build tools nativos (gyp + python + g++).
+# apk package versions stay unpinned on purpose: Alpine removes old revisions from
+# the repositories, so a pinned build would fail later with no change in this repo.
+# hadolint ignore=DL3018
 RUN apk add --no-cache python3 make g++
 
 COPY package.json pnpm-lock.yaml pnpm-workspace.yaml ./
@@ -27,13 +33,21 @@ RUN corepack enable \
 
 COPY tsconfig.json ./
 COPY src ./src
-RUN pnpm build
+# La interfaz se compila a dist/ui junto con el servidor.
+COPY ui ./ui
+# The runtime stage copies node_modules as it is, so drop the devDependencies here
+# (vite, typescript, react, vitest) instead of shipping them. better-sqlite3 is a
+# production dependency and stays. Same layer as the build to keep the layer count down.
+RUN pnpm build \
+ && pnpm prune --prod
 
 # ---------- runtime ----------
-FROM node:22-alpine AS runtime
+FROM node:22-alpine@sha256:fe4f6d74e20370acb04ad889077d14d0f64a9c8ea6a42bc60cddf1e844699914 AS runtime
 WORKDIR /app
 
 # sqlite CLI por si hace falta inspeccionar la DB; curl para healthcheck.
+# Unpinned for the same reason as the builder stage.
+# hadolint ignore=DL3018
 RUN apk add --no-cache sqlite curl tini \
  && mkdir -p /data \
  && chown -R node:node /data

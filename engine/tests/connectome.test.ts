@@ -16,8 +16,8 @@ function memory(gist: string): string {
   return consolidate(db, { scope: "test", gist, source_episode_ids: [episode.id] }).memory_id;
 }
 
-/** Un turno de uso medido: lo que el hook `Stop` manda cuando la respuesta usó recuerdos. */
-const turno = (...ids: string[]): void => {
+/** One turn of measured use: what the `Stop` hook sends when a reply used memories. */
+const turn = (...ids: string[]): void => {
   reinforce(db, { memory_ids: ids });
 };
 
@@ -34,13 +34,13 @@ describe("contador de turnos", () => {
   });
 
   it("cuenta un turno por cada uso medido, aunque sea de un solo recuerdo", () => {
-    // El denominador tiene que incluir los turnos de un recuerdo solo: si no,
-    // un recuerdo que se usa siempre solo parecería menos frecuente de lo que es.
+    // The denominator has to include single-memory turns: without them, a memory
+    // always used on its own would look rarer than it is.
     const a = memory("el deploy usa docker compose");
     const b = memory("el backup corre a las tres");
 
-    turno(a);
-    turno(a, b);
+    turn(a);
+    turn(a, b);
 
     expect(turnsRegistered(db)).toBe(2);
   });
@@ -66,8 +66,8 @@ describe("fuerza de asociación", () => {
   });
 
   it("es 0 cuando uno está en todos los turnos: saberlo no informa nada", () => {
-    // El caso del rich club: la identidad y el pacto se usan en todos los turnos,
-    // así que su co-uso con cualquier cosa es exactamente lo esperable por azar.
+    // The rich-club case: identity and the pact are used in every turn, so their
+    // co-use with anything is exactly what chance predicts.
     expect(associationStrength({ n: 5, useA: 10, useB: 5, turns: 10 })).toBeCloseTo(0, 5);
   });
 
@@ -83,17 +83,17 @@ describe("fuerza de asociación", () => {
 
 describe("el conteo crudo y la fuerza no dicen lo mismo", () => {
   it("el par con más co-usos no es el más fuerte", () => {
-    // H es el recuerdo que se usa en todos los turnos. X lo acompaña en la mitad.
-    // A y B se usan poco, pero nunca por separado.
+    // H is used in every turn; X joins it in half of them. A and B are used little,
+    // but never apart.
     const h = memory("hablamos en español y sin rodeos");
     const x = memory("el deploy usa docker compose");
     const a = memory("el bench corre con el embedder arriba");
     const b = memory("el banco de preguntas es privado");
 
-    for (let i = 0; i < 5; i++) turno(h, x);
-    for (let i = 0; i < 5; i++) turno(h);
-    turno(a, b);
-    turno(a, b);
+    for (let i = 0; i < 5; i++) turn(h, x);
+    for (let i = 0; i < 5; i++) turn(h);
+    turn(a, b);
+    turn(a, b);
 
     const hx = coUseEdges(db).find((e) => e.memory_a === (h < x ? h : x))!;
     expect(hx.n).toBe(5);
@@ -120,23 +120,23 @@ describe("aristas del conectoma", () => {
     const b = memory("el backup corre a las tres");
     const c = memory("el bench corre con el embedder arriba");
 
-    turno(a, b);
-    turno(a, b);
-    turno(a, c);
+    turn(a, b);
+    turn(a, b);
+    turn(a, c);
 
     expect(coUseEdges(db, { minN: 2 })).toHaveLength(1);
     expect(coUseEdges(db, { minN: 1 })).toHaveLength(2);
   });
 
   it("acotado a un conjunto de ids, no trae aristas que apunten afuera", () => {
-    // El grafo del viewer está recortado: una arista hacia un nodo que no se
-    // dibuja es una referencia colgada que rompe el render.
+    // The viewer graph is capped: an edge to a node nobody draws is a dangling
+    // reference that breaks the render.
     const a = memory("el deploy usa docker compose");
     const b = memory("el backup corre a las tres");
-    const afuera = memory("esto no entra en el grafo");
+    const outside = memory("esto no entra en el grafo");
 
-    turno(a, b);
-    turno(a, afuera);
+    turn(a, b);
+    turn(a, outside);
 
     const edges = coUseEdges(db, { ids: [a, b] });
     expect(edges).toHaveLength(1);
@@ -152,8 +152,8 @@ describe("aristas del conectoma", () => {
 
 describe("hubs", () => {
   it("ordena por fuerza sumada y no por cantidad de vecinos", () => {
-    // El que tiene más vecinos es el que se usa en todos los turnos, y es
-    // justamente el que no orienta a ninguno.
+    // The node with the most neighbours is the one used in every turn, which is
+    // precisely the one that orients nobody.
     const h = memory("hablamos en español y sin rodeos");
     const v1 = memory("el deploy usa docker compose");
     const v2 = memory("el backup corre a las tres");
@@ -161,9 +161,9 @@ describe("hubs", () => {
     const par1 = memory("el ordenador de memoria tiene tres fases");
     const par2 = memory("la fase dos espera datos de co-uso");
 
-    for (let i = 0; i < 4; i++) turno(h, v1, v2, v3);
-    for (let i = 0; i < 8; i++) turno(h);
-    for (let i = 0; i < 4; i++) turno(par1, par2);
+    for (let i = 0; i < 4; i++) turn(h, v1, v2, v3);
+    for (let i = 0; i < 8; i++) turn(h);
+    for (let i = 0; i < 4; i++) turn(par1, par2);
 
     const ranking = hubs(db);
     expect(ranking[0]?.id).not.toBe(h);

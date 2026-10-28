@@ -4,10 +4,18 @@ on:
   push:
     branches: [main]
   pull_request:
+  # Lets docker.yml run this exact suite before publishing an image: a tag must not
+  # ship code that the main CI would have rejected.
+  workflow_call:
+
+# Least privilege by default: nothing in here writes to the repo or to packages.
+permissions:
+  contents: read
 
 jobs:
   test:
     runs-on: ubuntu-latest
+    timeout-minutes: 15
     strategy:
       fail-fast: false
       matrix:
@@ -17,11 +25,14 @@ jobs:
       run:
         working-directory: engine
     steps:
-      - uses: actions/checkout@v4
-      - uses: pnpm/action-setup@v4
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          # No later step pushes, so the token does not need to stay in .git/config.
+          persist-credentials: false
+      - uses: pnpm/action-setup@b906affcce14559ad1aafd4ab0e942779e9f58b1 # v4.3.0
         with:
           package_json_file: engine/package.json
-      - uses: actions/setup-node@v4
+      - uses: actions/setup-node@49933ea5288caeca8642d1e84afbd3f7d6820020 # v4.4.0
         with:
           node-version: ${{ matrix.node-version }}
           cache: pnpm
@@ -29,4 +40,105 @@ jobs:
       - run: pnpm install --frozen-lockfile
       - run: pnpm typecheck
       - run: pnpm test
+      # Fails on unused files, exports and dependencies, so dead code cannot come back unnoticed.
+      - run: pnpm knip
+      # Copied blocks of 10+ lines in src/ and ui/src may not grow past 0.2%, today's level:
+      # the two left are in Detail.tsx, which #88 splits; then the threshold drops to 0.
+      - run: pnpm dup
+      # Biome lints src/, ui/src/ and tests/; formatting stays manual (see biome.json).
+      - run: pnpm lint
       - run: pnpm build
+
+  scripts:
+    # Nothing else parses the shell scripts, so a syntax error would only show up
+    # on a user's machine. shellcheck is limited to errors to avoid style noise.
+    runs-on: ubuntu-latest
+    name: shell-scripts
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          # No later step pushes, so the token does not need to stay in .git/config.
+          persist-credentials: false
+      - run: bash -n scripts/*.sh
+      - run: shellcheck --severity=error scripts/*.sh
+
+  packaging:
+    # The Dockerfile and the npm tarball are what people actually receive. A license
+    # that drifts from the root copy, or a Dockerfile the linter rejects, would
+    # otherwise only show up at publish time.
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          # No later step pushes, so the token does not need to stay in .git/config.
+          persist-credentials: false
+      # engine/LICENSE travels inside the npm tarball, so it must stay byte
+      # identical to the root one: the package declares MIT and has to ship that text.
+      - run: cmp LICENSE engine/LICENSE
+      # hadolint pinned by digest; a new rule set must not fail a build that did not
+      # change. The image is read from stdin because it is the Dockerfile, not the context.
+      - run: docker run --rm -i hadolint/hadolint:v2.14.0@sha256:27086352fd5e1907ea2b934eb1023f217c5ae087992eb59fde121dce9c9ff21e < engine/Dockerfile.mismem-brain
+
+  docker-build:
+    # A broken Dockerfile, or an image that builds but crashes at start, would otherwise only
+    # surface when a tag is pushed. Runs on pull requests and on main; inside the release gate
+    # (docker.yml calls this workflow on a tag) build-push builds the image right after.
+    # No registry login and no cache writes, so it needs nothing beyond contents: read.
+    if: ${{ !startsWith(github.ref, 'refs/tags/') }}
+    runs-on: ubuntu-latest
+    timeout-minutes: 30
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
+      - uses: docker/setup-buildx-action@8d2750c68a42422c14e847fe6c8ac0403b4cbd6f # v3.12.0
+      - uses: docker/build-push-action@10e90e3645eae34f1e60eeb005ba3a3d33f178e8 # v6.19.2
+        with:
+          context: engine
+          file: engine/Dockerfile.mismem-brain
+          # amd64 only: the arm64 emulated build is slow and is covered at release time.
+          platforms: linux/amd64
+          push: false
+          load: true
+          tags: mismem-brain:ci
+          cache-from: type=gha
+      # Building is not enough: start the container as a user would and wait for /healthz,
+      # which needs dist/, the production node_modules and the native better-sqlite3.
+      - name: smoke test the image
+        run: |
+          docker run -d --name mismem-ci -p 127.0.0.1:3200:3200 mismem-brain:ci
+          for _ in $(seq 1 30); do
+            if curl -fsS http://127.0.0.1:3200/healthz; then exit 0; fi
+            sleep 1
+          done
+          docker logs mismem-ci
+          exit 1
+
+  workflow-lint:
+    # Workflows run with our token, so lint them like code: actionlint for correctness,
+    # zizmor for security (unpinned actions, token scope, template injection). Both are
+    # pinned so a new release cannot fail a tag publish with no change in the repo.
+    runs-on: ubuntu-latest
+    timeout-minutes: 15
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          persist-credentials: false
+      - run: docker run --rm -v "$PWD:/repo" -w /repo rhysd/actionlint:1.7.7@sha256:887a259a5a534f3c4f36cb02dca341673c6089431057242cdc931e9f133147e9 -color
+      - run: pipx run zizmor==1.31.1 --min-severity medium .github/workflows
+
+  secret-scan:
+    # A leaked credential is only expensive once it ships, so scan every commit on each PR
+    # and push to main: a key added in one commit and deleted in the next still counts.
+    runs-on: ubuntu-latest
+    name: secret-scan
+    timeout-minutes: 10
+    steps:
+      - uses: actions/checkout@11d5960a326750d5838078e36cf38b85af677262 # v4.4.0
+        with:
+          # No later step pushes, so the token does not need to stay in .git/config.
+          persist-credentials: false
+          fetch-depth: 0
+      - run: docker run --rm -v "$PWD:/repo" zricethezav/gitleaks:v8.30.1@sha256:c00b6bd0aeb3071cbcb79009cb16a60dd9e0a7c60e2be9ab65d25e6bc8abbb7f git /repo --redact --no-banner

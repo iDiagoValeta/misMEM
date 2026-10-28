@@ -108,12 +108,11 @@ Y en `mcp.json`: `"command": "node", "args": ["<ruta-al-repo>/misMEM/engine/dist
 
 - **`engine/src/server.ts`** — MCP server stdio (uso local).
 - **`engine/src/server-http.ts`** — Streamable HTTP para deploy remoto (BasicAuth opcional, `/healthz`). Ver [DEPLOY.md](./DEPLOY.md).
-- **`engine/src/viewer.ts` + `engine/src/viewer-api.ts`** — panel read-only en `/viewer` y API de
-  sólo lectura: `/api/{stats,recent,search}` y, para ver de dónde sale cada recuerdo,
-  `/api/{scopes,memories,memory/:id,trait/:id,graph}`. La salience que devuelven es la efectiva,
-  con el decay aplicado a hoy, la misma que usa el recall.
+- **`engine/ui/`** — la interfaz (React + Vite, compilada a `dist/ui/`) que `server-http` sirve en `/viewer`: memorias por salience de hoy, rasgos, lo pendiente y de dónde sale cada recuerdo. `pnpm dev:ui` la levanta en desarrollo contra un servidor en `:3200`.
+- **`engine/src/viewer.ts`**, **`viewer-api.ts`** — su API de sólo lectura: `/api/{stats,recent,search,scopes,memories,graph}` y `/api/{memory,trait}/:id`. La salience que devuelven es la efectiva, con el decay aplicado a hoy, la misma que usa el recall.
+- **`engine/src/viewer-actions.ts`** — lo que la interfaz puede cambiar, sólo por POST JSON desde el propio origen: corregir una memoria, deshacer su consolidación, cristalizar y lanzar una consolidación. Olvidar una memoria (con sus episodios) o un rasgo no tiene vuelta atrás y está apagado salvo con `MISMEM_VIEWER_ALLOW_DELETE=1`; aun así va en dos pasos: el primer POST devuelve qué se perdería y un token de 60 s, y borra el segundo, el que lo trae.
 - **Consolidación LLM** — cron nocturno que destila episodios en memorias con DeepSeek, OpenRouter, OpenAI o cualquier servidor compatible, con pre-filtro Pareto para descartar ruido. Ver [engine/src/consolidation/README.md](engine/src/consolidation/README.md).
-- **CLIs** — `mismem-ingest` (exports de ChatGPT / transcripts de VS Code), `mismem-consolidate`, `mismem-forget`, `mismem-stats`, `mismem-embed`, `mismem-migrate-engram`, `mismem-bench` (mide el recall con un banco de preguntas propio, sin reforzar) y los dos hooks, `mismem-inject` y `mismem-used`.
+- **CLIs** — `mismem-http` (el mismo servidor HTTP que `pnpm start:http`), `mismem-ingest` (exports de ChatGPT / transcripts de VS Code), `mismem-consolidate`, `mismem-forget`, `mismem-stats`, `mismem-embed`, `mismem-migrate-engram`, `mismem-bench` (mide el recall con un banco de preguntas propio, sin reforzar), `mismem-obsidian` (escribe la memoria como bóveda de Obsidian en `<bóveda>/misMEM/`: una nota por memoria, rasgo y ámbito, enlazadas por origen y por parecido; re-exportar sólo borra las notas cuyo frontmatter sigue declarando el id del manifiesto, y se niega si la base no tiene nada que exportar o el manifiesto no se puede leer) y los dos hooks, `mismem-inject` y `mismem-used`.
 
 ## Stack
 
@@ -131,7 +130,7 @@ Y en `mcp.json`: `"command": "node", "args": ["<ruta-al-repo>/misMEM/engine/dist
 - ✅ Servidor Streamable HTTP + deploy Docker/Traefik.
 - ✅ Consolidación LLM nocturna (episodes → memories).
 - ✅ Índice hebbiano: `use_count` por recuerdo y `co_use` por par usado en el mismo turno.
-- ✅ Viewer read-only, con el origen de cada recuerdo y el grafo de la memoria, + CLIs de introspección.
+- ✅ Viewer con el origen de cada recuerdo y el grafo de la memoria, + CLIs de introspección.
 - ✅ Dedup en captura/ingesta (re-ingestar es idempotente).
 - ✅ Recall híbrido: FTS5 + búsqueda semántica opcional vía [Ollama](https://ollama.com) o cualquier servidor compatible con OpenAI.
 - ✅ Hooks opcionales de cliente: adelantar recuerdos antes de responder y reforzar los que se usaron.
@@ -145,7 +144,11 @@ default es Ollama (`ollama pull nomic-embed-text`). Los vectores se guardan
 como BLOB en la misma SQLite y la búsqueda es coseno en JS, sin extensiones
 nativas. Si el servidor no responde, todo degrada silenciosamente a FTS5 puro,
 que exige que estén **todas** las palabras de la consulta (sin contar las vacías:
-"qué", "sobre", "the"…). La semántica cubre deliberadamente
+"qué", "sobre", "the"…). Si esa consulta estricta no devuelve nada y no hay capa
+semántica, `recall` reintenta con una consulta OR y conserva sólo los candidatos
+que comparten al menos dos términos informativos (con una sola palabra basta una; en consultas
+largas, el 30 % de sus palabras), hasta 3 por capa. El rescate alcanza a rasgos, episodios y
+memorias, y no altera una búsqueda que ya encontró algo. La semántica cubre deliberadamente
 solo `memories`; `episodes` y `traits` conservan búsqueda FTS5. Backfill y
 reindexado: `mismem-embed` (`--status`, `--force`).
 
@@ -191,9 +194,7 @@ Hace falta porque `salience` mide recencia más que uso —la pasada de decay to
 todas las filas, así que ordenar por saliencia pone arriba lo nuevo, no lo
 importante—. Es la primera fase del *ordenador de memoria*, una capa derivada
 que compacta los aspectos principales para que el modelo sepa por dónde empezar
-sin tomar contexto. El diseño completo, con los papers y la evidencia medida,
-está en
-[docs/superpowers/specs/2026-10-27-ordenador-memoria-design.md](docs/superpowers/specs/2026-10-27-ordenador-memoria-design.md).
+sin tomar contexto.
 
 ### Hooks del cliente (opcional)
 
@@ -230,34 +231,12 @@ Inspirado en parte por *Initiation Into Hermetics* de Franz Bardon: el espejo qu
 
 ## Contribuir
 
-Issues y PRs bienvenidos. Antes de un PR: `pnpm typecheck && pnpm test` desde `engine/` (todo verde), commits convencionales (`feat:`, `fix:`, …). Las convenciones de código están en [.github/copilot-instructions.md](.github/copilot-instructions.md).
+Issues y PRs bienvenidos. Antes de un PR: `pnpm typecheck && pnpm test` desde `engine/` (todo verde), commits convencionales (`feat:`, `fix:`, …). Las convenciones de código están en [AGENTS.md](AGENTS.md).
 
 ## Gracias
 
 misMEM lo arrancó una persona sola, pero no siguió así.
-[**@iDiagoValeta**](https://github.com/iDiagoValeta) trajo buena parte de lo que
-hoy lo hace usable por alguien que no sea su autor:
-
-- **Instalación de un comando en Linux** ([`scripts/install.sh`](scripts/install.sh), #69):
-  detecta los clientes, deja la clave fuera de sus configuraciones y re-ejecutarlo
-  actualiza sin duplicar.
-- **Ver de dónde sale cada recuerdo** (#52): la API de sólo lectura con los ámbitos, el
-  origen de cada memoria, los rasgos que la citan y el grafo de la memoria entera.
-- **Consolidar con el proveedor que quieras** (#67): OpenAI y cualquier servidor
-  compatible, además de DeepSeek y OpenRouter. Es lo que permite consolidar sin que el
-  texto salga de tu red.
-- **Que el servidor HTTP no se abra por descuido** (#31, #33, #35): no arranca con la auth a
-  medias, sin auth sólo atiende loopback, y el cuerpo de `POST /mcp` corta en 4 MiB.
-- **Que no se pierda memoria por un descuido** (#37, #39, #50): una preferencia corta llega
-  al LLM en vez de caer como ruido, una tanda sin señal suma un strike en vez de condenar el
-  episodio, y cada llamada al LLM tiene un tope de tiempo.
-- **Que un flag mal escrito corte en vez de hacer otra cosa** (#42, #44), que con `forget`
-  es la diferencia entre un error y una purga.
-- **El hallazgo de que el refuerzo por uso no veía lo que la inyección adelantaba** (#48),
-  que es el bug que hacía que la saliencia no midiera nada.
-
-Las revisiones de sus PRs están abiertas en el repo a propósito: las mediciones y los
-desacuerdos valen tanto como el código.
+[**@iDiagoValeta**](https://github.com/iDiagoValeta) colaboró en su desarrollo de forma activa como muestra de su amor y apoyo incondicional hacia el Open-Source.
 
 ## Licencia
 

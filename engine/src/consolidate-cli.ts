@@ -5,11 +5,11 @@ import { ArgsError, EXIT_USAGE } from "./cli-args.js";
 import { parseConsolidateArgs } from "./consolidate-args.js";
 
 function help(): void {
-  console.log(`misMEM consolidate CLI
+  console.log(`misMEM: CLI de consolidación
 
 Destila episodios pendientes en memorias usando un LLM (DeepSeek, OpenRouter, OpenAI o compatible).
 
-Usage:
+Uso:
   mismem-consolidate [opciones]
 
 Opciones:
@@ -22,7 +22,7 @@ Opciones:
   --uncited-strikes <n>    Tandas en que el LLM puede ignorar un episodio antes de darlo por ruido (default 3)
   --help                   Esta ayuda
 
-Env:
+Variables:
   MISMEM_LLM_PROVIDER                   deepseek | openrouter | openai | compatible
                                         (sin ella, el primero con su variable, en ese orden)
   DEEPSEEK_API_KEY                      DeepSeek directo
@@ -45,7 +45,7 @@ Env:
 }
 
 async function main(): Promise<void> {
-  let opts;
+  let opts: ReturnType<typeof parseConsolidateArgs>;
   try {
     opts = parseConsolidateArgs(process.argv.slice(2));
   } catch (err) {
@@ -75,6 +75,6 @@ async function main(): Promise<void> {
 }
 
 main().catch((err) => {
-  console.error("[consolidate] FATAL:", err instanceof Error ? err.message : err);
+  console.error("[consolidate] ERROR:", err instanceof Error ? err.message : err);
   process.exit(1);
 });

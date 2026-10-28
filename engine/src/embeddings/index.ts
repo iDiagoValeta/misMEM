@@ -13,7 +13,7 @@
 import type { Database as DB } from "better-sqlite3";
 import { excludeNoiseSql } from "../noise.js";
 
-export type EmbeddingProvider = "ollama" | "openai";
+type EmbeddingProvider = "ollama" | "openai";
 export type EmbedKind = "query" | "document";
 
 export interface EmbeddingConfig {
@@ -111,7 +111,7 @@ export function saveMemoryEmbedding(
   ).run(memoryId, model, vec.length, Buffer.from(vec.buffer, vec.byteOffset, vec.byteLength), Date.now());
 }
 
-function cosine(a: Float32Array, b: Float32Array): number {
+export function cosine(a: Float32Array, b: Float32Array): number {
   if (a.length !== b.length) return -1;
   let dot = 0;
   let na = 0;

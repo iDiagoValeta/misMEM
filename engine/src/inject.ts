@@ -9,7 +9,7 @@
 import type { RecallHit } from "./schema.js";
 import { contentTerms } from "./terms.js";
 
-export interface InjectOptions {
+interface InjectOptions {
   maxMemories?: number;
   maxChars?: number;
   minPromptTerms?: number;
@@ -70,7 +70,7 @@ export function selectForInjection(
 }
 
 /** Primera línea del bloque: es lo que identifica la inyección de misMEM en un transcript. */
-export const INJECTION_HEADER =
+const INJECTION_HEADER =
   "Recuerdos de misMEM que pueden venir al caso. Son notas guardadas de antes, no algo";
 
 /** Deja claro que son notas viejas y no algo que la persona acabe de decir. */
@@ -84,7 +84,7 @@ export function formatInjection(hits: readonly RecallHit[]): string {
   ].join("\n");
 }
 
-export interface InjectedLine {
+interface InjectedLine {
   id: string;
   scope: string;
   text: string;

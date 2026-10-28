@@ -1,6 +1,6 @@
 import Database from "better-sqlite3";
 import type { Database as DB } from "better-sqlite3";
-import { mkdirSync } from "node:fs";
+import { chmodSync, mkdirSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { homedir } from "node:os";
 import { createHash } from "node:crypto";
@@ -15,7 +15,8 @@ export function defaultDbPath(): string {
 
 export function openDefaultDb(): DB {
   const path = defaultDbPath();
-  mkdirSync(dirname(path), { recursive: true });
+  // 0o700 only applies to directories created here; an existing one is left as it is.
+  mkdirSync(dirname(path), { recursive: true, mode: 0o700 });
   return openDb(path);
 }
 
@@ -104,20 +105,14 @@ END;
 CREATE TRIGGER IF NOT EXISTS memories_ad AFTER DELETE ON memories BEGIN
   INSERT INTO memories_fts(memories_fts, rowid, gist, details) VALUES('delete', old.rowid, old.gist, COALESCE(old.details, ''));
 END;
-CREATE TRIGGER IF NOT EXISTS memories_au AFTER UPDATE OF gist, details ON memories BEGIN
-  INSERT INTO memories_fts(memories_fts, rowid, gist, details) VALUES('delete', old.rowid, old.gist, COALESCE(old.details, ''));
-  INSERT INTO memories_fts(rowid, gist, details) VALUES (new.rowid, new.gist, COALESCE(new.details, ''));
-END;
+-- memories_au and traits_au are defined once, in migrate(): it must replace the legacy
+-- versions that reindexed on every UPDATE, so a copy here would just be dropped right after.
 
 CREATE TRIGGER IF NOT EXISTS traits_ai AFTER INSERT ON traits BEGIN
   INSERT INTO traits_fts(rowid, name) VALUES (new.rowid, new.name);
 END;
 CREATE TRIGGER IF NOT EXISTS traits_ad AFTER DELETE ON traits BEGIN
   INSERT INTO traits_fts(traits_fts, rowid, name) VALUES('delete', old.rowid, old.name);
-END;
-CREATE TRIGGER IF NOT EXISTS traits_au AFTER UPDATE OF name ON traits BEGIN
-  INSERT INTO traits_fts(traits_fts, rowid, name) VALUES('delete', old.rowid, old.name);
-  INSERT INTO traits_fts(rowid, name) VALUES (new.rowid, new.name);
 END;
 
 CREATE TABLE IF NOT EXISTS memory_embeddings (
@@ -202,5 +197,28 @@ export function openDb(path: string): DB {
   const db = new Database(path);
   db.exec(SCHEMA);
   migrate(db);
+  restrictToOwner(path);
   return db;
+}
+
+/**
+ * The file holds the whole memory and is created with the default umask (usually 0644).
+ * The WAL sidecars exist once the schema has switched the journal mode, hence this runs
+ * after it. chmod is a no-op on Windows.
+ */
+const TOLERATED_CHMOD_ERRORS = new Set(["ENOENT", "EPERM", "EACCES", "ENOTSUP", "EOPNOTSUPP"]);
+
+function restrictToOwner(path: string): void {
+  if (path === ":memory:" || path.startsWith("file:")) return;
+  for (const file of [path, `${path}-wal`, `${path}-shm`]) {
+    try {
+      chmodSync(file, 0o600);
+    } catch (err) {
+      // No existence check first (it would race with the file appearing or vanishing). The WAL
+      // sidecars may not exist (ENOENT). A file owned by someone else, or on a shared volume or
+      // NAS/SMB/FUSE mount that does not support chmod, can still be opened; failing to tighten
+      // it must not stop a CLI that only wants to read it. Anything else is a real error.
+      if (!TOLERATED_CHMOD_ERRORS.has((err as NodeJS.ErrnoException).code ?? "")) throw err;
+    }
+  }
 }

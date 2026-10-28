@@ -7,7 +7,7 @@
  */
 
 /** El servidor enmarca el JSON-RPC como SSE: la carga viene en una línea `data:`. */
-export function parseRpc(body: string): unknown {
+function parseRpc(body: string): unknown {
   const line = body.split("\n").find((l) => l.startsWith("data: "));
   return JSON.parse(line ? line.slice(6) : body);
 }
@@ -27,7 +27,7 @@ function authHeader(): string | undefined {
 }
 
 /** Un JSON-RPC contra `/mcp`. El servidor no pide handshake para `tools/*`. */
-export async function rpc(
+async function rpc(
   url: string,
   method: string,
   params: unknown,
@@ -51,6 +51,27 @@ export async function rpc(
   const parsed = parseRpc(await res.text()) as RpcResponse;
   if (parsed.error) throw new Error(parsed.error.message ?? "error del servidor");
   return parsed.result;
+}
+
+/** With a stdin nobody closes, a hook would wait forever and hang the turn. */
+const STDIN_TIMEOUT_MS = 2000;
+
+/** The hook payload from stdin; empty on a TTY or after the timeout. Never rejects. */
+export function readStdin(): Promise<string> {
+  return new Promise((resolve) => {
+    let data = "";
+    if (process.stdin.isTTY) return resolve("");
+    const done = (): void => {
+      clearTimeout(timer);
+      resolve(data);
+    };
+    const timer = setTimeout(done, STDIN_TIMEOUT_MS);
+    timer.unref();
+    process.stdin.setEncoding("utf8");
+    process.stdin.on("data", (chunk) => (data += chunk));
+    process.stdin.on("end", done);
+    process.stdin.on("error", done);
+  });
 }
 
 /** Llama una tool y devuelve el JSON que puso en el texto. */

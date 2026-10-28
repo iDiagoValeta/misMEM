@@ -7,12 +7,13 @@
  *
  * Env vars:
  *   MISMEM_HTTP_PORT     (default 3200)
- *   MISMEM_HTTP_HOST     (default 0.0.0.0)
+ *   MISMEM_HTTP_HOST     (default 127.0.0.1; containers set 0.0.0.0)
  *   MISMEM_AUTH_USER     opcional: con MISMEM_AUTH_PASS, BasicAuth en /mcp, /viewer y /api
  *   MISMEM_AUTH_PASS     pareja del anterior; con una sola de las dos no arranca
  *   MISMEM_DB            ruta SQLite (default ~/.mismem/mem.db)
  *   MISMEM_ALLOWED_HOSTS sin auth, nombres de Host aceptados además de loopback (coma)
  *   MISMEM_HTTP_MAX_BODY_BYTES  tope del cuerpo de POST /mcp (default 4 MiB); más, 413
+ *   MISMEM_VIEWER_ALLOW_DELETE  1 para que la interfaz pueda olvidar memorias y rasgos (default apagado)
  *
  * Endpoints:
  *   GET  /healthz   →  200 ok (liveness)
@@ -21,16 +22,14 @@
  *   DELETE /mcp     →  cierra stream
  */
 import { createServer as createHttpServer } from "node:http";
-import type { IncomingMessage, ServerResponse } from "node:http";
-import { timingSafeEqual } from "node:crypto";
+import type { ServerResponse } from "node:http";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 import { openDefaultDb } from "./db.js";
 import { hostAllowed, parseHostList } from "./http-host.js";
 import { BodyTooLargeError, InvalidJsonError, isJsonContentType, loadMaxBodyBytes, readJsonBody } from "./http-body.js";
-import { loadAuth } from "./http-guard.js";
+import { bindHost, checkBasicAuth, loadAuth } from "./http-guard.js";
 import { createServer } from "./server-core.js";
 import {
-  handleViewerHtml,
   handleStats,
   handleRecent,
   handleSearch,
@@ -44,9 +43,18 @@ import {
   handleTrait,
   parseDetailPath,
 } from "./viewer-api.js";
+import { serveUi } from "./viewer-static.js";
+import {
+  ACTION_MAX_BODY_BYTES,
+  ForgetConfirmations,
+  handleAction,
+  loadAllowDelete,
+  writeGuard,
+} from "./viewer-actions.js";
+import { ConsolidationJob } from "./consolidation/job.js";
 
 const PORT = Number(process.env.MISMEM_HTTP_PORT ?? 3200);
-const HOST = process.env.MISMEM_HTTP_HOST ?? "0.0.0.0";
+const HOST = bindHost();
 const ALLOWED_HOSTS = parseHostList(process.env.MISMEM_ALLOWED_HOSTS);
 const MAX_BODY_BYTES = loadMaxBodyBytes();
 
@@ -54,43 +62,27 @@ let AUTH: ReturnType<typeof loadAuth>;
 try {
   AUTH = loadAuth();
 } catch (err) {
-  // eslint-disable-next-line no-console
   console.error(`[mismem-http] ${(err as Error).message}`);
   process.exit(1);
-}
-
-function safeEqual(a: string, b: string): boolean {
-  const ab = Buffer.from(a, "utf8");
-  const bb = Buffer.from(b, "utf8");
-  if (ab.length !== bb.length) return false;
-  return timingSafeEqual(ab, bb);
-}
-
-function checkBasicAuth(req: IncomingMessage): boolean {
-  if (!AUTH) return true;
-  const header = req.headers.authorization;
-  if (!header?.startsWith("Basic ")) return false;
-  const decoded = Buffer.from(header.slice(6), "base64").toString("utf8");
-  const sep = decoded.indexOf(":");
-  if (sep < 0) return false;
-  const user = decoded.slice(0, sep);
-  const pass = decoded.slice(sep + 1);
-  return safeEqual(user, AUTH.user) && safeEqual(pass, AUTH.pass);
 }
 
 function send401(res: ServerResponse): void {
   res.statusCode = 401;
   res.setHeader("WWW-Authenticate", 'Basic realm="misMEM"');
-  res.end("Unauthorized");
+  res.end("No autorizado");
 }
 
 const db = openDefaultDb();
+// La corrida de consolidación que se lanza desde la interfaz: una a la vez por proceso.
+const consolidationJob = new ConsolidationJob(db);
+const ALLOW_DELETE = loadAllowDelete();
+const forgetConfirmations = new ForgetConfirmations();
 
 const httpServer = createHttpServer(async (req, res) => {
   try {
     if (!hostAllowed(req.headers.host, { auth: AUTH !== null, extra: ALLOWED_HOSTS })) {
       res.statusCode = 403;
-      res.end("Forbidden host");
+      res.end("Host no permitido");
       return;
     }
     const url = new URL(req.url ?? "/", `http://${req.headers.host ?? "localhost"}`);
@@ -103,7 +95,7 @@ const httpServer = createHttpServer(async (req, res) => {
     }
 
     if (url.pathname === "/mcp") {
-      if (!checkBasicAuth(req)) {
+      if (!checkBasicAuth(req.headers.authorization, AUTH)) {
         send401(res);
         return;
       }
@@ -118,7 +110,7 @@ const httpServer = createHttpServer(async (req, res) => {
               jsonrpc: "2.0",
               error: {
                 code: -32000,
-                message: "Unsupported Media Type: Content-Type must be application/json",
+                message: "Tipo de contenido no soportado: Content-Type debe ser application/json",
               },
               id: null,
             }),
@@ -132,7 +124,7 @@ const httpServer = createHttpServer(async (req, res) => {
             res.statusCode = 413;
             // Lo que quede sin leer no se drena: se cierra la conexión.
             res.setHeader("connection", "close");
-            res.end("Payload Too Large");
+            res.end("Cuerpo demasiado grande");
             return;
           }
           if (err instanceof InvalidJsonError) {
@@ -141,7 +133,7 @@ const httpServer = createHttpServer(async (req, res) => {
             res.end(
               JSON.stringify({
                 jsonrpc: "2.0",
-                error: { code: -32700, message: "Parse error" },
+                error: { code: -32700, message: "Error de parseo" },
                 id: null,
               }),
             );
@@ -165,20 +157,48 @@ const httpServer = createHttpServer(async (req, res) => {
       return;
     }
 
-    // Read-only viewer + JSON API. Misma BasicAuth que /mcp.
+    // Viewer + su API. Misma BasicAuth que /mcp; las escrituras, además, con writeGuard.
     if (
       url.pathname === "/viewer" ||
+      url.pathname.startsWith("/viewer/") ||
       url.pathname === "/" ||
       url.pathname.startsWith("/api/")
     ) {
-      if (!checkBasicAuth(req)) {
+      if (!checkBasicAuth(req.headers.authorization, AUTH)) {
         send401(res);
+        return;
+      }
+      if (req.method === "POST" && url.pathname.startsWith("/api/")) {
+        const rejected = writeGuard(req);
+        if (rejected) {
+          res.statusCode = rejected.status;
+          res.setHeader("content-type", "application/json; charset=utf-8");
+          res.end(JSON.stringify({ error: rejected.error }));
+          return;
+        }
+        let body: unknown;
+        try {
+          body = await readJsonBody(req, ACTION_MAX_BODY_BYTES);
+        } catch (err) {
+          const tooLarge = err instanceof BodyTooLargeError;
+          if (!tooLarge && !(err instanceof InvalidJsonError)) throw err;
+          res.statusCode = tooLarge ? 413 : 400;
+          if (tooLarge) res.setHeader("connection", "close");
+          res.setHeader("content-type", "application/json; charset=utf-8");
+          res.end(JSON.stringify({ error: tooLarge ? "cuerpo demasiado grande" : "JSON inválido" }));
+          return;
+        }
+        const actionOpts = { job: consolidationJob, allowDelete: ALLOW_DELETE, confirmations: forgetConfirmations };
+        if (await handleAction(db, res, url.pathname, body, actionOpts)) return;
+        res.statusCode = 404;
+        res.setHeader("content-type", "application/json; charset=utf-8");
+        res.end(JSON.stringify({ error: `acción desconocida: ${url.pathname}` }));
         return;
       }
       if (req.method !== "GET") {
         res.statusCode = 405;
-        res.setHeader("allow", "GET");
-        res.end("Method Not Allowed");
+        res.setHeader("allow", "GET, POST");
+        res.end("Método no permitido");
         return;
       }
       if (url.pathname === "/api/stats") return handleStats(db, res);
@@ -188,6 +208,13 @@ const httpServer = createHttpServer(async (req, res) => {
         return;
       }
       if (url.pathname === "/api/scopes") return handleScopes(db, res);
+      if (url.pathname === "/api/consolidate") {
+        res.statusCode = 200;
+        res.setHeader("content-type", "application/json; charset=utf-8");
+        res.setHeader("cache-control", "no-store");
+        res.end(JSON.stringify(consolidationJob.state()));
+        return;
+      }
       if (url.pathname === "/api/memories") return handleMemories(db, res, url);
       if (url.pathname === "/api/graph") return handleGraph(db, res, url);
       const detail = parseDetailPath(url.pathname);
@@ -195,14 +222,19 @@ const httpServer = createHttpServer(async (req, res) => {
       if (detail) {
         return detail.layer === "memory" ? handleMemory(db, res, detail.id) : handleTrait(db, res, detail.id);
       }
-      return handleViewerHtml(res);
+      if (url.pathname.startsWith("/api/")) {
+        res.statusCode = 404;
+        res.setHeader("content-type", "application/json; charset=utf-8");
+        res.end(JSON.stringify({ error: `endpoint desconocido: ${url.pathname}` }));
+        return;
+      }
+      return serveUi(res, url.pathname);
     }
 
     res.statusCode = 404;
-    res.end("Not Found");
+    res.end("No encontrado");
   } catch (err) {
     const message = err instanceof Error ? err.message : String(err);
-    // eslint-disable-next-line no-console
     console.error("[mcp]", err);
     if (!res.headersSent) {
       res.statusCode = 500;
@@ -215,9 +247,8 @@ const httpServer = createHttpServer(async (req, res) => {
 });
 
 httpServer.listen(PORT, HOST, () => {
-  // eslint-disable-next-line no-console
   console.log(
-    `misMEM HTTP listening on http://${HOST}:${PORT} (mcp=/mcp viewer=/viewer)`,
+    `misMEM HTTP escuchando en http://${HOST}:${PORT} (mcp=/mcp viewer=/viewer)`,
   );
 });
 
