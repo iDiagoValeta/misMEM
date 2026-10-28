@@ -1,0 +1,23 @@
+# Keep the build context to what Dockerfile.mismem-brain copies: package.json,
+# pnpm-lock.yaml, pnpm-workspace.yaml, tsconfig.json, src and ui. Anything else is
+# uploaded to the daemon and invalidates its cache for nothing.
+node_modules
+dist
+coverage
+tests
+vitest.config.ts
+tsconfig.test.json
+knip.json
+
+# Local databases hold real memories and must never leave the machine.
+*.db
+*.db-journal
+*.db-wal
+*.db-shm
+.env
+.env.*
+
+# Repository metadata the image does not use.
+.git
+.gitignore
+*.log
