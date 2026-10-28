@@ -84,3 +84,6 @@ temp/
 openrouter-mismemAPI.txt
 *api*key*.txt
 *openrouter*.txt
+
+# Personal working notes (design specs, plans): local only, never versioned.
+docs/superpowers/

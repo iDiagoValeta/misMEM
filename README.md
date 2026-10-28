@@ -194,9 +194,7 @@ Hace falta porque `salience` mide recencia más que uso —la pasada de decay to
 todas las filas, así que ordenar por saliencia pone arriba lo nuevo, no lo
 importante—. Es la primera fase del *ordenador de memoria*, una capa derivada
 que compacta los aspectos principales para que el modelo sepa por dónde empezar
-sin tomar contexto. El diseño completo, con los papers y la evidencia medida,
-está en
-[docs/superpowers/specs/2026-10-27-ordenador-memoria-design.md](docs/superpowers/specs/2026-10-27-ordenador-memoria-design.md).
+sin tomar contexto.
 
 ### Hooks del cliente (opcional)
 
