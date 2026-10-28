@@ -194,6 +194,10 @@ function documentFrequency(db: DB, term: RelaxedTerm): number {
  * Descartarlo dejaba esos dos rescates vacíos en cuanto sus palabras no aparecían en
  * ninguna memoria, y con la tabla de memorias vacía pasaba siempre (instalación recién
  * nacida, sin capa semántica), que es justo el caso que el rescate tiene que cubrir.
+ * El precio: con pocas memorias casi todo término es informativo, y un episodio que comparta
+ * dos raíces con una pregunta ajena ("cambiar la configuración del móvil" frente a la del
+ * servidor) se rescata. Es el camino degradado, donde traer algo flojo cuesta menos que no
+ * traer nada; con muchas memorias, dos términos ausentes de todas ellas ya son señal.
  *
  * Un término que sale en todas las memorias también entra: con el corpus diminuto de un
  * test o de una instalación recién nacida, "todos los documentos" no es ruido sino el
@@ -558,10 +562,10 @@ function semanticHitToRecall(hit: SemanticHit, at: number): RecallHit {
  * modelo (si se filtró por modelo) y mismas dimensiones en el ámbito. Sin ninguno, el vector
  * de la consulta no encuentra nada y el recall queda en manos de lo léxico.
  *
- * Lleva los mismos filtros que `semanticSearchMemories`, ruido incluido: un vector que esa
- * búsqueda descarta no puede encender la capa, o la puerta queda cerrada sin nada que la
- * sustituya. El backfill no excluía el ruido hasta tarde, así que hay bases con vectores de
- * memorias `[noise]` y `[pareto:l0]`.
+ * Lleva los mismos filtros de selección que `semanticSearchMemories` (ámbito, modelo, dims y
+ * ruido), no su corte por puntuación: un vector de ruido nunca se puntúa, así que no puede
+ * encender la capa. El backfill no excluía el ruido hasta tarde, así que hay bases con vectores
+ * de memorias `[noise]` y `[pareto:l0]`.
  */
 function hasComparableVectors(
   db: DB,

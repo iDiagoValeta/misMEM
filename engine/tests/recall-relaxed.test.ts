@@ -277,6 +277,22 @@ describe("recall híbrido: el rescate sólo cuando no hay capa semántica", () =
     expect(result.hits.map((hit) => hit.id)).toContain(episode);
   });
 
+  it("un vector de otras dimensiones no cierra la puerta al rescate", async () => {
+    const otra = memory("dev", "configurar servidor apache");
+    saveMemoryEmbedding(db, otra, "fake", Float32Array.from([1, 0, 0]));
+    const episode = capture(db, { scope: "dev", body: "configurar servidor nginx" }).id;
+    const embed: EmbedFn = async (texts) => texts.map(() => Float32Array.from([1, 0]));
+
+    const result = await recallHybrid(
+      db,
+      { query: "configurando servidores nginx", limit: 5 },
+      embed,
+      { reinforce: false, embeddingModel: "fake" },
+    );
+
+    expect(result.hits.map((hit) => hit.id)).toContain(episode);
+  });
+
   it("un vector de otro ámbito no cierra la puerta al rescate", async () => {
     const otra = memory("finanzas", "configurar servidor apache");
     saveMemoryEmbedding(db, otra, "fake", Float32Array.from([1, 0]));
