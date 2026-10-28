@@ -77,10 +77,11 @@ jobs:
       - run: docker run --rm -i hadolint/hadolint:v2.14.0@sha256:27086352fd5e1907ea2b934eb1023f217c5ae087992eb59fde121dce9c9ff21e < engine/Dockerfile.mismem-brain
 
   docker-build:
-    # A broken Dockerfile would otherwise only surface when a tag is pushed. Pull
-    # requests only; the release run (workflow_call from docker.yml) builds for real.
+    # A broken Dockerfile, or an image that builds but crashes at start, would otherwise only
+    # surface when a tag is pushed. Runs on pull requests and on main; inside the release gate
+    # (docker.yml calls this workflow on a tag) build-push builds the image right after.
     # No registry login and no cache writes, so it needs nothing beyond contents: read.
-    if: github.event_name == 'pull_request'
+    if: ${{ !startsWith(github.ref, 'refs/tags/') }}
     runs-on: ubuntu-latest
     timeout-minutes: 30
     steps:
@@ -95,7 +96,20 @@ jobs:
           # amd64 only: the arm64 emulated build is slow and is covered at release time.
           platforms: linux/amd64
           push: false
+          load: true
+          tags: mismem-brain:ci
           cache-from: type=gha
+      # Building is not enough: start the container as a user would and wait for /healthz,
+      # which needs dist/, the production node_modules and the native better-sqlite3.
+      - name: smoke test the image
+        run: |
+          docker run -d --name mismem-ci -p 127.0.0.1:3200:3200 mismem-brain:ci
+          for _ in $(seq 1 30); do
+            if curl -fsS http://127.0.0.1:3200/healthz; then exit 0; fi
+            sleep 1
+          done
+          docker logs mismem-ci
+          exit 1
 
   workflow-lint:
     # Workflows run with our token, so lint them like code: actionlint for correctness,
