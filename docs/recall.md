@@ -19,7 +19,7 @@ rasgos, episodios y memorias, y no altera una búsqueda que ya encontró algo.
 ## Por significado (opcional)
 
 Con un servidor de embeddings corriendo, `recall` suma búsqueda por significado: "problemas de plata"
-encuentra memorias que dicen "deudas". El valor por defecto es Ollama (`ollama pull nomic-embed-text`).
+encuentra memorias que dicen "deudas". El valor por defecto es Ollama (`ollama pull nomic-embed-text`), un modelo pensado para inglés.
 Los vectores se guardan como BLOB en la misma SQLite y la búsqueda es coseno en JS, sin extensiones
 nativas. Si el servidor no responde, todo degrada silenciosamente a FTS5 puro.
 
@@ -27,8 +27,9 @@ La semántica cubre deliberadamente sólo `memories`; `episodes` y `traits` cons
 Backfill y reindexado: `mismem-embed` (`--status`, `--force`).
 
 También habla con cualquier servidor compatible con OpenAI (`/v1/embeddings`, por ejemplo
-`llama-server --embedding`). Para memorias en varios idiomas conviene EmbeddingGemma 2, con sus prefijos y
-un corte más alto:
+`llama-server --embedding`). **Si tus memorias no están en inglés, usa EmbeddingGemma 2**: con memorias en
+castellano encontró 34 de 50 paráfrasis frente a 4 de 50 de `nomic-embed-text` (medido en la issue #72), y
+en CPU no gasta VRAM. Va con sus prefijos y un corte de 0,65 (con 0,68 sale casi igual):
 
 ```bash
 MISMEM_EMBEDDING_PROVIDER=openai
@@ -36,8 +37,16 @@ MISMEM_EMBEDDING_URL=http://127.0.0.1:8080
 MISMEM_EMBEDDING_MODEL=embeddinggemma-2
 MISMEM_EMBEDDING_QUERY_PREFIX="task: search result | query: "
 MISMEM_EMBEDDING_DOC_PREFIX="title: none | text: "
-MISMEM_EMBEDDING_MIN_SCORE=0.68
+MISMEM_EMBEDDING_MIN_SCORE=0.65
 ```
+
+`scripts/install.sh` lo monta si hay `llama-server` (baja el modelo sólo si se acepta, lo deja como servicio
+de systemd de usuario en CPU, y en la GPU con `--embeddings-gpu`); `--embeddings gemma|nomic` elige el
+modelo sin preguntas.
+
+Con `nomic-embed-text` el corte por defecto es 0,65: con 0,5 el hook de inyección añadía recuerdos sin
+relación a cada prompt. No hay que esperar paráfrasis: encuentra la memoria cuando la consulta comparte sus
+palabras, no cuando la dice de otra forma. Un `MISMEM_EMBEDDING_MIN_SCORE` explícito gana siempre.
 
 La búsqueda sólo compara vectores del modelo configurado. Cambiar de modelo reindexa solo en el siguiente
 backfill (`mismem-embed`); cambiar un prefijo no se detecta y exige `mismem-embed --force`. Todas las

@@ -6,6 +6,30 @@
 
 - `forget` borraba los episodios de una memoria de saliencia baja aunque alguno fuera más nuevo que `before_days`. Con los defaults de `mismem-forget` (90 y 30 días), un episodio de 40 días atado a una memoria olvidable se borraba antes de los 90 que promete `before_days`. Ahora la memoria sólo es olvidable cuando todos sus episodios ya superaron `before_days`; mientras quede uno más nuevo, la memoria y sus episodios esperan. Las memorias sin episodios o con todos viejos se borran igual que antes, y sus episodios con ellas para que `ON DELETE SET NULL` no los devuelva a pendientes.
 - El conteo de `dry_run` sale de las mismas consultas que el borrado, y un test compara lo que anuncia con lo que después borra.
+### Embeddings: mejores valores por defecto para quien instala misMEM (#72)
+
+- Con `nomic-embed-text` el corte semántico de 0,5 no cortaba nada: las 10 preguntas ajenas de la
+  medición traían 5 recuerdos cada una, así que el hook de inyección añadía recuerdos sin relación a
+  cada prompt. Sin `MISMEM_EMBEDDING_MIN_SCORE`, el corte por defecto ahora depende del modelo: 0,65
+  para `nomic-embed-text` (también con etiqueta, p. ej. `:latest`) y 0,5 para el resto. Con 0,65 las
+  preguntas ajenas bajan a 0 recuerdos sin perder aciertos. Un valor explícito, incluido `0`, sigue
+  ganando siempre.
+- `scripts/install.sh`: si hay `llama-server`, ofrece EmbeddingGemma 2 como opción recomendada.
+  Con memorias en castellano encontró 34 de 50 paráfrasis frente a 4 de 50 de `nomic-embed-text`
+  (medición de la issue). Baja el GGUF (296 MB) sólo si el usuario dice que sí, deja `llama-server`
+  como servicio de systemd de usuario (`mismem-embed`, en CPU; `--embeddings-gpu` o la pregunta
+  interactiva lo pasan a la GPU) y escribe en `~/.config/mismem/env` el proveedor, los prefijos y el
+  corte 0,65. `nomic-embed-text` por Ollama queda como alternativa ligera. Con `--yes` el modelo no
+  cambia salvo que se pida con `--embeddings gemma|nomic`: re-ejecutarlo conserva tal cual cualquier
+  configuración de embeddings que ya hubiera (otro modelo, otro servidor, prefijos, corte) y no duplica el
+  servicio. Si se vuelve a nomic, el servicio `mismem-embed` que montó el instalador se para y se
+  desactiva para no dejar ocupados el puerto y la memoria. Con EmbeddingGemma 2 elegido pero sin servidor
+  arrancado no se escribe `MISMEM_EMBEDDINGS=off`: la búsqueda degrada a palabras y se activa sola cuando
+  el servidor arranca.
+- README y `DEPLOY.md` dicen claro que con memorias que no estén en inglés la opción es EmbeddingGemma 2,
+  que con `nomic-embed-text` el corte es 0,65 y no hay que esperar paráfrasis, y que el corte de
+  EmbeddingGemma 2 recomendado pasa de 0,68 a 0,65 (misma efectividad medida, con más recuerdos por
+  pregunta).
 
 - El timeout de embeddings y el puerto HTTP dejan de aceptar valores imposibles: un negativo, basura, 0 o vacío vuelven a 3000 ms y a 3200 (antes `MISMEM_EMBEDDING_TIMEOUT_MS=-5` hacía que `AbortSignal.timeout` lanzara `RangeError` y un `MISMEM_HTTP_PORT` con basura llegaba a `listen` como `NaN`); `prepublishOnly` usa pnpm.
 

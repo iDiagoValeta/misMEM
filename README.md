@@ -61,13 +61,13 @@ git clone https://github.com/lucasmella-stack/misMEM.git && bash misMEM/scripts/
 Instala misMEM desde el repo clonado, pregunta dónde guardar la memoria y con qué proveedor consolidar
 (DeepSeek, OpenRouter, OpenAI, un servidor compatible o ninguno), guarda la clave en
 `~/.config/mismem/env` con permisos 600 y configura los clientes que encuentra: Claude Code (MCP y hooks de
-inyección y refuerzo), opencode, Claude Desktop, VS Code y Cursor. Si hay Ollama ofrece el modelo de
-embeddings, y si se quiere deja la consolidación nocturna como timer de systemd. Los clientes llaman a
+inyección y refuerzo), opencode, Claude Desktop, VS Code y Cursor. Para la búsqueda por significado ofrece EmbeddingGemma 2 si hay
+`llama-server`, o `nomic-embed-text` si hay Ollama ([qué modelo elegir](docs/recall.md#por-significado-opcional)), y si se quiere deja la consolidación nocturna como timer de systemd. Los clientes llaman a
 `~/.local/bin/mismem-run`, así que ninguna clave queda en su configuración. Volver a ejecutarlo actualiza
 sin duplicar, y no pisa a ciegas una configuración de misMEM hecha a mano: los hooks de Claude Code que
 ya estén configurados de otra forma y un MCP `mismem` de opencode con otro comando se respetan, y este
 último sólo se reemplaza con `REPLACE_EXISTING=yes`. `--from-npm` instala el paquete publicado, que puede ir por detrás del repo; `--help` explica
-el modo sin preguntas (`--yes`, `--clients`, `--timer`).
+el modo sin preguntas (`--yes`, `--clients`, `--timer`, `--embeddings`).
 
 ### Docker: un servidor para varias máquinas
 
