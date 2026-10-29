@@ -1,9 +1,18 @@
+import { mkdtempSync, rmSync } from "node:fs";
+import { tmpdir } from "node:os";
+import { join } from "node:path";
 import { describe, it, expect, beforeEach } from "vitest";
 import type { Database as DB } from "better-sqlite3";
 import { openDb } from "../src/db.js";
 import { capture, consolidate, reinforce } from "../src/tools.js";
 import { reinforceMemories } from "../src/salience.js";
-import { associationStrength, coUseEdges, hubs, turnsRegistered } from "../src/connectome.js";
+import {
+  associationStrength,
+  coUseEdges,
+  hubs,
+  seedTurnsFromUse,
+  turnsRegistered,
+} from "../src/connectome.js";
 
 let db: DB;
 
@@ -179,5 +188,100 @@ describe("hubs", () => {
     memory("el deploy usa docker compose");
 
     expect(hubs(db)).toEqual([]);
+  });
+});
+
+describe("semilla del contador de turnos", () => {
+  /** A DB as the previous version left it: co_use and use_count written, no counter. */
+  const beforeTheCounter = (): void => {
+    db.prepare("DELETE FROM meta WHERE key = 'connectome.turns'").run();
+  };
+
+  it("arranca en el uso más alto registrado, que es la cota que los datos permiten", () => {
+    const h = memory("hablamos en español y sin rodeos");
+    const x = memory("el deploy usa docker compose");
+
+    for (let i = 0; i < 5; i++) turn(h, x);
+    for (let i = 0; i < 7; i++) turn(h);
+    beforeTheCounter();
+
+    seedTurnsFromUse(db);
+
+    // Twelve turns used h, so there were at least twelve.
+    expect(turnsRegistered(db)).toBe(12);
+  });
+
+  it("no pisa un contador que ya venía contando", () => {
+    const a = memory("el deploy usa docker compose");
+    const b = memory("el backup corre a las tres");
+
+    for (let i = 0; i < 4; i++) turn(a, b);
+
+    seedTurnsFromUse(db);
+
+    expect(turnsRegistered(db)).toBe(4);
+  });
+
+  it("no inventa un contador donde nunca se midió uso", () => {
+    memory("el deploy usa docker compose");
+
+    seedTurnsFromUse(db);
+
+    expect(turnsRegistered(db)).toBe(0);
+    expect(db.prepare("SELECT COUNT(*) AS n FROM meta").get()).toMatchObject({ n: 0 });
+  });
+
+  it("deja de leer como asociación máxima un par heredado", () => {
+    // The rich-club pair: h is in every turn, so its association with x is exactly
+    // what chance predicts. Without the seed, `n` counts turns the denominator
+    // never saw and the edge reads 1 — the opposite of the right answer.
+    const h = memory("hablamos en español y sin rodeos");
+    const x = memory("el deploy usa docker compose");
+
+    for (let i = 0; i < 3; i++) turn(h, x);
+    for (let i = 0; i < 9; i++) turn(h);
+    beforeTheCounter();
+    turn(h, x);
+
+    const sinSemilla = strengthOf(h, x);
+
+    beforeTheCounter();
+    seedTurnsFromUse(db);
+
+    expect(sinSemilla).toBe(1);
+    expect(strengthOf(h, x)).toBeCloseTo(0, 5);
+  });
+
+  it("sigue contando desde la semilla y no desde cero", () => {
+    const a = memory("el deploy usa docker compose");
+    const b = memory("el backup corre a las tres");
+
+    for (let i = 0; i < 4; i++) turn(a, b);
+    beforeTheCounter();
+    seedTurnsFromUse(db);
+    turn(a, b);
+
+    expect(turnsRegistered(db)).toBe(5);
+  });
+
+  it("se siembra al abrir una base escrita por la versión anterior", () => {
+    const dir = mkdtempSync(join(tmpdir(), "mismem-con-"));
+    try {
+      const path = join(dir, "mem.db");
+      db = openDb(path);
+      const h = memory("hablamos en español y sin rodeos");
+      const x = memory("el deploy usa docker compose");
+      for (let i = 0; i < 5; i++) turn(h, x);
+      for (let i = 0; i < 7; i++) turn(h);
+      beforeTheCounter();
+      db.close();
+
+      db = openDb(path);
+
+      expect(turnsRegistered(db)).toBe(12);
+      db.close();
+    } finally {
+      rmSync(dir, { force: true, recursive: true });
+    }
   });
 });

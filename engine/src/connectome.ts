@@ -18,8 +18,9 @@
  * the support floor. Nothing is hidden here.
  *
  * Turns that happened before this counter existed are missing from the
- * denominator, which understates strength rather than overstating it. The bias is
- * conservative and shrinks with use.
+ * denominator, so on the first open `seedTurnsFromUse` puts it on the same clock
+ * as the counts it divides. From there the bias is conservative — the denominator
+ * is a lower bound, so strength is understated — and shrinks with use.
  */
 import type { Database as DB } from "better-sqlite3";
 
@@ -68,6 +69,35 @@ export function registerTurn(db: DB): void {
     `INSERT INTO meta (key, value) VALUES (?, '1')
      ON CONFLICT(key) DO UPDATE SET value = CAST(CAST(value AS INTEGER) + 1 AS TEXT)`,
   ).run(TURNS_KEY);
+}
+
+/**
+ * Puts the counter on the same clock as the counts it divides. A DB written before
+ * the counter existed carries `n` and `use_count` from turns nobody counted, and a
+ * denominator of zero makes the quotient clamp to 1: every inherited pair would
+ * read as a maximal association, which is the rich club the weight exists to avoid.
+ *
+ * The seed is the highest use on record, a lower bound on the turns that must have
+ * happened, because each use took one turn. Only when the counter is absent: one
+ * already running is the real measurement and nothing may overwrite it.
+ */
+export function seedTurnsFromUse(db: DB): void {
+  const existing = db.prepare("SELECT 1 FROM meta WHERE key = ?").get(TURNS_KEY);
+  if (existing !== undefined) return;
+
+  const row = db
+    .prepare(
+      `SELECT MAX(bound) AS bound FROM (
+         SELECT MAX(use_count) AS bound FROM memories
+         UNION ALL
+         SELECT MAX(n) AS bound FROM co_use
+       )`,
+    )
+    .get() as { bound: number | null };
+  const turns = row.bound ?? 0;
+  if (turns <= 0) return;
+
+  db.prepare("INSERT INTO meta (key, value) VALUES (?, ?)").run(TURNS_KEY, String(turns));
 }
 
 /**
