@@ -2,6 +2,10 @@
 
 ## Sin publicar
 
+### La interfaz parte `App.tsx` y `Lists.tsx` (#169)
+
+- `App.tsx` (470 líneas) queda en composición: la cabecera, el diálogo de cristalizar, la barra de selección y los hooks de tema, atajos y debounce viven en sus propios ficheros. Las cuatro listas y sus primitivas pasan a `components/list/`, y el tipo `Selection` a `lib/selection.ts`, que rompe el ciclo de imports entre `App` y las listas. Nada visible cambia.
+
 ## 0.6.0 — 2026-10-29
 
 ### El olvido respeta `before_days` también al borrar memorias
