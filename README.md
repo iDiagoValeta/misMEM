@@ -72,17 +72,16 @@ el modo sin preguntas (`--yes`, `--clients`, `--timer`).
 ### Docker: un servidor para varias máquinas
 
 ```bash
-git clone https://github.com/lucasmella-stack/misMEM.git && cd misMEM/engine
-docker build -t mismem-brain:latest -f Dockerfile.mismem-brain .
 docker run -d --name mismem-brain \
   -e MISMEM_AUTH_USER=brain -e MISMEM_AUTH_PASS=<contraseña> \
   -v mismem-data:/data -p 127.0.0.1:3200:3200 \
-  mismem-brain:latest
+  ghcr.io/lucasmella-stack/mismem-brain:latest
 curl http://127.0.0.1:3200/healthz
 ```
 
-El visor queda en `/viewer` y el MCP en `/mcp`. Para exponerlo con Traefik y TLS, y para saber en qué
-estado está la imagen publicada en GHCR, ver [DEPLOY.md](DEPLOY.md).
+Imagen multi-arch (`linux/amd64` y `linux/arm64`), sin clonar nada. El visor queda en `/viewer` y el MCP
+en `/mcp`. Para exponerlo con Traefik y TLS, o para construirla vos en el servidor, ver
+[DEPLOY.md](DEPLOY.md).
 
 ### npm: sin clonar nada
 
