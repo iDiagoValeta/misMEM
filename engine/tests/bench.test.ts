@@ -1,10 +1,10 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import type { Database as DB } from "better-sqlite3";
-import { openDb } from "../src/db.js";
-import { capture, consolidate } from "../src/tools.js";
+import { openDb } from "../src/store/db.js";
+import { capture, consolidate } from "../src/memory/tools.js";
 import { embedPendingMemories } from "../src/embeddings/store.js";
 import type { EmbedFn } from "../src/embeddings/provider.js";
-import { meanRank, mrr, parseBank, recallAt, runBench } from "../src/bench.js";
+import { meanRank, mrr, parseBank, recallAt, runBench } from "../src/recall/bench.js";
 
 let db: DB;
 

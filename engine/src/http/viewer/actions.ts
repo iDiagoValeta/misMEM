@@ -25,11 +25,11 @@ import { randomBytes } from "node:crypto";
 import type { IncomingMessage, ServerResponse } from "node:http";
 import type { Database as DB } from "better-sqlite3";
 import { z } from "zod";
-import { CrystallizeInput, Scope } from "./schema.js";
-import { crystallize } from "./tools.js";
-import { embedPendingMemories } from "./embeddings/store.js";
-import { JobError, type ConsolidationJob } from "./consolidation/job.js";
-import { json } from "./viewer.js";
+import { CrystallizeInput, Scope } from "../../schema.js";
+import { crystallize } from "../../memory/tools.js";
+import { embedPendingMemories } from "../../embeddings/store.js";
+import { JobError, type ConsolidationJob } from "../../consolidation/job.js";
+import { json } from "./read.js";
 
 /** Una acción no necesita más: lo grande va por capture o la ingesta. */
 export const ACTION_MAX_BODY_BYTES = 256 * 1024;

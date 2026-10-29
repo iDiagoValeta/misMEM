@@ -20,31 +20,31 @@ la interfaz es React, Vite y Tailwind. Gestor de paquetes: pnpm, nunca npm.
 
 | Ruta | Qué posee | Se toca cuando |
 |---|---|---|
-| `engine/src/db.ts` | `SCHEMA`, migraciones aditivas (`migrate()`), apertura de la base con permisos `0600` | cambia una tabla, una columna o un índice |
-| `engine/src/schema.ts` | Inputs Zod de las herramientas y el tipo `RecallHit` | cambia lo que una herramienta acepta o devuelve |
-| `engine/src/tools.ts` | Las operaciones MCP: `capture`, `recall` y `recallHybrid`, `reinforce`, `consolidate`, `crystallize`, `forget` y la lista de episodios pendientes | cambia lo que hace una herramienta |
-| `engine/src/search.ts` | Ranking del recall: consulta FTS5, rescate y fusión RRF con la saliencia | cambia el ranking (pide `mismem-bench`) |
+| `engine/src/domain/` | `hash.ts` (hash del contenido, dedup de `capture`), `terms.ts` (tokenización compartida por la búsqueda y la medición de uso), `noise.ts` (marcadores de ruido). Sin I/O ni entorno | cambia uno de esos tres criterios |
+| `engine/src/store/` | `db.ts` (`SCHEMA`, migraciones aditivas en `migrate()`, apertura con permisos `0600`), `connectome.ts` (turnos y pares de uso) | cambia una tabla, una columna o cómo se abre la base |
+| `engine/src/memory/` | `tools.ts` (las operaciones MCP: `capture`, `recall` y `recallHybrid`, `reinforce`, `consolidate`, `crystallize`, `forget` y la lista de episodios pendientes), `salience.ts` (decay y refuerzo) | cambia lo que hace una herramienta o la fórmula de saliencia |
+| `engine/src/recall/` | `search.ts` (ranking: consulta FTS5, rescate y fusión RRF con la saliencia), `bench.ts` (medición del recall) | cambia el ranking (pide `mismem-bench`) |
+| `engine/src/queries/` | `relations.ts`: lecturas que comparten el visor y la exportación a Obsidian (memorias parecidas por vector) | cambia cómo se relacionan las memorias |
 | `engine/src/embeddings/` | `provider.ts` (configuración por entorno y cliente HTTP), `store.ts` (SQL de `memory_embeddings`, búsqueda y backfill), `vector.ts` (coseno) | cambia la capa semántica (pide `mismem-bench`) |
-| `engine/src/salience.ts` | Decay y refuerzo de la saliencia | cambia la fórmula de saliencia |
-| `engine/src/noise.ts`, `engine/src/terms.ts`, `engine/src/hash.ts` | Marcadores de ruido, tokenización compartida por la búsqueda y la medición de uso, hash del contenido (dedup de `capture`) | cambia uno de esos tres criterios |
-| `engine/src/relations.ts` | Lecturas que comparten el visor y la exportación a Obsidian (memorias parecidas por vector) | cambia cómo se relacionan las memorias |
-| `engine/src/server-core.ts` | Descriptores de las herramientas MCP y su despacho; lo usan `server.ts` (stdio) y `server-http.ts` | se añade o cambia una herramienta |
-| `engine/src/engram-compat.ts` | Los alias `mem_*` y su mapeo a las seis herramientas | cambia la compatibilidad con Engram |
-| `engine/src/server-http.ts` | Servidor HTTP: `/mcp`, `/healthz`, `/viewer` y `/api/*` | se añade una ruta; la lógica va a otro módulo |
-| `engine/src/http-guard.ts`, `engine/src/http-host.ts`, `engine/src/http-body.ts` | Dirección de enlace y BasicAuth, guarda de `Host`, lectura del cuerpo con tope | cambia qué petición se atiende |
-| `engine/src/viewer.ts`, `engine/src/viewer-api.ts`, `engine/src/viewer-actions.ts`, `engine/src/viewer-static.ts` | API de lectura del visor, sus escrituras por POST, y la interfaz compilada con su CSP | cambia lo que el visor muestra o puede hacer |
-| `engine/ui/` | La interfaz (React) en `ui/src`; se compila a `dist/ui`. `ui/src/components/ui/` es código de shadcn: Biome y knip lo tratan aparte | cambia lo que se ve |
-| `engine/src/consolidation/` | `run.ts` (la corrida), `llm.ts` (proveedores), `prompts.ts`, `job.ts` (corrida en segundo plano desde la interfaz) y su `README.md` | cambia cómo se destilan los episodios |
-| `engine/src/pareto/classifier.ts` | Prefiltro heurístico que descarta ruido antes del LLM | cambia qué se descarta sin LLM |
+| `engine/src/consolidation/` | `run.ts` (la corrida), `llm.ts` (proveedores), `prompts.ts`, `job.ts` (corrida en segundo plano desde la interfaz), `pareto.ts` (prefiltro heurístico que descarta ruido antes del LLM) y su `README.md` | cambia cómo se destilan los episodios |
 | `engine/src/ingest/` | Importadores de ChatGPT y de VS Code, y el recorrido de ficheros | se importa un formato nuevo |
-| `engine/src/inject.ts`, `engine/src/usage.ts`, `engine/src/hook-client.ts`, `engine/src/hook-readiness.ts` | Lógica de los hooks: qué inyectar, qué se usó, cliente remoto y espera a que el servidor esté listo | cambia un hook |
-| `engine/src/obsidian.ts`, `engine/src/bench.ts` | Exportación como bóveda de Obsidian; medición del recall | cambia una de las dos |
-| `engine/src/*-cli.ts`, `engine/src/*-args.ts`, `engine/src/cli-args.ts`, `engine/src/env.ts` | Los binarios `mismem-*`, la lectura estricta de sus argumentos y la lectura de variables numéricas | cambia un CLI o un flag |
+| `engine/src/export/` | `obsidian.ts`: la memoria como bóveda de Obsidian | cambia la exportación |
+| `engine/src/mcp/` | `engram-compat.ts`: los alias `mem_*` y su mapeo a las seis herramientas | cambia la compatibilidad con Engram |
+| `engine/src/http/` | `guard.ts`, `host.ts`, `body.ts` (dirección de enlace y BasicAuth, guarda de `Host`, lectura del cuerpo con tope) y `viewer/{read,api,actions}.ts` (API de lectura del visor y sus escrituras por POST) | cambia qué petición se atiende o lo que el visor muestra y puede hacer |
+| `engine/src/hooks/` | `inject.ts`, `usage.ts`, `client.ts`, `readiness.ts`: qué inyectar, qué se usó, cliente remoto y espera a que el servidor esté listo | cambia un hook |
+| `engine/src/` (raíz) | Los binarios `mismem-*` (`*-cli.ts`, `*-args.ts`, `cli-args.ts`), `env.ts`, el borde de Zod (`schema.ts`, con el tipo `RecallHit`), las entradas `server.ts`, `server-core.ts` y `server-http.ts`, y `viewer-static.ts` con su CSP | cambia un CLI, un flag o una entrada |
+| `engine/ui/` | La interfaz (React) en `ui/src`; se compila a `dist/ui`. `ui/src/components/ui/` es código de shadcn: Biome y knip lo tratan aparte | cambia lo que se ve |
 | `engine/tests/` | Un `<área>.test.ts` por área; `fixtures/` (exports ficticios) y `support/` | cada cambio |
 | `scripts/` | `install.sh` (instalador de Linux), `mismem-hook.sh` (envoltorio de los hooks), `backup-mismem-from-server.ps1` (respaldo desde Windows) | cambia la instalación o el respaldo |
 | `engine/Dockerfile.mismem-brain`, `.github/` | La imagen, los workflows, las plantillas y las etiquetas | cambia el empaquetado o la CI |
 
-Las tablas de la base, en `engine/src/db.ts`:
+`engine/tests/architecture.test.ts` hace cumplir esa estructura: la lista exacta de ficheros de la raíz, la
+matriz de dependencias entre carpetas (sólo hacia abajo, más `env.ts`, `cli-args.ts` y `schema.ts`), la
+pureza de `domain/` (sin I/O ni `process.env`), la ausencia de SQL en la entrega (`http/`, `mcp/`, `hooks/`,
+`export/` y la raíz) y el trinquete de 400 líneas en `src/` y `ui/src/`. Sus excepciones son explícitas y
+sólo encogen: el test falla también si una deja de hacer falta.
+
+Las tablas de la base, en `engine/src/store/db.ts`:
 
 | Tabla | Qué guarda |
 |---|---|
@@ -79,11 +79,11 @@ pnpm typecheck && pnpm test && pnpm knip && pnpm dup && pnpm lint && pnpm build
 |---|---|
 | Nunca leer ni editar `.env*`, ni mostrar un secreto en una respuesta, un log o un issue | Ahí viven las claves de los proveedores y las credenciales del servidor; `.env.example` sólo lleva marcadores |
 | Sin `git push --force` ni reescribir la historia sin permiso expreso | Se mergea con merge commit y la historia publicada conserva el porqué de cada commit |
-| El esquema cambia sólo con migraciones aditivas en `migrate()` de `engine/src/db.ts`: se añaden columnas, índices y tablas, y cada paso comprueba el estado y se puede repetir. `migrate()` sí puede borrar y recrear disparadores heredados y rellenar columnas nuevas; nunca borra una tabla ni una columna con datos. Con su test y su línea en el CHANGELOG | La base de cada persona ya existe y se abre con el código nuevo: un error rompe datos reales. `CODEOWNERS` pide revisión de los dos responsables |
-| Quien toca el ranking o los embeddings (`tools.ts`, `search.ts`, `embeddings/`) corre `mismem-bench` antes y después y pone las cifras en el PR, con la etiqueta `needs-bench` ([Tests](docs/standards/tests.md)) | Sin esa medida no hay forma de saber si el cambio mejora el recall: los tests no la dan y el bench no corre en CI |
+| El esquema cambia sólo con migraciones aditivas en `migrate()` de `engine/src/store/db.ts`: se añaden columnas, índices y tablas, y cada paso comprueba el estado y se puede repetir. `migrate()` sí puede borrar y recrear disparadores heredados y rellenar columnas nuevas; nunca borra una tabla ni una columna con datos. Con su test y su línea en el CHANGELOG | La base de cada persona ya existe y se abre con el código nuevo: un error rompe datos reales. `CODEOWNERS` pide revisión de los dos responsables |
+| Quien toca el ranking o los embeddings (`memory/tools.ts`, `recall/search.ts`, `embeddings/`) corre `mismem-bench` antes y después y pone las cifras en el PR, con la etiqueta `needs-bench` ([Tests](docs/standards/tests.md)) | Sin esa medida no hay forma de saber si el cambio mejora el recall: los tests no la dan y el bench no corre en CI |
 | Toda dependencia que se añade o se sube entra con versión exacta (sin `^` ni `~`) y publicada hace 14 días o más; los `^` que ya hay se fijan la próxima vez que se suban ([Seguridad](docs/standards/security.md)). Un script de instalación nuevo se lee, y sólo entonces se aprueba, uno a uno, en `allowBuilds` de `engine/pnpm-workspace.yaml` (hoy `better-sqlite3` y `esbuild`) | Cadena de suministro: lo recién publicado es lo que más se compromete, y un `postinstall` ejecuta código al instalar |
 | Los hooks `mismem-inject` y `mismem-used` nunca fallan ni bloquean un prompt: errores a stderr, salida sin error, y ante la duda no hacen nada; contra un servidor remoto (`MISMEM_HOOK_URL`) llevan además un tope de tiempo | Corren en cada turno del cliente; un hook roto cuesta más que un recuerdo sin inyectar |
-| `engine/src/server-http.ts` escucha al importarse: su lógica va a módulos que se puedan importar y probar (`http-guard.ts`, `http-host.ts`, `http-body.ts`) | Un test no puede importarlo sin abrir un puerto; el test del servidor lo lanza como proceso hijo |
+| `engine/src/server-http.ts` escucha al importarse: su lógica va a módulos que se puedan importar y probar (`http/guard.ts`, `http/host.ts`, `http/body.ts`) | Un test no puede importarlo sin abrir un puerto; el test del servidor lo lanza como proceso hijo |
 | Datos de usuario nunca en tests, fixtures, capturas, documentación, issues ni logs | La memoria es personal. Los tests usan `openDb(":memory:")` o un directorio temporal propio y jamás tocan `~/.mismem` |
 | Las herramientas de la propia memoria (`capture`, `recall`) son para las notas del agente: nunca guardan secretos ni datos de terceros | Lo capturado queda en una base que se respalda, se consolida con un LLM externo y se lee desde el visor |
 
@@ -128,14 +128,14 @@ pnpm typecheck && pnpm test && pnpm knip && pnpm dup && pnpm lint && pnpm build
 - **`SCHEMA` y `migrate()`**: `SCHEMA` sólo crea lo que falta. Lo que ya existe cambia en `migrate()`, y los
   disparadores `memories_au` y `traits_au` viven únicamente allí.
 - **La consolidación es idempotente** porque sólo mira `consolidated_into IS NULL`. Una consulta nueva de
-  episodios pendientes usa esa misma condición, como `pendingEpisodes` en `tools.ts`.
+  episodios pendientes usa esa misma condición, como `pendingEpisodes` en `memory/tools.ts`.
 - **`recall` refuerza lo que devuelve** salvo con `reinforce: false` o `MISMEM_REINFORCE_ON_RECALL=off`.
   Una búsqueda que nadie pidió (el hook de inyección, el visor, el bench) pasa `reinforce: false`; sólo
   `reinforce` escribe `use_count` y `co_use`.
 - **Los marcadores de ruido** (`[noise] ...`, `[pareto:l0] ...`) no compiten en el recall ni gastan un
   embedding: las consultas que alimentan al modelo y las listas de la interfaz los excluyen con
   `excludeNoiseSql`. `forget` los ve, y el endpoint en bruto `/api/recent?layer=memory` también.
-- **Los alias `mem_*`** (`engine/src/engram-compat.ts`) tienen que seguir funcionando: hay clientes que
+- **Los alias `mem_*`** (`engine/src/mcp/engram-compat.ts`) tienen que seguir funcionando: hay clientes que
   vienen de Engram y no se reconfiguran. No todos delegan en las seis herramientas: `mem_save`, `mem_search`,
   `mem_session_summary` y `mem_save_prompt` sí; `mem_context`, `mem_get_observation` y `mem_update` leen o
   escriben con SQL propio, y `mem_suggest_topic_key`, `mem_session_start` y `mem_session_end` son una

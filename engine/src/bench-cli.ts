@@ -7,8 +7,8 @@
  * privado: se arma desde la memoria de cada uno y no va al repo.
  */
 import { readFileSync } from "node:fs";
-import { defaultDbPath, openDb } from "./db.js";
-import { meanRank, mrr, parseBank, recallAt, runBench, type Score } from "./bench.js";
+import { defaultDbPath, openDb } from "./store/db.js";
+import { meanRank, mrr, parseBank, recallAt, runBench, type Score } from "./recall/bench.js";
 import { ArgsError, EXIT_USAGE } from "./cli-args.js";
 import { BENCH_DEFAULT_LIMIT, parseBenchArgs } from "./bench-args.js";
 

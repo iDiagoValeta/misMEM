@@ -10,8 +10,8 @@ import { existsSync } from "node:fs";
 import { parseArgs } from "node:util";
 import Database from "better-sqlite3";
 import { EXIT_USAGE } from "./cli-args.js";
-import { defaultDbPath, openDb } from "./db.js";
-import { EXPORT_ROOT, exportObsidian } from "./obsidian.js";
+import { defaultDbPath, openDb } from "./store/db.js";
+import { EXPORT_ROOT, exportObsidian } from "./export/obsidian.js";
 
 const HELP = `misMEM obsidian export
 

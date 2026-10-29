@@ -4,7 +4,7 @@ import { chmodSync, mkdirSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { homedir } from "node:os";
 import { seedTurnsFromUse } from "./connectome.js";
-import { contentHash } from "./hash.js";
+import { contentHash } from "../domain/hash.js";
 
 export function defaultDbPath(): string {
   return resolve(process.env.MISMEM_DB ?? `${homedir()}/.mismem/mem.db`);

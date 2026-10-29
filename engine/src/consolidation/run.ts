@@ -1,8 +1,8 @@
 import type { Database as DB } from "better-sqlite3";
-import { consolidate } from "../tools.js";
+import { consolidate } from "../memory/tools.js";
 import { envNonNegativeNumber, envPositiveNumber } from "../env.js";
 import { embedPendingMemories } from "../embeddings/store.js";
-import { classify } from "../pareto/classifier.js";
+import { classify } from "./pareto.js";
 import {
   distill,
   loadLlmConfig,

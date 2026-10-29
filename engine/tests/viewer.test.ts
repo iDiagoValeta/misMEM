@@ -1,12 +1,12 @@
 import { describe, it, expect, beforeEach } from "vitest";
 import type { Database as DB } from "better-sqlite3";
-import { openDb } from "../src/db.js";
-import { capture, consolidate } from "../src/tools.js";
+import { openDb } from "../src/store/db.js";
+import { capture, consolidate } from "../src/memory/tools.js";
 import {
   handleStats,
   handleRecent,
   handleSearch,
-} from "../src/viewer.js";
+} from "../src/http/viewer/read.js";
 
 let db: DB;
 

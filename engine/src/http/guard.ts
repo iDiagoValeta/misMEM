@@ -3,7 +3,7 @@
  * server-http.ts, que escucha al importarse, para poder probarlo.
  */
 import { timingSafeEqual } from "node:crypto";
-import { envPositiveNumber } from "./env.js";
+import { envPositiveNumber } from "../env.js";
 
 /**
  * Loopback unless told otherwise: without MISMEM_AUTH_* the Host guard only stops browser

@@ -13,7 +13,7 @@
  *   L2  importance ≥ 0.60   → alta prioridad
  *   L3  importance ≥ 0.85   → semilla de trait (crystallize candidate)
  */
-import { contentTerms } from "../terms.js";
+import { contentTerms } from "../domain/terms.js";
 
 /** Palabras con contenido desde las que un texto corto deja de ser muletilla. */
 const MIN_FACT_TERMS = 3;

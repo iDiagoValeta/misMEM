@@ -6,8 +6,8 @@
  * poco y con criterio: una pregunta con sustancia, pocos recuerdos, ninguno de un
  * ámbito que el usuario no quiere mandar afuera, y nada que ya esté en el contexto.
  */
-import type { RecallHit } from "./schema.js";
-import { contentTerms } from "./terms.js";
+import type { RecallHit } from "../schema.js";
+import { contentTerms } from "../domain/terms.js";
 
 interface InjectOptions {
   maxMemories?: number;

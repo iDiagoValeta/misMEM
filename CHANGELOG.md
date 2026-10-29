@@ -6,6 +6,20 @@
 
 - `App.tsx` (470 líneas) queda en composición: la cabecera, el diálogo de cristalizar, la barra de selección y los hooks de tema, atajos y debounce viven en sus propios ficheros. Las cuatro listas y sus primitivas pasan a `components/list/`, y el tipo `Selection` a `lib/selection.ts`, que rompe el ciclo de imports entre `App` y las listas. Nada visible cambia.
 
+### engine/src se organiza por capacidad (#160)
+
+- `engine/src` deja de ser plano: `hash.ts`, `terms.ts` y `noise.ts` pasan a `domain/`; `db.ts` y
+  `connectome.ts` a `store/`; `tools.ts` y `salience.ts` a `memory/`; `search.ts` y `bench.ts` a `recall/`;
+  `relations.ts` a `queries/`; `obsidian.ts` a `export/`; `engram-compat.ts` a `mcp/`; `inject.ts`, `usage.ts`,
+  `hook-client.ts` y `hook-readiness.ts` a `hooks/`; y los módulos del servidor HTTP a `http/` y
+  `http/viewer/`, con `pareto/classifier.ts` en `consolidation/pareto.ts`. Sólo cambian rutas e imports: no
+  se parte ningún fichero ni cambia lógica.
+- `engine/tests/architecture.test.ts` fija la lista de ficheros de la raíz, la matriz de dependencias entre
+  carpetas, la pureza de `domain/`, la ausencia de SQL en la entrega y el trinquete de 400 líneas, con
+  excepciones explícitas que sólo encogen.
+- Nada de eso cambia lo que se publica: `dist/server.js`, `dist/server-http.js` y `dist/*-cli.js` conservan
+  su ruta y su nombre.
+
 ## 0.6.0 — 2026-10-29
 
 ### El olvido respeta `before_days` también al borrar memorias

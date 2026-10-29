@@ -1,6 +1,6 @@
 #!/usr/bin/env node
 import { resolve } from "node:path";
-import { defaultDbPath, openDefaultDb } from "./db.js";
+import { defaultDbPath, openDefaultDb } from "./store/db.js";
 import { walkAndIngest } from "./ingest/walk.js";
 import { ingestChatGPTExport } from "./ingest/chatgpt.js";
 import { ingestVSCodeTranscripts, ingestVSCodePrompts } from "./ingest/vscode.js";
@@ -45,7 +45,7 @@ async function main(): Promise<void> {
     }
     case "file": {
       const { readFile } = await import("node:fs/promises");
-      const { capture } = await import("./tools.js");
+      const { capture } = await import("./memory/tools.js");
       const content = await readFile(resolve(parsed.path), "utf8");
       const r = capture(db, { scope: parsed.scope, body: content });
       console.log(JSON.stringify(r));

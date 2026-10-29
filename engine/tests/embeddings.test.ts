@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach } from "vitest";
 import type { Database as DB } from "better-sqlite3";
-import { openDb } from "../src/db.js";
-import { capture, consolidate, recallHybrid } from "../src/tools.js";
+import { openDb } from "../src/store/db.js";
+import { capture, consolidate, recallHybrid } from "../src/memory/tools.js";
 import {
   saveMemoryEmbedding,
   semanticSearchMemories,
@@ -198,7 +198,7 @@ describe("recallHybrid", () => {
     await embedPendingMemories(db, { embedFn: fakeEmbed, model: "fake" });
 
     // "finanzas" no aparece literal en el gist → FTS5 no lo encuentra...
-    const { recall } = await import("../src/tools.js");
+    const { recall } = await import("../src/memory/tools.js");
     const lexical = recall(db, { query: "finanzas" });
     expect(lexical.hits).toHaveLength(0);
 

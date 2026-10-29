@@ -15,9 +15,9 @@
  */
 import type { ServerResponse } from "node:http";
 import type { Database as DB } from "better-sqlite3";
-import { countPendingEpisodes, pendingEpisodes, recallHybrid } from "./tools.js";
-import type { EmbedFn } from "./embeddings/provider.js";
-import { Layer } from "./schema.js";
+import { countPendingEpisodes, pendingEpisodes, recallHybrid } from "../../memory/tools.js";
+import type { EmbedFn } from "../../embeddings/provider.js";
+import { Layer } from "../../schema.js";
 
 // One source for the layer names: the Zod enum that validates them.
 const LAYERS: readonly Layer[] = Layer.options;

@@ -1,10 +1,10 @@
 import { describe, it, expect, beforeEach } from "vitest";
 import type { IncomingMessage, ServerResponse } from "node:http";
 import type { Database as DB } from "better-sqlite3";
-import { openDb } from "../src/db.js";
+import { openDb } from "../src/store/db.js";
 import type { ConsolidationJob } from "../src/consolidation/job.js";
 import { saveMemoryEmbedding } from "../src/embeddings/store.js";
-import { capture, consolidate, crystallize } from "../src/tools.js";
+import { capture, consolidate, crystallize } from "../src/memory/tools.js";
 import {
   ForgetConfirmations,
   crystallizeFromUi,
@@ -14,7 +14,7 @@ import {
   loadAllowDelete,
   unconsolidateMemory,
   writeGuard,
-} from "../src/viewer-actions.js";
+} from "../src/http/viewer/actions.js";
 
 let db: DB;
 beforeEach(() => {
