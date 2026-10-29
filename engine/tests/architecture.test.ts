@@ -67,14 +67,9 @@ const ALLOWED: Record<string, string[]> = {
 // http, mcp, hooks, export) only composes, so its queries are debt from the flat
 // layout and each entry moves when its module is split.
 const SQL_EXCEPTIONS: Record<string, string> = {
-  "src/ingest-cli.ts (sql)": "reads stats inline; moves with the ingest split",
   "src/migrate-engram-cli.ts (sql)": "reads the engram database; moves with the ingest split",
   "src/obsidian-cli.ts (sql)": "opens the database itself; moves with the export split",
-  "src/stats-cli.ts (sql)": "reads stats inline; moves with the query split",
   "src/export/obsidian.ts (sql)": "queries its own rows; moves with the export split",
-  "src/http/viewer/read.ts (sql)": "read model of the viewer; moves with the query split",
-  "src/http/viewer/api.ts (sql)": "read model of the viewer; moves with the query split",
-  "src/http/viewer/actions.ts (sql)": "writes from the viewer; moves with the memory split",
   "src/mcp/engram-compat.ts (sql)": "legacy aliases with their own SQL; moves with the alias split",
 };
 
