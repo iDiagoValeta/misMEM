@@ -44,6 +44,7 @@
 
 - zod pasa de 3.25.76 a 4.6.7 (versión exacta): `.int()` rechaza enteros fuera del rango seguro de JS (y el `inputSchema` de `forget` lo anuncia), los límites de longitud cuentan *code points* en vez de unidades UTF-16 y cambian los textos de `ZodError`; `tests/tool-schemas.test.ts` compara con `z.toJSONSchema` en vez de leer internos de zod 3.
 
+
 ### Un solo diálogo de confirmación en el detalle
 
 - `MemoryView` y `TraitView` repetían el pie del diálogo de confirmación y la forma de sus props. Ambos viven ahora en `DetailParts.tsx` (`ConfirmDialog` y `DetailViewProps`), sin cambios visibles, y `pnpm dup` pasa a exigir umbral 0: ningún bloque copiado de 10 o más líneas.
@@ -223,7 +224,7 @@
 - La consolidación acepta OpenAI y cualquier servidor compatible desde #67, y tanto los
   componentes como la sección de privacidad hablaban sólo de DeepSeek y OpenRouter. Importa
   porque es lo que permite consolidar sin que el texto salga de la red propia.
-- Una sección para el índice hebbiano y un enlace al diseño del ordenador de memoria.
+- Una sección para el índice hebbiano.
 - El README y DEPLOY.md mandaban a `docker pull ghcr.io/lucasmella-stack/mismem-brain:latest` como
   camino recomendado, y esa imagen **nunca se publicó**: las tres corridas de `docker.yml` fallan
   al empujar con `denied: permission_denied: read_package`, así que el `pull` responde `denied`.
@@ -271,6 +272,30 @@
   contra DNS rebinding.
 - `MISMEM_HTTP_MAX_BODY_BYTES`: `POST /mcp` corta el cuerpo en 4 MiB con 413 sin juntarlo en
   memoria, y un `Content-Type` que no es JSON responde 415 antes de leer.
+
+### El conectoma se puede mirar
+
+- `/api/graph?co_use=1` suma una segunda capa lateral. La que ya había, `?related=1`, une memorias
+  **parecidas**: sale de lo que cada una dice. Esta sale de lo que **pasó**: qué recuerdos usó junto
+  un mismo turno. Las dos juntas valen más que cada una —parecidas que nunca se usan juntas son
+  candidatas a que una reemplace a la otra— pero eso es otra entrada.
+- El peso **no** es el conteo crudo, es NPMI. Un recuerdo que se usa en todos los turnos co-ocurre
+  con todo, así que por conteo sería el centro del grafo sin orientar a nada: el mismo error de la
+  saliencia midiendo recencia. Con NPMI, 0 es "indistinguible del azar" y 1 "nunca aparecen
+  separados". Hay un test que construye el caso y falla si el ranking se ordena por grado;
+  comprobado mutando el comparador.
+- Hacía falta un denominador y no existía: la tabla `meta` guarda el total de turnos de uso medido,
+  y se suma dentro de la misma transacción que los conteos de `co_use` para que no pueda quedar
+  desfasado. Migración aditiva.
+- Con pocos datos la fuerza es ruido por construcción —dos recuerdos usados una sola vez, esa vez
+  juntos, dan 1—, así que cada arista viaja con su `n`, `?co_use_min_n=k` filtra por soporte y el
+  resumen informa el tamaño de la muestra. Los costados de la interfaz tienen que poder decir "esto
+  todavía no significa nada" en vez de pintar ruido.
+- Sin el parámetro la respuesta no cambia: las aristas verticales no reciben campos nuevos y hay un
+  test que compara las dos respuestas.
+- Sobre copia de producción: migración en 18 ms, `integrity_check` y `foreign_key_check` ok, 3.805
+  memorias y 216 rasgos intactos, y las seis aristas existentes dan fuerza 0 porque el contador nace
+  ahora. Es correcto: son turnos que nadie midió, y 0 dice "no sé" en vez de inventar un número.
 
 ## 0.5.0 — 2026-10-23
 

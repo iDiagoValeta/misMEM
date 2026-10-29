@@ -10,6 +10,7 @@ import {
   type RecallHit,
 } from "./schema.js";
 import { contentHash } from "./hash.js";
+import { registerTurn } from "./connectome.js";
 import { CANDIDATE_POOL_LIMIT, fuseMemories, hasComparableVectors, lexicalCandidates } from "./search.js";
 import { embedTexts, loadEmbeddingConfig, type EmbedFn } from "./embeddings/provider.js";
 import { semanticSearchMemories } from "./embeddings/store.js";
@@ -133,6 +134,9 @@ function registrarUso(db: DB, memoryIds: readonly string[], at: number): void {
   );
 
   db.transaction(() => {
+    // The turn goes in the same transaction as the counts: the denominator must not
+    // fall out of step with the numerators, not even through a failure mid-way.
+    registerTurn(db);
     for (const id of ids) contar.run(id);
     for (let i = 0; i < ids.length; i++) {
       for (let j = i + 1; j < ids.length; j++) {
