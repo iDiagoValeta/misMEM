@@ -6,8 +6,9 @@ import { fileURLToPath } from "node:url";
 // engine/src used to be flat. It is now grouped by capability, and the point of
 // grouping is lost unless the dependencies stay one-way. The checks below are the
 // contract: a review cannot see an import that skips a layer, and no other test
-// fails when one appears. Each rule keeps an explicit exception list, and the test
-// fails both when a new violation lands and when an exception outlives its cause.
+// fails when one appears. The rules that need one keep an explicit exception list, and
+// the test fails when a new violation lands and when an exception outlives its cause.
+// The layer rule has none left: `memory` no longer reaches back into `recall`.
 
 const ENGINE = fileURLToPath(new URL("../", import.meta.url));
 const SRC = join(ENGINE, "src");
@@ -62,13 +63,6 @@ const ALLOWED: Record<string, string[]> = {
   http: ["domain", "store", "embeddings", "memory", "recall", "queries", "consolidation"],
 };
 
-// `memory` reaches back into `recall` for the lexical pool and the fusion helpers
-// while `tools.ts` still owns the recall path; the tools split removes the cycle.
-const LAYER_EXCEPTIONS: Record<string, string> = {
-  "src/memory/tools.ts -> src/recall/lexical.ts (capa)": "the lexical pool still lives in recall; the tools split removes the cycle",
-  "src/memory/tools.ts -> src/recall/fuse.ts (capa)": "the fusion helpers still live in recall; the tools split removes the cycle",
-};
-
 // SQL belongs to the capabilities that own the schema. The delivery layer (root,
 // http, mcp, hooks, export) only composes, so its queries are debt from the flat
 // layout and each entry moves when its module is split.
@@ -89,7 +83,6 @@ const SQL_EXCEPTIONS: Record<string, string> = {
 const SIZE_EXCEPTIONS: Record<string, string> = {
   "src/consolidation/run.ts (400 líneas)": "awaits the consolidation split",
   "src/export/obsidian.ts (400 líneas)": "awaits the export split",
-  "src/memory/tools.ts (400 líneas)": "awaits the tools split",
 };
 
 const MAX_LINES = 400;
@@ -184,8 +177,7 @@ describe("estructura de src", () => {
         if (!allowed) violations.push(`${rel} -> src/${to.replace(/\.js$/, ".ts")} (capa)`);
       }
     }
-    expect(violations.filter((v) => !(v in LAYER_EXCEPTIONS))).toEqual([]);
-    expect(Object.keys(LAYER_EXCEPTIONS).filter((k) => !violations.includes(k))).toEqual([]);
+    expect(violations).toEqual([]);
   });
 
   it("domain no hace I/O ni lee el entorno", () => {

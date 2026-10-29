@@ -20,7 +20,9 @@
  *   mem_session_end      → no-op informativo
  */
 import type { Database as DB } from "better-sqlite3";
-import { capture, pendingEpisodes, recallHybrid } from "../memory/tools.js";
+import { capture } from "../memory/capture.js";
+import { pendingEpisodes } from "../memory/pending.js";
+import { recallHybrid } from "../recall/recall.js";
 import type { EmbedFn } from "../embeddings/provider.js";
 
 export interface EngramToolDef {

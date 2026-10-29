@@ -6,7 +6,7 @@
 import { defaultDbPath, openDefaultDb } from "./store/db.js";
 import { ArgsError, EXIT_USAGE } from "./cli-args.js";
 import { parseForgetArgs } from "./forget-args.js";
-import { forget } from "./memory/tools.js";
+import { forget } from "./memory/forget.js";
 
 function help(): void {
   console.log(`misMEM: CLI de olvido

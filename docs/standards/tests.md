@@ -21,7 +21,7 @@ Vitest, desde `engine/`: `pnpm test`. El typecheck también cubre los tests (`pn
 - **Un fichero temporal se crea en un directorio propio y se borra al terminar.** Ningún test toca
   `~/.mismem`.
 - **Un test no usa memorias reales.** Ni en los fixtures ni en las salidas guardadas.
-- **Un cambio en el ranking del recall** (`recall/`, `memory/tools.ts`, `embeddings/`) se mide además con
+- **Un cambio en el ranking del recall** (`recall/`, `embeddings/`) se mide además con
   `mismem-bench` antes y después, y las cifras van en el PR (etiqueta `needs-bench`).
 - **Un bug se arregla con su test de regresión**, que falla antes del arreglo.
 

@@ -1,6 +1,8 @@
 import { afterEach, describe, expect, it, vi } from "vitest";
 import { openDb } from "../src/store/db.js";
-import { capture, consolidate, recallHybrid } from "../src/memory/tools.js";
+import { capture } from "../src/memory/capture.js";
+import { consolidate } from "../src/memory/consolidate.js";
+import { recallHybrid } from "../src/recall/recall.js";
 import { embedPendingMemories } from "../src/embeddings/store.js";
 import { embedTexts, loadEmbeddingConfig } from "../src/embeddings/provider.js";
 

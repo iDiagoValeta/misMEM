@@ -1,14 +1,12 @@
 import { describe, it, expect, beforeEach, afterEach } from "vitest";
 import type { Database as DB } from "better-sqlite3";
 import { openDb } from "../src/store/db.js";
-import {
-  capture,
-  recall,
-  consolidate,
-  crystallize,
-  forget,
-  reinforce,
-} from "../src/memory/tools.js";
+import { capture } from "../src/memory/capture.js";
+import { recall } from "../src/recall/recall.js";
+import { consolidate } from "../src/memory/consolidate.js";
+import { crystallize } from "../src/memory/crystallize.js";
+import { forget } from "../src/memory/forget.js";
+import { reinforce } from "../src/memory/reinforce.js";
 
 let db: DB;
 const DAY = 86_400_000;

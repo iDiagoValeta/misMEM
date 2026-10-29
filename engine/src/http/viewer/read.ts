@@ -15,7 +15,8 @@
  */
 import type { ServerResponse } from "node:http";
 import type { Database as DB } from "better-sqlite3";
-import { countPendingEpisodes, pendingEpisodes, recallHybrid } from "../../memory/tools.js";
+import { countPendingEpisodes, pendingEpisodes } from "../../memory/pending.js";
+import { recallHybrid } from "../../recall/recall.js";
 import type { EmbedFn } from "../../embeddings/provider.js";
 import { Layer } from "../../schema.js";
 

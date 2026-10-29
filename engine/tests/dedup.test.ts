@@ -5,7 +5,8 @@ import { join } from "node:path";
 import type { Database as DB } from "better-sqlite3";
 import { openDb } from "../src/store/db.js";
 import { contentHash } from "../src/domain/hash.js";
-import { capture, recall } from "../src/memory/tools.js";
+import { capture } from "../src/memory/capture.js";
+import { recall } from "../src/recall/recall.js";
 
 let db: DB;
 

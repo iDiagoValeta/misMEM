@@ -9,7 +9,12 @@ import {
   ListToolsRequestSchema,
 } from "@modelcontextprotocol/sdk/types.js";
 import type { Database as DB } from "better-sqlite3";
-import { capture, recallHybrid, consolidate, crystallize, forget, reinforce } from "./memory/tools.js";
+import { capture } from "./memory/capture.js";
+import { recallHybrid } from "./recall/recall.js";
+import { consolidate } from "./memory/consolidate.js";
+import { crystallize } from "./memory/crystallize.js";
+import { forget } from "./memory/forget.js";
+import { reinforce } from "./memory/reinforce.js";
 import { embedPendingMemories } from "./embeddings/store.js";
 import {
   ENGRAM_TOOLS,
