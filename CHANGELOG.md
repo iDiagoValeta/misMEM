@@ -297,6 +297,22 @@
   memorias y 216 rasgos intactos, y las seis aristas existentes dan fuerza 0 porque el contador nace
   ahora. Es correcto: son turnos que nadie midió, y 0 dice "no sé" en vez de inventar un número.
 
+### La imagen de GHCR existe
+
+- `ghcr.io/lucasmella-stack/mismem-brain` se publica de verdad: `0.5.0`, `0.5` y `latest`, multi-arch
+  (`linux/amd64` y `linux/arm64`), con pull anónimo. Es la primera imagen que llega al registro desde
+  que existe el repo, y `latest` deja de apuntar al `0.2.0` de julio de 2026.
+- No hacía falta cambiar nada del workflow. Los push de v0.1.0 y v0.2.0 habían creado el paquete en
+  julio, GitHub no lo vinculó al repositorio, y desde v0.3.0 todo push moría en `denied:
+  permission_denied: read_package`. El paquete tampoco se veía en la lista de la cuenta por estar
+  privado y sin vincular. Dos cambios en *Package settings*: el repo con rol **Write** en *Manage
+  Actions access*, y la visibilidad a **Public**.
+- El Quickstart de Docker del README pasa a ser `docker run ghcr.io/...` en vez de clonar y construir,
+  y en `DEPLOY.md` la imagen publicada pasa a ser la opción A: el build en el servidor queda como la
+  alternativa para probar un cambio sin pasar por un release. El diagnóstico queda escrito ahí, con el
+  comando de `gh api` que hace visible un paquete privado sin vincular y el `docker logout ghcr.io`
+  para las máquinas con credenciales viejas.
+
 ## 0.5.0 — 2026-10-23
 
 ### Que el LLM ignore un episodio ya no lo condena a la primera
