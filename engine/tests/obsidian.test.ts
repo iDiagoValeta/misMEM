@@ -9,7 +9,7 @@ import { saveMemoryEmbedding } from "../src/embeddings/store.js";
 import { capture } from "../src/memory/capture.js";
 import { consolidate } from "../src/memory/consolidate.js";
 import { crystallize } from "../src/memory/crystallize.js";
-import { EXPORT_ROOT, exportObsidian, safeName } from "../src/export/obsidian.js";
+import { EXPORT_ROOT, exportObsidian } from "../src/export/obsidian.js";
 
 let db: DB;
 let vault: string;
@@ -34,20 +34,6 @@ function memoryFrom(scope: string, gist: string, bodies: string[], vec?: number[
 
 const notes = (sub: string): string[] => readdirSync(join(vault, EXPORT_ROOT, sub)).sort();
 const read = (sub: string, name: string): string => readFileSync(join(vault, EXPORT_ROOT, sub, name), "utf8");
-
-describe("safeName", () => {
-  it("quita lo que Obsidian o Windows no admiten y corta por palabra", () => {
-    expect(safeName('a/b\\c:d*e?f"g<h>i|j#k^l[m]n')).toBe("a b c d e f g h i j k l m n");
-    expect(safeName("una frase bastante larga que no entra", 20)).toBe("una frase bastante");
-    expect(safeName("termina en punto.")).toBe("termina en punto");
-    expect(safeName("///")).toBe("sin título");
-  });
-
-  it("quita los caracteres de control: un NUL revienta la escritura y los demás rompen el sync", () => {
-    expect(safeName("antes\u0000despues")).toBe("antes despues");
-    expect(safeName("control \u0001 y \u001b escape\u007f")).toBe("control y escape");
-  });
-});
 
 describe("exportObsidian", () => {
   it("una nota por memoria, rasgo y ámbito, enlazadas por origen, rasgo y parecido", () => {

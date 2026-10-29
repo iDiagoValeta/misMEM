@@ -2,6 +2,19 @@
 
 ## Sin publicar
 
+### La exportación a Obsidian separa sus lecturas, su formato y su bóveda (#167)
+
+- `engine/src/export/obsidian.ts` queda en `exportObsidian`, que orquesta: lee, arma los mapas de enlaces y
+  entrega los ficheros al escritor. Las cuatro lecturas (memorias, rasgos, episodios consolidados y ámbitos)
+  pasan a `engine/src/queries/export.ts`; el formato puro de cada nota (nombres, enlaces, frontmatter y
+  cuerpo) a `engine/src/export/notes.ts`; y el manifiesto, la propiedad por frontmatter y la escritura o
+  borrado a `engine/src/export/vault.ts`. `EXPORT_ROOT` sigue exportándose desde `obsidian.ts`.
+- `mismem-obsidian` comprueba que el fichero es una base de misMEM con `engine/src/store/probe.ts`, que la abre
+  en sólo lectura antes de que `openDb` migre el esquema o pase el journal a WAL.
+- Mismos ficheros, mismos bytes, mismo manifiesto y mismas negativas. `engine/tests/export-notes.test.ts` fija el
+  formato sin disco; `engine/tests/architecture.test.ts` pierde las dos excepciones de SQL y la de tamaño de la
+  exportación, y `AGENTS.md` y `docs/architecture.md` describen el corte.
+
 ### Los alias de Engram y su migración dejan de escribir SQL (#166)
 
 - `engine/src/mcp/engram-tools.ts` reúne `ENGRAM_TOOLS` y `EngramToolDef`; `engram-compat.ts` queda en el

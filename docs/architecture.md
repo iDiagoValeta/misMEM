@@ -67,16 +67,18 @@ quedan fuera (`engine/src/domain/noise.ts`).
 | `engine/src/http/routes.ts` | El despacho de cada petición en su orden (Host → `/healthz` → `/mcp` → visor y API → 404), con la base, la auth, el tope del cuerpo, el job de consolidación y el transporte del MCP inyectados. `respond.ts` reúne las respuestas JSON y de texto |
 | `engine/ui/` | La interfaz (React y Vite, compilada a `dist/ui/`) que `server-http` sirve en `/viewer`: memorias por saliencia de hoy, rasgos, lo pendiente y de dónde sale cada recuerdo. `pnpm dev:ui` la levanta en desarrollo contra un servidor en `:3200` |
 | `engine/src/http/viewer/read.ts`, `api.ts` | Su API de sólo lectura: `/api/{stats,recent,search,scopes,memories,graph}` y `/api/{memory,trait}/:id`. Validan la entrada, llaman a `engine/src/queries/` y responden; la saliencia que devuelven es la efectiva, con el decay aplicado a hoy, la misma que usa el recall |
-| `engine/src/queries/` | Las lecturas del visor, de `mismem-stats`, `mismem-ingest` y del alias `mem_get_observation`, un módulo por recurso (`stats.ts`, `recent.ts`, `scopes.ts`, `memories.ts`, `traits.ts`, `graph.ts`, `forget-impact.ts`, `observation.ts`), más `views.ts` (la forma de una memoria y un rasgo) y `relations.ts` (memorias parecidas por vector, compartida con la exportación a Obsidian). Reciben la base y devuelven datos planos |
+| `engine/src/queries/` | Las lecturas del visor, de `mismem-stats`, `mismem-ingest`, del alias `mem_get_observation` y la exportación a Obsidian, un módulo por recurso (`stats.ts`, `recent.ts`, `scopes.ts`, `memories.ts`, `traits.ts`, `graph.ts`, `forget-impact.ts`, `observation.ts`, `export.ts`), más `views.ts` (la forma de una memoria y un rasgo) y `relations.ts` (memorias parecidas por vector, compartida con la exportación a Obsidian). Reciben la base y devuelven datos planos |
 | `engine/src/http/viewer/actions.ts` | Lo que la interfaz puede cambiar, sólo por POST JSON desde el propio origen: corregir una memoria, deshacer su consolidación, cristalizar y lanzar una consolidación. Olvidar una memoria (con sus episodios) o un rasgo no tiene vuelta atrás y está apagado salvo con `MISMEM_VIEWER_ALLOW_DELETE=1`; aun así va en dos pasos: el primer POST devuelve qué se perdería y un token de 60 s, y borra el segundo, el que lo trae. Las escrituras y su SQL viven en `engine/src/memory/edit.ts`, y el impacto de un olvido en `queries/forget-impact.ts` |
 | `engine/src/mcp/` | Los alias `mem_*` de Engram, que siguen funcionando para los clientes que no se reconfiguran: `engram-tools.ts` con el catálogo de definiciones y `engram-compat.ts` con el despacho a las seis herramientas o a `queries/observation.ts` y `memory/engram-update.ts` |
 | Consolidación con LLM | Cron nocturno que destila episodios en memorias con DeepSeek, OpenRouter, OpenAI o cualquier servidor compatible, con prefiltro Pareto para descartar ruido. Ver [su README](../engine/src/consolidation/README.md) |
 | CLIs | `mismem-http` (el mismo servidor HTTP que `pnpm start:http`), `mismem-ingest` (exports de ChatGPT y transcripts de VS Code), `mismem-consolidate`, `mismem-forget`, `mismem-stats`, `mismem-embed`, `mismem-migrate-engram` (una base de Engram a episodios, con `ingest/engram.ts`), `mismem-bench` (mide el recall con un banco de preguntas propio, sin reforzar), `mismem-obsidian` y los dos hooks, `mismem-inject` y `mismem-used` |
 
 `mismem-obsidian` escribe la memoria como bóveda de Obsidian en `<bóveda>/misMEM/`: una nota por memoria,
-rasgo y ámbito, enlazadas por origen y por parecido. Re-exportar sólo borra las notas cuyo frontmatter
-sigue declarando el id del manifiesto, y se niega si la base no tiene nada que exportar o el manifiesto no
-se puede leer.
+rasgo y ámbito, enlazadas por origen y por parecido. `engine/src/export/obsidian.ts` orquesta; sus lecturas
+viven en `queries/export.ts`, el formato puro de cada nota en `export/notes.ts` y el manifiesto y la escritura
+en `export/vault.ts`. Re-exportar sólo borra las notas cuyo frontmatter sigue declarando el id del manifiesto,
+y se niega si la base no tiene nada que exportar o el manifiesto no se puede leer. `mismem-obsidian` comprueba
+en sólo lectura que el fichero es una base de misMEM con `store/probe.ts` antes de abrirlo.
 
 ## Almacenamiento
 

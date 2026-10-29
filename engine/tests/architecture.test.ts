@@ -64,18 +64,12 @@ const ALLOWED: Record<string, string[]> = {
 };
 
 // SQL belongs to the capabilities that own the schema. The delivery layer (root,
-// http, mcp, hooks, export) only composes, so its queries are debt from the flat
-// layout and each entry moves when its module is split.
-const SQL_EXCEPTIONS: Record<string, string> = {
-  "src/obsidian-cli.ts (sql)": "opens the database itself; moves with the export split",
-  "src/export/obsidian.ts (sql)": "queries its own rows; moves with the export split",
-};
+// http, mcp, hooks, export) only composes: its reads live in `queries/`.
 
 // Ratchet: these already exceed 400 lines and are split in later PRs. Entries can
 // only be removed; nothing new may be added.
 const SIZE_EXCEPTIONS: Record<string, string> = {
   "src/consolidation/run.ts (400 líneas)": "awaits the consolidation split",
-  "src/export/obsidian.ts (400 líneas)": "awaits the export split",
 };
 
 const MAX_LINES = 400;
@@ -195,8 +189,7 @@ describe("estructura de src", () => {
       if (!delivery.has(layer)) continue;
       if (SQL.test(code) || VALUE_IMPORT.test(code)) violations.push(`${rel} (sql)`);
     }
-    expect(violations.filter((v) => !(v in SQL_EXCEPTIONS))).toEqual([]);
-    expect(Object.keys(SQL_EXCEPTIONS).filter((k) => !violations.includes(k))).toEqual([]);
+    expect(violations).toEqual([]);
   });
 
   it("ningún fichero pasa del tope de líneas salvo las excepciones", () => {
