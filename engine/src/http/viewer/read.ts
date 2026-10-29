@@ -19,6 +19,7 @@ import { countPendingEpisodes, pendingEpisodes } from "../../memory/pending.js";
 import { recallHybrid } from "../../recall/recall.js";
 import type { EmbedFn } from "../../embeddings/provider.js";
 import { Layer } from "../../schema.js";
+import { json } from "../respond.js";
 
 // One source for the layer names: the Zod enum that validates them.
 const LAYERS: readonly Layer[] = Layer.options;
@@ -31,13 +32,6 @@ export function clampLimit(raw: string | null, def: number, max: number): number
   const n = Number(raw);
   if (!Number.isFinite(n) || n <= 0) return def;
   return Math.min(max, Math.floor(n));
-}
-
-export function json(res: ServerResponse, status: number, payload: unknown): void {
-  res.statusCode = status;
-  res.setHeader("content-type", "application/json; charset=utf-8");
-  res.setHeader("cache-control", "no-store");
-  res.end(JSON.stringify(payload));
 }
 
 /**

@@ -28,7 +28,8 @@ import {
   type TraitRow,
 } from "../../store/rows.js";
 import { effectiveSalience } from "../../memory/salience.js";
-import { clampLimit, json, parseOffset } from "./read.js";
+import { json } from "../respond.js";
+import { clampLimit, parseOffset } from "./read.js";
 
 const GRAPH_MAX_MEMORIES = 400;
 const GRAPH_MAX_TRAITS = 200;

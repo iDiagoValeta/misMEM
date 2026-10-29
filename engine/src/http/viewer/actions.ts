@@ -29,7 +29,7 @@ import { CrystallizeInput, Scope } from "../../schema.js";
 import { crystallize } from "../../memory/crystallize.js";
 import { embedPendingMemories } from "../../embeddings/store.js";
 import { JobError, type ConsolidationJob } from "../../consolidation/job.js";
-import { json } from "./read.js";
+import { json } from "../respond.js";
 
 /** Una acción no necesita más: lo grande va por capture o la ingesta. */
 export const ACTION_MAX_BODY_BYTES = 256 * 1024;
