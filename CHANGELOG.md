@@ -2,6 +2,10 @@
 
 ## Sin publicar
 
+### La interfaz parte `GraphView.tsx` y `MemoryView.tsx` (#170)
+
+- El grafo deja en `GraphView.tsx` la consulta, el estado y la composición: los colores leídos del tema pasan a `lib/graph-tokens.ts` y el pintado de nodos y aristas a `components/graph/paint.ts`. La ficha de memoria saca el formulario de edición a `components/memory/EditForm.tsx`, los dos pasos de deshacer y olvidar a `hooks/use-memory-actions.ts` y sus textos a `lib/memory-text.ts`, que ahora tiene test. Nada visible cambia.
+
 ### La corrida de consolidación recibe un contexto y deja su estado aparte (#168)
 
 - `engine/src/consolidation/run.ts` queda en `runConsolidation`: lee el entorno, arma el contexto de la
