@@ -297,6 +297,24 @@
   memorias y 216 rasgos intactos, y las seis aristas existentes dan fuerza 0 porque el contador nace
   ahora. Es correcto: son turnos que nadie midió, y 0 dice "no sé" en vez de inventar un número.
 
+### El contador de turnos nace con la cota que los datos permiten
+
+- Un cerebro que ya venía midiendo co-uso con la versión anterior guarda `n` y `use_count` de turnos
+  que nadie contó. Con el contador en 0 toda fuerza vale 0, que es correcto —dice "no sé"—, pero
+  **desde el primer turno medido después de actualizar** el cociente `n / turnos` se acota a 1 y cada
+  par heredado se lee como asociación máxima: justo el club de los ricos que el peso existe para
+  evitar. Duraba hasta que el contador pasaba por arriba de cada `n`.
+- Al abrir, si el contador no existe, se siembra con el uso más alto registrado (`max(use_count)` y
+  `max(n)` de `co_use`). Es una cota inferior de los turnos que hubo, porque cada uso ocupó un turno:
+  subestima, nunca infla. Sólo cuando falta: un contador andando es la medición de verdad y no se pisa.
+- Sobre copia de producción (2.527 memorias, 2.651 episodios, esquema previo a `use_count`): migración
+  en 19 ms, nada perdido, y no siembra nada porque ahí no hay uso medido —un cerebro viejo no recibe un
+  contador inventado—. Con 40 turnos reinyectados sobre ids reales, el par identidad+acompañante da
+  0,112; sin semilla, el primer turno tras el deploy lo sube a **1**; con semilla (38, la cota) vuelve a
+  **0**, que es la respuesta correcta para algo que acompaña a un recuerdo que está en todos los turnos.
+  El par poco usado se queda en 1 con `n` de 3, y para eso está `?co_use_min_n=k`.
+- El test que lo cubre afirma las dos lecturas, la de antes y la de después, así que el artefacto queda
+  escrito en la suite en vez de en un comentario.
 ### La imagen de GHCR existe
 
 - `ghcr.io/lucasmella-stack/mismem-brain` se publica de verdad: `0.5.0`, `0.5` y `latest`, multi-arch

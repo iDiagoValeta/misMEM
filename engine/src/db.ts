@@ -3,6 +3,7 @@ import type { Database as DB } from "better-sqlite3";
 import { chmodSync, mkdirSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { homedir } from "node:os";
+import { seedTurnsFromUse } from "./connectome.js";
 import { contentHash } from "./hash.js";
 
 export function defaultDbPath(): string {
@@ -187,6 +188,10 @@ function migrate(db: DB): void {
      SET salience_updated_at = COALESCE(last_accessed_at, created_at)
      WHERE salience_updated_at IS NULL`,
   );
+
+  // The turn counter is the denominator of counts that predate it: without this the
+  // inherited pairs read as maximal associations. See `seedTurnsFromUse`.
+  seedTurnsFromUse(db);
 }
 
 export function openDb(path: string): DB {
