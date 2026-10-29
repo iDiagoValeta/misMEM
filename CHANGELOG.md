@@ -2,10 +2,13 @@
 
 ## Sin publicar
 
+## 0.6.0 — 2026-10-29
+
 ### El olvido respeta `before_days` también al borrar memorias
 
 - `forget` borraba los episodios de una memoria de saliencia baja aunque alguno fuera más nuevo que `before_days`. Con los defaults de `mismem-forget` (90 y 30 días), un episodio de 40 días atado a una memoria olvidable se borraba antes de los 90 que promete `before_days`. Ahora la memoria sólo es olvidable cuando todos sus episodios ya superaron `before_days`; mientras quede uno más nuevo, la memoria y sus episodios esperan. Las memorias sin episodios o con todos viejos se borran igual que antes, y sus episodios con ellas para que `ON DELETE SET NULL` no los devuelva a pendientes.
 - El conteo de `dry_run` sale de las mismas consultas que el borrado, y un test compara lo que anuncia con lo que después borra.
+
 ### Embeddings: mejores valores por defecto para quien instala misMEM (#72)
 
 - Con `nomic-embed-text` el corte semántico de 0,5 no cortaba nada: las 10 preguntas ajenas de la
@@ -344,6 +347,7 @@
   El par poco usado se queda en 1 con `n` de 3, y para eso está `?co_use_min_n=k`.
 - El test que lo cubre afirma las dos lecturas, la de antes y la de después, así que el artefacto queda
   escrito en la suite en vez de en un comentario.
+
 ### La imagen de GHCR existe
 
 - `ghcr.io/lucasmella-stack/mismem-brain` se publica de verdad: `0.5.0`, `0.5` y `latest`, multi-arch
