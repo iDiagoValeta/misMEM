@@ -1,27 +1,10 @@
-// Owns FTS query building, rescue and ranking for recall, apart from tools.ts so a ranking change does not share a diff with the write paths.
+// Owns the lax rescue: its prefix, rarity and minimum-match constants and the scoring that
+// decides which candidates survive when the strict query found nothing.
 import type { Database as DB } from "better-sqlite3";
-import type { RecallInput, RecallHit } from "../schema.js";
 import { plain, searchTerms } from "../domain/terms.js";
-import type { SemanticHit } from "../embeddings/store.js";
-import { effectiveSalience } from "../memory/salience.js";
-import { excludeNoiseSql, type SalienceRow } from "../store/rows.js";
-
-export const CANDIDATE_POOL_LIMIT = 50;
-const MEMORY_FTS_SCAN_LIMIT = 200;
-const RRF_K = 60;
-// Menor que un puesto de RRF en la cima (1/61 - 1/62 ≈ 0.00026): ahí la saliencia
-// sólo desempata. Más abajo los puestos se achican (≈ 0.00008 al final de los 50
-// candidatos) y una saliencia alta puede adelantar dos o tres lugares.
-const SALIENCE_RRF_WEIGHT = 0.0002;
-
-const quoteFts = (term: string): string => `"${term.replace(/"/g, '""')}"`;
-
-function escapeFts(query: string): string {
-  // Cada palabra entre comillas: FTS5 las une con AND y los caracteres especiales no rompen el MATCH.
-  // Sin palabras, un término vacío no matchea nada y evita una expresión inválida.
-  const escaped = searchTerms(query).map(quoteFts).join(" ");
-  return escaped || '""';
-}
+import { excludeNoiseSql } from "../store/rows.js";
+import { FTS_TOKEN_SPLIT, quoteFts } from "./fts.js";
+import type { RankedCandidate } from "./lexical.js";
 
 // El tokenizador no reduce a raíz: sin esto "controlo" no encuentra "controlan" ni "deudas"
 // encuentra "deuda". Una palabra de 5 letras o más busca por su principio, sin las últimas
@@ -29,11 +12,6 @@ function escapeFts(query: string): string {
 const PREFIX_FROM_LENGTH = 5;
 const PREFIX_TRIM = 3;
 const PREFIX_MIN = 4;
-
-// El rescate puntúa con el mismo tokenizador que indexa FTS5 (unicode61): `_` y cualquier
-// signo separan palabras. Si un lado parte y el otro no, se recupera por un criterio y se
-// cuenta por otro, y el candidato se descarta con cero coincidencias.
-const FTS_TOKEN_SPLIT = /[^\p{L}\p{N}]+/u;
 
 // Cuántos términos informativos distintos tienen que coincidir. Con uno se colaría
 // cualquier recuerdo que comparta una palabra rara pero ajena; con dos, el candidato tiene
@@ -62,9 +40,9 @@ const RELAXED_RARE_FRACTION = 0.05;
 // tope del rescate; el estricto conserva el suyo de candidatos.
 const RELAXED_MAX_RESULTS = 3;
 // Tope de palabras para que la consulta de rescate no crezca sin límite.
-const RELAXED_MAX_TERMS = 12;
+export const RELAXED_MAX_TERMS = 12;
 
-interface RelaxedTerm {
+export interface RelaxedTerm {
   word: string;
   /** Principio por el que se busca; null si la palabra es demasiado corta y va exacta. */
   prefix: string | null;
@@ -83,7 +61,7 @@ interface RelaxedQuery {
  * cambian género, número y conjugación. Cada palabra se parte como la parte FTS5, porque
  * un identificador con guion bajo son dos tokens para el índice y uno solo aquí.
  */
-function relaxedTerms(query: string): RelaxedQuery {
+export function relaxedTerms(query: string): RelaxedQuery {
   const seen = new Set<string>();
   const terms: RelaxedTerm[] = [];
   for (const term of searchTerms(query)) {
@@ -134,7 +112,7 @@ function dedupeByPrefix(terms: RelaxedTerm[]): RelaxedTerm[] {
  * La consulta de rescate cuando la estricta no encontró nada: una sola expresión con OR de
  * todas las palabras. FTS5 ya no decide si el recuerdo vale; sólo trae candidatos baratos.
  */
-function relaxedFts(terms: RelaxedTerm[]): string {
+export function relaxedFts(terms: RelaxedTerm[]): string {
   const expressions = terms.map(({ word, prefix }) =>
     prefix ? `${quoteFts(prefix)}*` : quoteFts(word),
   );
@@ -186,7 +164,7 @@ function documentFrequency(db: DB, term: RelaxedTerm): number {
  * improbable; si aparece, es el tema y merece contar. El total sale del mismo conjunto
  * que la frecuencia, sin ruido, para que las dos comparaciones hablen del mismo corpus.
  */
-function informativeTerms(db: DB, terms: RelaxedTerm[]): RelaxedTerm[] {
+export function informativeTerms(db: DB, terms: RelaxedTerm[]): RelaxedTerm[] {
   const total = (
     db
       .prepare(
@@ -229,50 +207,12 @@ function countRelaxedMatches(text: string, terms: RelaxedTerm[]): number {
   }, 0);
 }
 
-interface TraitCandidate {
-  id: string;
-  scope: string;
-  text: string;
-  created_at: number;
-}
-
-interface MemoryCandidate extends SalienceRow {
-  id: string;
-  scope: string;
-  /** Lo que se devuelve: el gist. */
-  text: string;
-  /** Lo que indexa FTS5 y sobre lo que se cuenta: gist y detalles. */
-  search_text: string;
-  created_at: number;
-  fts_rank: number;
-}
-
-interface EpisodeCandidate {
-  id: string;
-  scope: string;
-  text: string;
-  created_at: number;
-}
-
-/** Lo mínimo para ordenar candidatos rescatados: texto, id y puesto de FTS5. */
-interface RankedCandidate {
-  id: string;
-  /** Lo que se devuelve al cliente. */
-  text: string;
-  /** Lo que indexa FTS5; si falta, se puntúa `text` (rasgos y episodios). */
-  search_text?: string;
-  fts_rank: number;
-}
-
-type TraitRow = TraitCandidate & { fts_rank: number };
-type EpisodeRow = EpisodeCandidate & { fts_rank: number };
-
 /**
  * Deja sólo los candidatos del rescate que alcanzan el mínimo de términos informativos y
  * los ordena por esas coincidencias, no por la saliencia ni por la antigüedad. El tope
  * evita que el rescate se convierta en una segunda lista.
  */
-function relaxRows<T extends RankedCandidate>(
+export function relaxRows<T extends RankedCandidate>(
   rows: T[],
   informative: RelaxedTerm[],
   queryWords: number,
@@ -302,209 +242,4 @@ function relaxRows<T extends RankedCandidate>(
     )
     .slice(0, RELAXED_MAX_RESULTS)
     .map(({ row }) => row);
-}
-
-export function lexicalCandidates(
-  db: DB,
-  input: ReturnType<typeof RecallInput.parse>,
-  at: number,
-  /** Sin capa semántica que responda, el rescate es lo único que encuentra una frase natural. */
-  { rescue = true }: { rescue?: boolean } = {},
-): {
-  traits: TraitCandidate[];
-  memories: RecallHit[];
-  episodes: EpisodeCandidate[];
-} {
-  const strict = escapeFts(input.query);
-  const scopeFilter = input.scope ? "AND t.scope = @scope" : "";
-
-  const traitStmt = db.prepare(
-    `SELECT t.id, t.scope, t.name AS text, t.created_at, rank AS fts_rank
-     FROM traits_fts f JOIN traits t ON t.rowid = f.rowid
-     WHERE traits_fts MATCH @q ${scopeFilter}
-     ORDER BY rank, t.id LIMIT @limit`,
-  );
-
-  const memoryStmt = db.prepare(
-    `SELECT m.id, m.scope, m.gist AS text,
-            m.gist || ' ' || COALESCE(m.details, '') AS search_text,
-            m.salience, m.created_at,
-            m.last_accessed_at, m.salience_updated_at, rank AS fts_rank
-     FROM memories_fts f JOIN memories m ON m.rowid = f.rowid
-     WHERE memories_fts MATCH @q ${input.scope ? "AND m.scope = @scope" : ""}
-       AND ${excludeNoiseSql("m")}
-     ORDER BY rank, m.salience DESC, m.id LIMIT @limit`,
-  );
-
-  const episodeStmt = db.prepare(
-    `SELECT e.id, e.scope, e.body AS text, e.created_at, rank AS fts_rank
-     FROM episodes_fts f JOIN episodes e ON e.rowid = f.rowid
-     WHERE episodes_fts MATCH @q ${input.scope ? "AND e.scope = @scope" : ""}
-       AND e.consolidated_into IS NULL
-     ORDER BY e.created_at DESC, e.id LIMIT @limit`,
-  );
-
-  const run = (q: string): {
-    traits: TraitRow[];
-    memories: MemoryCandidate[];
-    episodes: EpisodeRow[];
-  } => ({
-    traits: traitStmt.all({ q, scope: input.scope, limit: CANDIDATE_POOL_LIMIT }) as TraitRow[],
-    memories: memoryStmt.all({
-      q,
-      scope: input.scope,
-      limit: MEMORY_FTS_SCAN_LIMIT,
-    }) as MemoryCandidate[],
-    episodes: episodeStmt.all({ q, scope: input.scope, limit: CANDIDATE_POOL_LIMIT }) as EpisodeRow[],
-  });
-
-  // La estricta manda sobre la consulta entera: si encontró algo en cualquier capa, el
-  // resultado es el de siempre. El rescate sólo entra cuando no hubo ni un candidato, para
-  // que una paráfrasis no altere una búsqueda que ya funcionaba.
-  const strictRows = run(strict);
-  const strictEmpty =
-    strictRows.traits.length === 0 &&
-    strictRows.memories.length === 0 &&
-    strictRows.episodes.length === 0;
-  // Sólo se consulta la frecuencia cuando de verdad hace falta rescatar: son hasta doce
-  // cuentas sobre memories_fts que una búsqueda normal no debe pagar.
-  let rescuedTerms: RelaxedTerm[] | null = null;
-  let rescuedWordCount = 0;
-  let rows = strictRows;
-  if (strictEmpty && rescue) {
-    const { terms, wordCount } = relaxedTerms(input.query);
-    const relaxed = relaxedFts(terms);
-    if (relaxed !== strict) {
-      rows = run(relaxed);
-      rescuedTerms = informativeTerms(db, terms);
-      // La proporción cuenta lo que de verdad se busca; RELAXED_MAX_TERMS ya recortó la
-      // consulta, y exigir por palabras que no llegaron a buscar sería inalcanzable.
-      rescuedWordCount = Math.min(wordCount, RELAXED_MAX_TERMS);
-    }
-  }
-  const traitRows: TraitCandidate[] = (
-    rescuedTerms
-      ? relaxRows(rows.traits, rescuedTerms, rescuedWordCount)
-      : rows.traits
-  ).map(({ fts_rank: _ftsRank, ...row }) => row);
-  const episodeRows: EpisodeCandidate[] = (
-    rescuedTerms
-      ? relaxRows(rows.episodes, rescuedTerms, rescuedWordCount)
-      : rows.episodes
-  ).map(({ fts_rank: _ftsRank, ...row }) => row);
-
-  // El rescate ya viene ordenado por coincidencias y recortado a RELAXED_MAX_RESULTS. El
-  // estricto conserva el orden de FTS5 y desempata por la saliencia ya decaída: la cruda
-  // favorecía lo que se usó hace mucho y no es la que ve el cliente en el hit.
-  const orderedMemories = rescuedTerms
-    ? relaxRows(rows.memories, rescuedTerms, rescuedWordCount)
-    : rows.memories.sort(
-        (a, b) =>
-          Number(a.fts_rank) - Number(b.fts_rank) ||
-          effectiveSalience(b, at) - effectiveSalience(a, at) ||
-          a.id.localeCompare(b.id),
-      );
-  const memories: RecallHit[] = orderedMemories
-    .slice(0, CANDIDATE_POOL_LIMIT)
-    .map((r) => ({
-      layer: "memory" as const,
-      id: r.id,
-      scope: r.scope,
-      text: r.text,
-      salience: effectiveSalience(r, at),
-      created_at: r.created_at,
-    }));
-
-  return {
-    traits: traitRows,
-    memories,
-    episodes: episodeRows,
-  };
-}
-
-function semanticHitToRecall(hit: SemanticHit, at: number): RecallHit {
-  return {
-    layer: "memory",
-    id: hit.id,
-    scope: hit.scope,
-    text: hit.text,
-    salience: effectiveSalience(hit, at),
-    created_at: hit.created_at,
-    via: "semantic",
-  };
-}
-
-/**
- * Si la búsqueda semántica de esta consulta tiene algo que puntuar: algún vector del mismo
- * modelo (si se filtró por modelo) y mismas dimensiones en el ámbito. Sin ninguno, el vector
- * de la consulta no encuentra nada y el recall queda en manos de lo léxico.
- *
- * Lleva los mismos filtros de selección que `semanticSearchMemories` (ámbito, modelo, dims y
- * ruido), no su corte por puntuación: un vector de ruido nunca se puntúa, así que no puede
- * encender la capa. El backfill no excluía el ruido hasta tarde, así que hay bases con vectores
- * de memorias `[noise]` y `[pareto:l0]`.
- */
-export function hasComparableVectors(
-  db: DB,
-  opts: { model?: string; dims: number; scope?: string },
-): boolean {
-  const filters = [
-    opts.scope ? "m.scope = @scope" : null,
-    opts.model ? "e.model = @model" : null,
-    "e.dims = @dims",
-    excludeNoiseSql("m"),
-  ].filter((value): value is string => value !== null);
-  return (
-    db
-      .prepare(
-        `SELECT 1 FROM memory_embeddings e JOIN memories m ON m.id = e.memory_id
-         WHERE ${filters.join(" AND ")} LIMIT 1`,
-      )
-      .get({ scope: opts.scope, model: opts.model, dims: opts.dims }) !== undefined
-  );
-}
-
-export function fuseMemories(
-  lexical: RecallHit[],
-  semantic: SemanticHit[],
-  at: number,
-): RecallHit[] {
-  const candidates = new Map<
-    string,
-    { hit: RecallHit; rrf: number }
-  >();
-
-  lexical.forEach((hit, index) => {
-    candidates.set(hit.id, {
-      hit,
-      rrf: 1 / (RRF_K + index + 1),
-    });
-  });
-
-  semantic.forEach((row, index) => {
-    const current = candidates.get(row.id);
-    if (current) {
-      current.rrf += 1 / (RRF_K + index + 1);
-      return;
-    }
-    candidates.set(row.id, {
-      hit: semanticHitToRecall(row, at),
-      rrf: 1 / (RRF_K + index + 1),
-    });
-  });
-
-  return [...candidates.values()]
-    .sort((a, b) => {
-      const scoreA =
-        a.rrf + (a.hit.salience ?? 0) * SALIENCE_RRF_WEIGHT;
-      const scoreB =
-        b.rrf + (b.hit.salience ?? 0) * SALIENCE_RRF_WEIGHT;
-      return (
-        scoreB - scoreA ||
-        (b.hit.salience ?? 0) - (a.hit.salience ?? 0) ||
-        b.hit.created_at - a.hit.created_at ||
-        a.hit.id.localeCompare(b.hit.id)
-      );
-    })
-    .map(({ hit }) => hit);
 }
