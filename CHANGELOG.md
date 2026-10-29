@@ -2,6 +2,20 @@
 
 ## Sin publicar
 
+### Los alias de Engram y su migración dejan de escribir SQL (#166)
+
+- `engine/src/mcp/engram-tools.ts` reúne `ENGRAM_TOOLS` y `EngramToolDef`; `engram-compat.ts` queda en el
+  despacho y los helpers de argumentos. `mem_get_observation` lee por `engine/src/queries/observation.ts` y
+  `mem_update` escribe por `engine/src/memory/engram-update.ts`: la memoria y el borrado de su vector, o el
+  nombre de un rasgo, con el mismo fallback al episodio de siempre.
+- `engine/src/migrate-engram-cli.ts` queda en argumentos, ayuda, llamada y salida. `engine/src/ingest/engram.ts`
+  abre la base de Engram en sólo lectura, la lee entera y la migra en una transacción, con el mismo mapeo, los
+  mismos ids determinísticos, la misma idempotencia y los mismos mensajes.
+- `engine/tests/ingest-engram.test.ts` cubre la lectura, el mapeo, la idempotencia y la salida del CLI; los
+  alias siguen fijados por `engine/tests/engram-compat.test.ts` sin cambios. `engine/tests/architecture.test.ts`
+  pierde las dos excepciones de SQL de `mcp/engram-compat.ts` y `migrate-engram-cli.ts`, y `AGENTS.md` y
+  `docs/architecture.md` describen el corte.
+
 ### El SQL del visor y de los CLI sale de la entrega (#165)
 
 - Las lecturas de `engine/src/http/viewer/read.ts` y `api.ts` pasan a `engine/src/queries/`: `stats.ts` (los
