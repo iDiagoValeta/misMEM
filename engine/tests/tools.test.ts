@@ -11,6 +11,7 @@ import {
 } from "../src/tools.js";
 
 let db: DB;
+const DAY = 86_400_000;
 
 beforeEach(() => {
   db = openDb(":memory:");
@@ -244,5 +245,145 @@ describe("forget", () => {
       .prepare("SELECT COUNT(*) AS n FROM episodes")
       .get() as { n: number };
     expect(still.n).toBe(0);
+  });
+
+  it("keeps a forgettable memory while one of its episodes is newer than before_days", () => {
+    const { id: ep } = capture(db, { scope: "s", body: "evidencia reciente" });
+    const { memory_id } = consolidate(db, {
+      scope: "s",
+      gist: "memoria de baja salience",
+      source_episode_ids: [ep],
+    });
+    const old = Date.now() - 60 * DAY;
+    db.prepare(
+      `UPDATE memories
+       SET salience = 0.01, created_at = ?, salience_updated_at = ?
+       WHERE id = ?`,
+    ).run(old, old, memory_id);
+    db.prepare("UPDATE episodes SET created_at = ? WHERE id = ?").run(
+      Date.now() - 40 * DAY,
+      ep,
+    );
+
+    const result = forget(db, {
+      before_days: 90,
+      memory_grace_days: 30,
+      salience_below: 0.1,
+      dry_run: false,
+    });
+
+    expect(result).toMatchObject({
+      memories_to_delete: 0,
+      episodes_to_delete: 0,
+    });
+    expect(
+      db.prepare("SELECT 1 FROM memories WHERE id = ?").get(memory_id),
+    ).toBeDefined();
+    expect(db.prepare("SELECT 1 FROM episodes WHERE id = ?").get(ep)).toBeDefined();
+  });
+
+  it("deletes that memory with its episodes once every one of them is older than before_days", () => {
+    const { id: ep } = capture(db, { scope: "s", body: "evidencia vieja" });
+    const { memory_id } = consolidate(db, {
+      scope: "s",
+      gist: "memoria de baja salience",
+      source_episode_ids: [ep],
+    });
+    const oldMemory = Date.now() - 60 * DAY;
+    db.prepare(
+      `UPDATE memories
+       SET salience = 0.01, created_at = ?, salience_updated_at = ?
+       WHERE id = ?`,
+    ).run(oldMemory, oldMemory, memory_id);
+    db.prepare("UPDATE episodes SET created_at = ? WHERE id = ?").run(
+      Date.now() - 100 * DAY,
+      ep,
+    );
+
+    const result = forget(db, {
+      before_days: 90,
+      memory_grace_days: 30,
+      salience_below: 0.1,
+      dry_run: false,
+    });
+
+    expect(result).toMatchObject({
+      memories_to_delete: 1,
+      episodes_to_delete: 1,
+    });
+    expect(
+      db.prepare("SELECT 1 FROM memories WHERE id = ?").get(memory_id),
+    ).toBeUndefined();
+    expect(db.prepare("SELECT 1 FROM episodes WHERE id = ?").get(ep)).toBeUndefined();
+  });
+
+  it("dry_run counts exactly what the real run deletes", () => {
+    const { id: oldEp } = capture(db, { scope: "s", body: "viejo uno" });
+    const { id: olderEp } = capture(db, { scope: "s", body: "viejo dos" });
+    const { memory_id: forgettable } = consolidate(db, {
+      scope: "s",
+      gist: "olvidable",
+      source_episode_ids: [oldEp, olderEp],
+    });
+    const { id: recentEp } = capture(db, { scope: "s", body: "reciente" });
+    const { memory_id: protectedMemory } = consolidate(db, {
+      scope: "s",
+      gist: "protegida",
+      source_episode_ids: [recentEp],
+    });
+    const oldMemory = Date.now() - 60 * DAY;
+    const ageMemory = db.prepare(
+      `UPDATE memories
+       SET salience = 0.01, created_at = ?, salience_updated_at = ?
+       WHERE id = ?`,
+    );
+    ageMemory.run(oldMemory, oldMemory, forgettable);
+    ageMemory.run(oldMemory, oldMemory, protectedMemory);
+    db.prepare("UPDATE episodes SET created_at = ? WHERE id = ?").run(
+      Date.now() - 100 * DAY,
+      oldEp,
+    );
+    db.prepare("UPDATE episodes SET created_at = ? WHERE id = ?").run(
+      Date.now() - 120 * DAY,
+      olderEp,
+    );
+    db.prepare("UPDATE episodes SET created_at = ? WHERE id = ?").run(
+      Date.now() - 40 * DAY,
+      recentEp,
+    );
+
+    const options = {
+      before_days: 90,
+      memory_grace_days: 30,
+      salience_below: 0.1,
+    };
+    const episodesBefore = db
+      .prepare("SELECT COUNT(*) AS n FROM episodes")
+      .get() as { n: number };
+    const memoriesBefore = db
+      .prepare("SELECT COUNT(*) AS n FROM memories")
+      .get() as { n: number };
+
+    const dry = forget(db, { ...options, dry_run: true });
+    const real = forget(db, { ...options, dry_run: false });
+
+    expect(real).toMatchObject({
+      episodes_to_delete: dry.episodes_to_delete,
+      memories_to_delete: dry.memories_to_delete,
+      dry_run: false,
+    });
+    expect(dry).toMatchObject({
+      episodes_to_delete: 2,
+      memories_to_delete: 1,
+      dry_run: true,
+    });
+    const episodesAfter = db
+      .prepare("SELECT COUNT(*) AS n FROM episodes")
+      .get() as { n: number };
+    const memoriesAfter = db
+      .prepare("SELECT COUNT(*) AS n FROM memories")
+      .get() as { n: number };
+    expect(episodesBefore.n - episodesAfter.n).toBe(real.episodes_to_delete);
+    expect(memoriesBefore.n - memoriesAfter.n).toBe(real.memories_to_delete);
   });
 });

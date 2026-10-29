@@ -84,7 +84,7 @@ búsqueda por significado son un BLOB por memoria en la misma base. El fichero s
 
 Las memories pierden la mitad de su saliencia cada 90 días sin refuerzo (configurable con
 `MISMEM_SALIENCE_HALF_LIFE_DAYS`). `recall` aplica el decay pendiente y después suma el refuerzo
-hebbiano. `forget` elimina memories bajo el umbral sólo después de su período de gracia; `--dry-run`
+hebbiano. `forget` elimina memories bajo el umbral sólo después de su período de gracia y de que todos sus episodios superen `before_days`; `--dry-run`
 calcula el resultado sin modificar la base.
 
 ## El índice hebbiano

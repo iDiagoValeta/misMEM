@@ -286,9 +286,10 @@ docker exec mismem-brain rm -f "$tmp"
 - **`mismem-forget` borra de verdad si no le pasás `--dry-run`** (la tool MCP
   `forget`, en cambio, simula por defecto). Probá primero con `--dry-run`.
 - La consolidación marca como ruido lo que el LLM no usó, con saliencia 0,05;
-  el olvido se lo lleva a los 30 días junto con sus episodios. Por eso el
-  ejemplo guarda 30 días de respaldos: con menos, lo que se marcó mal ya no se
-  recupera.
+  el olvido se lo lleva cuando la memoria cumple los 30 días de gracia y todos
+  sus episodios superan `--before-days` (90 en el ejemplo), junto con ellos. Por
+  eso el ejemplo guarda 30 días de respaldos: con menos, lo que se marcó mal ya
+  no se recupera.
 - Los logs del cron nombran ámbitos y los primeros caracteres de algunas
   memorias: tratalos como datos personales y rotalos (`logrotate`).
 - `scripts/backup-mismem-from-server.ps1` hace el mismo respaldo desde Windows.

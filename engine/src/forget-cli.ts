@@ -19,7 +19,8 @@ Uso:
 Opciones:
   --dry-run                Mostrar qué se borraría sin borrar nada
   --scope <name>           Limitar a un scope
-  --before-days <n>        Edad mínima de episodios consolidados (default 90)
+  --before-days <n>        Edad mínima de episodios consolidados; una memoria con alguno
+                           más nuevo no se olvida (default 90)
   --memory-grace-days <n>  Edad mínima de memorias antes de purgarlas (default 30)
   --salience-below <n>     Umbral de salience para memorias (default 0.1)
   --help                   Esta ayuda
