@@ -44,6 +44,7 @@
     "mismem-stats": "./dist/stats-cli.js",
     "mismem-embed": "./dist/embed-cli.js",
     "mismem-bench": "./dist/bench-cli.js",
+    "mismem-eval": "./dist/eval-cli.js",
     "mismem-used": "./dist/used-cli.js",
     "mismem-inject": "./dist/inject-cli.js",
     "mismem-obsidian": "./dist/obsidian-cli.js"
