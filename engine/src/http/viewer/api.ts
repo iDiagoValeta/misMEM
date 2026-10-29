@@ -17,41 +17,19 @@
  */
 import type { ServerResponse } from "node:http";
 import type { Database as DB } from "better-sqlite3";
-import { excludeNoiseSql, isNoiseGist } from "../../domain/noise.js";
+import { isNoiseGist } from "../../domain/noise.js";
 import { coUseLinks, parseIds, relatedLinks, type GraphLink } from "../../queries/relations.js";
 import { hubs, turnsRegistered } from "../../store/connectome.js";
-import { effectiveSalience, type SalienceRow } from "../../memory/salience.js";
+import {
+  excludeNoiseSql,
+  MEMORY_COLUMNS,
+  type EpisodeRow,
+  type MemoryRow,
+  type TraitRow,
+} from "../../store/rows.js";
+import { effectiveSalience } from "../../memory/salience.js";
 import { clampLimit, json, parseOffset } from "./read.js";
 
-interface MemoryRow extends SalienceRow {
-  id: string;
-  scope: string;
-  gist: string;
-  details: string | null;
-  source_episode_ids: string;
-}
-
-interface TraitRow {
-  id: string;
-  scope: string;
-  name: string;
-  strength: number;
-  polarity: string;
-  evidence_memory_ids: string;
-  created_at: number;
-  updated_at: number;
-}
-
-interface EpisodeRow {
-  id: string;
-  scope: string;
-  body: string;
-  created_at: number;
-  consolidated_into: string | null;
-}
-
-const MEMORY_COLUMNS =
-  "id, scope, gist, details, source_episode_ids, salience, created_at, last_accessed_at, salience_updated_at";
 const GRAPH_MAX_MEMORIES = 400;
 const GRAPH_MAX_TRAITS = 200;
 const GRAPH_MAX_EPISODES = 2000;

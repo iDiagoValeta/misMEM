@@ -5,18 +5,7 @@
  * embedding. `forget` y el viewer sí los siguen viendo.
  */
 
-const NOISE_GIST_PREFIXES = ["[noise] ", "[pareto:l0] "] as const;
-
-/**
- * Condición SQL que descarta los marcadores. `alias` es la tabla `memories`.
- * Los prefijos son constantes del módulo, no entrada externa; en LIKE de SQLite
- * sólo `%` y `_` son comodines, así que `[` va literal.
- */
-export function excludeNoiseSql(alias: string): string {
-  return NOISE_GIST_PREFIXES.map((prefix) => `${alias}.gist NOT LIKE '${prefix}%'`).join(
-    " AND ",
-  );
-}
+export const NOISE_GIST_PREFIXES = ["[noise] ", "[pareto:l0] "] as const;
 
 /** Para medir desde afuera que ningún marcador se escapó al recall. */
 export function isNoiseGist(gist: string): boolean {

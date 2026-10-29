@@ -2,6 +2,15 @@
 
 ## Sin publicar
 
+### Una sola definición de las formas de fila (#161)
+
+- `engine/src/store/rows.ts` reúne `MemoryRow`, `TraitRow` y `EpisodeRow` con los tipos del esquema de `db.ts`,
+  además de `MEMORY_COLUMNS` y `SalienceRow`. El visor y la exportación a Obsidian dejan de declarar sus copias,
+  que ya discrepaban en la anulabilidad de `consolidated_into`; quien selecciona menos columnas las deriva con
+  `Omit` en vez de repetirlas, así que dos lectores ya no pueden discrepar sobre una columna.
+- `excludeNoiseSql` pasa de `domain/noise.ts` a `store/rows.ts`, porque construye SQL: el dominio se queda con
+  `isNoiseGist` y los prefijos. No cambia ninguna consulta ni el comportamiento.
+
 ### La interfaz parte `App.tsx` y `Lists.tsx` (#169)
 
 - `App.tsx` (470 líneas) queda en composición: la cabecera, el diálogo de cristalizar, la barra de selección y los hooks de tema, atajos y debounce viven en sus propios ficheros. Las cuatro listas y sus primitivas pasan a `components/list/`, y el tipo `Selection` a `lib/selection.ts`, que rompe el ciclo de imports entre `App` y las listas. Nada visible cambia.

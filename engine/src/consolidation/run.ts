@@ -2,6 +2,7 @@ import type { Database as DB } from "better-sqlite3";
 import { consolidate } from "../memory/tools.js";
 import { envNonNegativeNumber, envPositiveNumber } from "../env.js";
 import { embedPendingMemories } from "../embeddings/store.js";
+import type { EpisodeRow } from "../store/rows.js";
 import { classify } from "./pareto.js";
 import {
   distill,
@@ -95,11 +96,8 @@ interface ScopeRow {
   newest: number;
 }
 
-interface EpisodeRow {
-  id: string;
-  body: string;
-  created_at: number;
-}
+/** Only the columns the batch query selects. */
+type PendingEpisodeRow = Pick<EpisodeRow, "id" | "body" | "created_at">;
 
 export async function runConsolidation(
   db: DB,
@@ -252,7 +250,7 @@ async function processScope(
          ORDER BY created_at ASC
          LIMIT @max`,
       )
-      .all({ scope, cutoff, max: limits.maxBatch + skipped.size + deferred.size }) as EpisodeRow[]
+      .all({ scope, cutoff, max: limits.maxBatch + skipped.size + deferred.size }) as PendingEpisodeRow[]
   )
     .filter((e) => !skipped.has(e.id) && !deferred.has(e.id))
     .slice(0, limits.maxBatch);
@@ -263,8 +261,8 @@ async function processScope(
   let dropped_l0 = 0;
   let candidates = episodes;
   if (paretoPrefilter && !dryRun) {
-    const noise: EpisodeRow[] = [];
-    const keep: EpisodeRow[] = [];
+    const noise: PendingEpisodeRow[] = [];
+    const keep: PendingEpisodeRow[] = [];
     const seen: string[] = [];
     for (const e of episodes) {
       const r = classify(e.body, { neighbors: seen.slice(-5) });
@@ -377,8 +375,8 @@ async function processScope(
   if (uncited.length > 0) {
     const bump = db.prepare("UPDATE episodes SET uncited_count = uncited_count + 1 WHERE id = ?");
     const strikesOf = db.prepare("SELECT uncited_count FROM episodes WHERE id = ?");
-    const exhausted: EpisodeRow[] = [];
-    const retry: EpisodeRow[] = [];
+    const exhausted: PendingEpisodeRow[] = [];
+    const retry: PendingEpisodeRow[] = [];
     db.transaction(() => {
       for (const e of uncited) {
         bump.run(e.id);

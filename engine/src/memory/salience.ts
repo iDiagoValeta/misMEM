@@ -1,5 +1,6 @@
 import type { Database as DB } from "better-sqlite3";
 import { envPositiveNumber } from "../env.js";
+import type { SalienceRow } from "../store/rows.js";
 
 const DEFAULT_SALIENCE_HALF_LIFE_DAYS = 90;
 
@@ -16,13 +17,6 @@ export function decayedSalience(
   if (at <= updatedAt) return salience;
   const elapsedDays = (at - updatedAt) / 86_400_000;
   return salience * 0.5 ** (elapsedDays / halfLifeDays);
-}
-
-export interface SalienceRow {
-  salience: number;
-  created_at: number;
-  last_accessed_at: number | null;
-  salience_updated_at: number | null;
 }
 
 export function effectiveSalience(

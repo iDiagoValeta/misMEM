@@ -21,8 +21,8 @@ import { createHash } from "node:crypto";
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve, sep } from "node:path";
 import type { Database as DB } from "better-sqlite3";
-import { excludeNoiseSql } from "../domain/noise.js";
-import { effectiveSalience, type SalienceRow } from "../memory/salience.js";
+import { excludeNoiseSql, type EpisodeRow, type MemoryRow, type TraitRow } from "../store/rows.js";
+import { effectiveSalience } from "../memory/salience.js";
 import { parseIds, relatedLinks } from "../queries/relations.js";
 
 export const EXPORT_ROOT = "misMEM";
@@ -55,30 +55,11 @@ export interface ExportStats {
   dry_run: boolean;
 }
 
-interface MemoryRow extends SalienceRow {
-  id: string;
-  scope: string;
-  gist: string;
-  details: string | null;
-}
-
-interface TraitRow {
-  id: string;
-  scope: string;
-  name: string;
-  strength: number;
-  polarity: string;
-  evidence_memory_ids: string;
-  updated_at: number;
-}
-
-interface EpisodeRow {
-  id: string;
-  scope: string;
-  body: string;
-  created_at: number;
-  consolidated_into: string;
-}
+/** The columns the export selects: `source_episode_ids` is not needed here. */
+type ExportMemoryRow = Omit<MemoryRow, "source_episode_ids">;
+type ExportTraitRow = Omit<TraitRow, "created_at">;
+/** The query keeps only consolidated episodes, so the link is never null here. */
+type ExportEpisodeRow = EpisodeRow & { consolidated_into: string };
 
 /** Un nombre de fichero válido en Obsidian y en Windows, legible y corto. */
 export function safeName(text: string, max = 60): string {
@@ -116,13 +97,13 @@ export function exportObsidian(db: DB, opts: ExportOptions): ExportStats {
       `SELECT id, scope, gist, details, salience, created_at, last_accessed_at, salience_updated_at
        FROM memories m WHERE (@scope IS NULL OR scope = @scope) AND ${excludeNoiseSql("m")}`,
     )
-    .all({ scope: scope ?? null }) as MemoryRow[];
+    .all({ scope: scope ?? null }) as ExportMemoryRow[];
   const traits = db
     .prepare(
       `SELECT id, scope, name, strength, polarity, evidence_memory_ids, updated_at
        FROM traits WHERE (@scope IS NULL OR scope = @scope)`,
     )
-    .all({ scope: scope ?? null }) as TraitRow[];
+    .all({ scope: scope ?? null }) as ExportTraitRow[];
   // Una base recién creada (o la ruta equivocada a otro SQLite) no tiene nada que exportar:
   // seguir adelante borraría todas las notas propias del manifiesto y la bóveda quedaría
   // vacía sin error. Mejor negarse antes de escribir o borrar, también en --dry-run.
@@ -136,7 +117,7 @@ export function exportObsidian(db: DB, opts: ExportOptions): ExportStats {
       `SELECT e.id, e.scope, e.body, e.created_at, e.consolidated_into FROM episodes e
        WHERE e.consolidated_into IN (SELECT value FROM json_each(?)) ORDER BY e.created_at`,
     )
-    .all(JSON.stringify(memories.map((m) => m.id))) as EpisodeRow[];
+    .all(JSON.stringify(memories.map((m) => m.id))) as ExportEpisodeRow[];
 
   const salience = new Map(memories.map((m) => [m.id, effectiveSalience(m, at)]));
   const memoryPath = new Map(memories.map((m) => [m.id, `Memorias/${safeName(m.gist)} (${shortId(m.id)})`]));
@@ -166,16 +147,16 @@ export function exportObsidian(db: DB, opts: ExportOptions): ExportStats {
     const hash = createHash("sha256").update(s, "utf8").digest("hex").slice(0, 6);
     return `Ámbitos/${base} (${hash})`;
   };
-  const episodePath = (e: EpisodeRow): string =>
+  const episodePath = (e: ExportEpisodeRow): string =>
     `Episodios/${day(e.created_at)} ${safeName(e.body, 40)} (${shortId(e.id)})`;
   // Una etiqueta de wikilink no puede contener el cierre del enlace ni partir la línea: un
   // `\` final escapaba el `]]` y un salto dejaba el enlace abierto en dos líneas.
   const linkLabel = (label: string): string => label.replace(/[[\]|\\<>]/g, " ").replace(/\s+/g, " ").trim();
   const link = (path: string, label?: string): string => (label ? `[[${path}|${linkLabel(label)}]]` : `[[${path}]]`);
 
-  const byMemory = new Map<string, EpisodeRow[]>();
+  const byMemory = new Map<string, ExportEpisodeRow[]>();
   for (const e of episodes) byMemory.set(e.consolidated_into, [...(byMemory.get(e.consolidated_into) ?? []), e]);
-  const citedBy = new Map<string, TraitRow[]>();
+  const citedBy = new Map<string, ExportTraitRow[]>();
   for (const t of traits) {
     for (const id of parseIds(t.evidence_memory_ids)) citedBy.set(id, [...(citedBy.get(id) ?? []), t]);
   }
