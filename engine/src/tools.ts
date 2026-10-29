@@ -10,6 +10,7 @@ import {
   type RecallHit,
 } from "./schema.js";
 import { contentHash } from "./hash.js";
+import { registerTurn } from "./connectome.js";
 import { CANDIDATE_POOL_LIMIT, fuseMemories, hasComparableVectors, lexicalCandidates } from "./search.js";
 import { embedTexts, loadEmbeddingConfig, type EmbedFn } from "./embeddings/provider.js";
 import { semanticSearchMemories } from "./embeddings/store.js";
@@ -133,6 +134,9 @@ function registrarUso(db: DB, memoryIds: readonly string[], at: number): void {
   );
 
   db.transaction(() => {
+    // The turn goes in the same transaction as the counts: the denominator must not
+    // fall out of step with the numerators, not even through a failure mid-way.
+    registerTurn(db);
     for (const id of ids) contar.run(id);
     for (let i = 0; i < ids.length; i++) {
       for (let j = i + 1; j < ids.length; j++) {
@@ -341,14 +345,25 @@ export function forget(
   const cutoff = at - input.before_days * 86_400_000;
   const memoryCutoff = at - input.memory_grace_days * 86_400_000;
   const scopeWhere = input.scope ? "AND scope = @scope" : "";
+  const memoryScopeWhere = input.scope ? "AND m.scope = @scope" : "";
+  // A memory is only forgettable once every episode still linked to it is past
+  // before_days: forgetting it deletes those episodes too (ON DELETE SET NULL
+  // would otherwise re-queue them for consolidation), so one newer episode keeps
+  // the whole memory alive.
   const memoryRows = db
     .prepare(
-      `SELECT id, salience, created_at, last_accessed_at, salience_updated_at
-       FROM memories
-       WHERE created_at <= @memoryCutoff ${scopeWhere}`,
+      `SELECT m.id, m.salience, m.created_at, m.last_accessed_at, m.salience_updated_at
+       FROM memories m
+       WHERE m.created_at <= @memoryCutoff ${memoryScopeWhere}
+         AND NOT EXISTS (
+           SELECT 1 FROM episodes e
+           WHERE e.consolidated_into = m.id
+             AND e.created_at >= @cutoff
+         )`,
     )
     .all({
       memoryCutoff,
+      cutoff,
       scope: input.scope,
     }) as Array<SalienceRow & { id: string }>;
   const memoryIds = memoryRows

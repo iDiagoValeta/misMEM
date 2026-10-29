@@ -3,6 +3,7 @@ import type { Database as DB } from "better-sqlite3";
 import { chmodSync, mkdirSync } from "node:fs";
 import { dirname, resolve } from "node:path";
 import { homedir } from "node:os";
+import { seedTurnsFromUse } from "./connectome.js";
 import { contentHash } from "./hash.js";
 
 export function defaultDbPath(): string {
@@ -56,6 +57,14 @@ CREATE TABLE IF NOT EXISTS co_use (
   CHECK (memory_a < memory_b)
 );
 CREATE INDEX IF NOT EXISTS idx_co_use_b ON co_use(memory_b, n);
+
+-- Contadores de la propia base. Hoy sólo vive acá el total de turnos de uso
+-- medido, que es el denominador del índice hebbiano: sin él, el co-uso de un
+-- recuerdo que se usa siempre no se distingue del azar.
+CREATE TABLE IF NOT EXISTS meta (
+  key   TEXT PRIMARY KEY,
+  value TEXT NOT NULL
+);
 
 CREATE TABLE IF NOT EXISTS traits (
   id                   TEXT PRIMARY KEY,
@@ -179,6 +188,10 @@ function migrate(db: DB): void {
      SET salience_updated_at = COALESCE(last_accessed_at, created_at)
      WHERE salience_updated_at IS NULL`,
   );
+
+  // The turn counter is the denominator of counts that predate it: without this the
+  // inherited pairs read as maximal associations. See `seedTurnsFromUse`.
+  seedTurnsFromUse(db);
 }
 
 export function openDb(path: string): DB {

@@ -2,6 +2,10 @@
 
 ## Sin publicar
 
+### El olvido respeta `before_days` también al borrar memorias
+
+- `forget` borraba los episodios de una memoria de saliencia baja aunque alguno fuera más nuevo que `before_days`. Con los defaults de `mismem-forget` (90 y 30 días), un episodio de 40 días atado a una memoria olvidable se borraba antes de los 90 que promete `before_days`. Ahora la memoria sólo es olvidable cuando todos sus episodios ya superaron `before_days`; mientras quede uno más nuevo, la memoria y sus episodios esperan. Las memorias sin episodios o con todos viejos se borran igual que antes, y sus episodios con ellas para que `ON DELETE SET NULL` no los devuelva a pendientes.
+- El conteo de `dry_run` sale de las mismas consultas que el borrado, y un test compara lo que anuncia con lo que después borra.
 ### Embeddings: mejores valores por defecto para quien instala misMEM (#72)
 
 - Con `nomic-embed-text` el corte semántico de 0,5 no cortaba nada: las 10 preguntas ajenas de la
@@ -68,6 +72,7 @@
 ### zod 4
 
 - zod pasa de 3.25.76 a 4.6.7 (versión exacta): `.int()` rechaza enteros fuera del rango seguro de JS (y el `inputSchema` de `forget` lo anuncia), los límites de longitud cuentan *code points* en vez de unidades UTF-16 y cambian los textos de `ZodError`; `tests/tool-schemas.test.ts` compara con `z.toJSONSchema` en vez de leer internos de zod 3.
+
 
 ### Un solo diálogo de confirmación en el detalle
 
@@ -248,7 +253,7 @@
 - La consolidación acepta OpenAI y cualquier servidor compatible desde #67, y tanto los
   componentes como la sección de privacidad hablaban sólo de DeepSeek y OpenRouter. Importa
   porque es lo que permite consolidar sin que el texto salga de la red propia.
-- Una sección para el índice hebbiano y un enlace al diseño del ordenador de memoria.
+- Una sección para el índice hebbiano.
 - El README y DEPLOY.md mandaban a `docker pull ghcr.io/lucasmella-stack/mismem-brain:latest` como
   camino recomendado, y esa imagen **nunca se publicó**: las tres corridas de `docker.yml` fallan
   al empujar con `denied: permission_denied: read_package`, así que el `pull` responde `denied`.
@@ -296,6 +301,64 @@
   contra DNS rebinding.
 - `MISMEM_HTTP_MAX_BODY_BYTES`: `POST /mcp` corta el cuerpo en 4 MiB con 413 sin juntarlo en
   memoria, y un `Content-Type` que no es JSON responde 415 antes de leer.
+
+### El conectoma se puede mirar
+
+- `/api/graph?co_use=1` suma una segunda capa lateral. La que ya había, `?related=1`, une memorias
+  **parecidas**: sale de lo que cada una dice. Esta sale de lo que **pasó**: qué recuerdos usó junto
+  un mismo turno. Las dos juntas valen más que cada una —parecidas que nunca se usan juntas son
+  candidatas a que una reemplace a la otra— pero eso es otra entrada.
+- El peso **no** es el conteo crudo, es NPMI. Un recuerdo que se usa en todos los turnos co-ocurre
+  con todo, así que por conteo sería el centro del grafo sin orientar a nada: el mismo error de la
+  saliencia midiendo recencia. Con NPMI, 0 es "indistinguible del azar" y 1 "nunca aparecen
+  separados". Hay un test que construye el caso y falla si el ranking se ordena por grado;
+  comprobado mutando el comparador.
+- Hacía falta un denominador y no existía: la tabla `meta` guarda el total de turnos de uso medido,
+  y se suma dentro de la misma transacción que los conteos de `co_use` para que no pueda quedar
+  desfasado. Migración aditiva.
+- Con pocos datos la fuerza es ruido por construcción —dos recuerdos usados una sola vez, esa vez
+  juntos, dan 1—, así que cada arista viaja con su `n`, `?co_use_min_n=k` filtra por soporte y el
+  resumen informa el tamaño de la muestra. Los costados de la interfaz tienen que poder decir "esto
+  todavía no significa nada" en vez de pintar ruido.
+- Sin el parámetro la respuesta no cambia: las aristas verticales no reciben campos nuevos y hay un
+  test que compara las dos respuestas.
+- Sobre copia de producción: migración en 18 ms, `integrity_check` y `foreign_key_check` ok, 3.805
+  memorias y 216 rasgos intactos, y las seis aristas existentes dan fuerza 0 porque el contador nace
+  ahora. Es correcto: son turnos que nadie midió, y 0 dice "no sé" en vez de inventar un número.
+
+### El contador de turnos nace con la cota que los datos permiten
+
+- Un cerebro que ya venía midiendo co-uso con la versión anterior guarda `n` y `use_count` de turnos
+  que nadie contó. Con el contador en 0 toda fuerza vale 0, que es correcto —dice "no sé"—, pero
+  **desde el primer turno medido después de actualizar** el cociente `n / turnos` se acota a 1 y cada
+  par heredado se lee como asociación máxima: justo el club de los ricos que el peso existe para
+  evitar. Duraba hasta que el contador pasaba por arriba de cada `n`.
+- Al abrir, si el contador no existe, se siembra con el uso más alto registrado (`max(use_count)` y
+  `max(n)` de `co_use`). Es una cota inferior de los turnos que hubo, porque cada uso ocupó un turno:
+  subestima, nunca infla. Sólo cuando falta: un contador andando es la medición de verdad y no se pisa.
+- Sobre copia de producción (2.527 memorias, 2.651 episodios, esquema previo a `use_count`): migración
+  en 19 ms, nada perdido, y no siembra nada porque ahí no hay uso medido —un cerebro viejo no recibe un
+  contador inventado—. Con 40 turnos reinyectados sobre ids reales, el par identidad+acompañante da
+  0,112; sin semilla, el primer turno tras el deploy lo sube a **1**; con semilla (38, la cota) vuelve a
+  **0**, que es la respuesta correcta para algo que acompaña a un recuerdo que está en todos los turnos.
+  El par poco usado se queda en 1 con `n` de 3, y para eso está `?co_use_min_n=k`.
+- El test que lo cubre afirma las dos lecturas, la de antes y la de después, así que el artefacto queda
+  escrito en la suite en vez de en un comentario.
+### La imagen de GHCR existe
+
+- `ghcr.io/lucasmella-stack/mismem-brain` se publica de verdad: `0.5.0`, `0.5` y `latest`, multi-arch
+  (`linux/amd64` y `linux/arm64`), con pull anónimo. Es la primera imagen que llega al registro desde
+  que existe el repo, y `latest` deja de apuntar al `0.2.0` de julio de 2026.
+- No hacía falta cambiar nada del workflow. Los push de v0.1.0 y v0.2.0 habían creado el paquete en
+  julio, GitHub no lo vinculó al repositorio, y desde v0.3.0 todo push moría en `denied:
+  permission_denied: read_package`. El paquete tampoco se veía en la lista de la cuenta por estar
+  privado y sin vincular. Dos cambios en *Package settings*: el repo con rol **Write** en *Manage
+  Actions access*, y la visibilidad a **Public**.
+- El Quickstart de Docker del README pasa a ser `docker run ghcr.io/...` en vez de clonar y construir,
+  y en `DEPLOY.md` la imagen publicada pasa a ser la opción A: el build en el servidor queda como la
+  alternativa para probar un cambio sin pasar por un release. El diagnóstico queda escrito ahí, con el
+  comando de `gh api` que hace visible un paquete privado sin vincular y el `docker logout ghcr.io`
+  para las máquinas con credenciales viejas.
 
 ## 0.5.0 — 2026-10-23
 

@@ -1,6 +1,8 @@
-// Owns the read queries shared by the viewer API and the Obsidian export: related-memory links from stored vectors and id-array parsing.
+// Owns the read queries shared by the viewer API and the Obsidian export: lateral memory-to-memory
+// links — by similarity from stored vectors, and by measured co-use — and id-array parsing.
 import type { Database as DB } from "better-sqlite3";
 import { cosine } from "./embeddings/vector.js";
+import { coUseEdges } from "./connectome.js";
 
 // Con nomic-embed-text hasta lo que no tiene nada que ver da 0,6-0,7 de coseno: medido en
 // una base real (118 memorias), la vecina más cercana tiene mediana 0,795. Con 0,75 y tres
@@ -8,7 +10,17 @@ import { cosine } from "./embeddings/vector.js";
 const RELATED_MIN_SCORE = 0.75;
 const RELATED_PER_NODE = 3;
 
-export type GraphLink = { source: string; target: string; kind: "origin" | "evidence" | "related"; score?: number };
+export type GraphLink = {
+  source: string;
+  target: string;
+  kind: "origin" | "evidence" | "related" | "co_use";
+  /** Cosine, `related` only. */
+  score?: number;
+  /** Turns backing the edge, `co_use` only: strength does not read without its support. */
+  n?: number;
+  /** NPMI, `co_use` only. */
+  strength?: number;
+};
 
 /**
  * Aristas entre memorias parecidas, con los vectores ya guardados (no llama al embedder).
@@ -50,6 +62,22 @@ export function relatedLinks(
     }
   }
   return [...links.values()];
+}
+
+/**
+ * Edges from measured co-use: which memories one turn used together. Where `relatedLinks`
+ * compares what each memory says, this comes from what actually happened. The weight is
+ * NPMI rather than the count, because a memory used in every turn co-occurs with
+ * everything while orienting nobody — see `connectome.ts`.
+ */
+export function coUseLinks(db: DB, memoryIds: readonly string[], minN = 1): GraphLink[] {
+  return coUseEdges(db, { ids: memoryIds, minN }).map((e) => ({
+    source: e.memory_a,
+    target: e.memory_b,
+    kind: "co_use" as const,
+    n: e.n,
+    strength: e.strength,
+  }));
 }
 
 /** Los arrays de ids viven como JSON en una columna de texto: uno roto no rompe la respuesta. */

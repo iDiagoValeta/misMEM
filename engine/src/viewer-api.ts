@@ -7,7 +7,10 @@
  *   GET /api/memory/:id      → la memoria, sus episodios de origen y los rasgos que la citan
  *   GET /api/trait/:id       → el rasgo y las memorias que lo sostienen
  *   GET /api/graph           → nodos y aristas episodio → memoria → rasgo (?scope=&episodes=1),
- *                              y memoria ↔ memoria por parecido (?related=1)
+ *                              memoria ↔ memoria por parecido (?related=1) y memoria ↔ memoria
+ *                              por co-uso medido (?co_use=1, soporte con ?co_use_min_n=k), que
+ *                              añade el grado de cada nodo y un resumen del tamaño de la
+ *                              muestra; sin el parámetro no aparece nada de eso
  *
  * La salience que devuelve es la efectiva (con el decaimiento aplicado a hoy), la misma que
  * usa el recall. La guardada sólo es el valor del último checkpoint.
@@ -15,7 +18,8 @@
 import type { ServerResponse } from "node:http";
 import type { Database as DB } from "better-sqlite3";
 import { excludeNoiseSql, isNoiseGist } from "./noise.js";
-import { parseIds, relatedLinks, type GraphLink } from "./relations.js";
+import { coUseLinks, parseIds, relatedLinks, type GraphLink } from "./relations.js";
+import { hubs, turnsRegistered } from "./connectome.js";
 import { effectiveSalience, type SalienceRow } from "./salience.js";
 import { clampLimit, json, parseOffset } from "./viewer.js";
 
@@ -52,6 +56,8 @@ const GRAPH_MAX_MEMORIES = 400;
 const GRAPH_MAX_TRAITS = 200;
 const GRAPH_MAX_EPISODES = 2000;
 const GRAPH_LABEL_CHARS = 120;
+
+const GRAPH_MAX_HUBS = 20;
 
 /** Topes por capa; los tests los bajan para no sembrar cientos de filas. */
 export interface GraphCaps {
@@ -266,6 +272,10 @@ export function handleGraph(
   const scope = url.searchParams.get("scope");
   const withEpisodes = url.searchParams.get("episodes") === "1";
   const withRelated = url.searchParams.get("related") === "1";
+  // The co-use layer is opt-in: without the parameter the response does not change at
+  // all, because this is the contract the interface already consumes.
+  const withCoUse = url.searchParams.get("co_use") === "1";
+  const coUseMinN = Math.max(1, Number(url.searchParams.get("co_use_min_n") ?? 1) || 1);
   const maxMemories = caps.memories ?? GRAPH_MAX_MEMORIES;
   const maxTraits = caps.traits ?? GRAPH_MAX_TRAITS;
   const maxEpisodes = caps.episodes ?? GRAPH_MAX_EPISODES;
@@ -343,5 +353,39 @@ export function handleGraph(
 
   if (withRelated) links.push(...relatedLinks(db, [...memoryIds]));
 
-  json(res, 200, { nodes, links, truncated });
+  if (!withCoUse) {
+    json(res, 200, { nodes, links, truncated });
+    return;
+  }
+
+  const drawn = [...memoryIds];
+  const lateral = coUseLinks(db, drawn, coUseMinN);
+  const degrees = new Map<string, { degree: number; strength: number }>();
+  for (const link of lateral) {
+    for (const id of [link.source, link.target]) {
+      const current = degrees.get(id) ?? { degree: 0, strength: 0 };
+      current.degree += 1;
+      if ((link.strength ?? 0) > 0) current.strength += link.strength ?? 0;
+      degrees.set(id, current);
+    }
+  }
+  links.push(...lateral);
+
+  json(res, 200, {
+    nodes: nodes.map((node) => {
+      const own = degrees.get(node.id as string);
+      return own ? { ...node, co_use: own } : node;
+    }),
+    links,
+    truncated,
+    // The side panels must not present noise as topology: with few turns, a pair seen
+    // once scores maximum strength by construction.
+    connectome: {
+      turns: turnsRegistered(db),
+      pairs: coUseLinks(db, drawn, 1).length,
+      shown: lateral.length,
+      min_n: coUseMinN,
+      hubs: hubs(db, { ids: drawn, minN: coUseMinN }).slice(0, GRAPH_MAX_HUBS),
+    },
+  });
 }

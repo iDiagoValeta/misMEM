@@ -133,13 +133,14 @@ describe("salience decay", () => {
 
 describe("forget con decay", () => {
   it("dry-run calcula elegibilidad sin mutar la memoria", () => {
-    const { memoryId } = makeMemory("dry run");
+    const { episodeId, memoryId } = makeMemory("dry run");
     const old = Date.now() - 365 * DAY;
     db.prepare(
       `UPDATE memories
        SET salience = 0.5, created_at = ?, salience_updated_at = ?
        WHERE id = ?`,
     ).run(old, old, memoryId);
+    db.prepare("UPDATE episodes SET created_at = ? WHERE id = ?").run(old, episodeId);
 
     const before = db
       .prepare(
@@ -203,6 +204,10 @@ describe("forget con decay", () => {
        SET salience = 0.01, created_at = ?, salience_updated_at = ?
        WHERE id = ?`,
     ).run(old, old, memoryId);
+    db.prepare("UPDATE episodes SET created_at = ? WHERE id = ?").run(
+      Date.now() - 100 * DAY,
+      episodeId,
+    );
 
     const result = forget(db, {
       dry_run: false,

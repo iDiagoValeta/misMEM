@@ -40,7 +40,16 @@ Cliente MCP (VS Code / Claude Code / Claude Desktop / agente)
 
 ## Fase 1 — Obtener la imagen
 
-Opción A — build en el servidor (arquitectura nativa). **Es la que funciona hoy:**
+Opción A — imagen multi-arch publicada, sin clonar nada:
+
+```bash
+docker pull ghcr.io/lucasmella-stack/mismem-brain:latest
+```
+
+Trae `linux/amd64` o `linux/arm64` según el servidor. Los tags son la versión exacta
+(`0.5.0`), `major.minor` (`0.5`) y `latest`, que sale del release estable más alto.
+
+Opción B — build en el servidor, para probar un cambio sin pasar por un release:
 
 ```bash
 ssh <tu-servidor>
@@ -48,18 +57,6 @@ git clone https://github.com/lucasmella-stack/misMEM.git mismem
 cd mismem/engine
 docker build -t mismem-brain:latest -f Dockerfile.mismem-brain .
 ```
-
-Opción B — imagen multi-arch desde GHCR:
-
-```bash
-docker pull ghcr.io/lucasmella-stack/mismem-brain:latest
-```
-
-> **Todavía no está publicada.** Las tres corridas del workflow `docker.yml`
-> (v0.3.0 y dos de v0.5.0) fallan al empujar con `denied: permission_denied:
-> read_package`: el login entra pero el push no, así que el paquete nunca se
-> creó y el `pull` responde `denied`. Falta habilitarlo del lado de GitHub, no
-> en el repo. Hasta entonces, la opción A.
 
 ### Cómo se publica la imagen
 
@@ -71,12 +68,24 @@ no publica el árbol viejo encima del último release. Para republicar sin mover
 tag, `workflow_dispatch` sobre el tag que corresponda; lanzado desde una rama falla
 al arrancar, para no publicar código sin release.
 
-**Si el push a GHCR falla con `denied: permission_denied: read_package`**, el paquete
-existe pero no le da escritura a este repositorio. El workflow ya declara
-`permissions: packages: write`; lo que falta es del lado del paquete, y se arregla una
-sola vez desde la UI: en el paquete `mismem-brain` → *Package settings* → *Manage
-Actions access* → agregar el repositorio `misMEM` con rol **Write**. Después,
-relanzar el workflow con `workflow_dispatch` sobre el tag; no hace falta re-taggear.
+**Si el push falla con `denied: permission_denied: read_package`**, el paquete existe
+pero no le da escritura a este repositorio. Pasó acá: los push de v0.1.0 y v0.2.0
+crearon el paquete en julio de 2026, GitHub no lo vinculó al repo, y desde v0.3.0 todo
+push murió ahí. El workflow no tenía nada mal —ya declaraba `permissions: packages:
+write`—, y el paquete no aparecía en la lista de paquetes de la cuenta por estar
+privado y sin vincular: hace falta la API (`gh api "user/packages?package_type=container"`,
+con scope `read:packages`) para verlo.
+
+Se arregla una sola vez desde *Package settings*
+(`https://github.com/users/<usuario>/packages/container/mismem-brain/settings`):
+
+1. *Manage Actions access* → *Add Repository* → `misMEM` con rol **Write**.
+2. *Danger Zone* → *Change visibility* → **Public**, o el `docker pull` sigue pidiendo
+   login aunque el push ya funcione.
+
+Después, `gh workflow run docker.yml --ref vX.Y.Z`; no hace falta re-taggear. Si el
+`docker pull` falla con `denied: denied` desde una máquina donde alguna vez hubo login,
+son credenciales viejas: `docker logout ghcr.io`.
 
 El paquete npm `@lucasmella/mismem` se publica a mano (`pnpm publish` desde `engine/`):
 no hay workflow que lo haga. Tags anotados: `git tag -a vX.Y.Z -m 'misMEM X.Y.Z'`.
@@ -87,9 +96,8 @@ no hay workflow que lo haga. Tags anotados: `git tag -a vX.Y.Z -m 'misMEM X.Y.Z'
 
 ```yaml
   mismem-brain:
-    # Con la opción A, el tag local. Con la imagen publicada, en su lugar:
-    # ghcr.io/lucasmella-stack/mismem-brain:latest
-    image: mismem-brain:latest
+    # Con la opción B, el tag local: mismem-brain:latest
+    image: ghcr.io/lucasmella-stack/mismem-brain:latest
     container_name: mismem-brain
     restart: unless-stopped
     environment:
@@ -278,9 +286,10 @@ docker exec mismem-brain rm -f "$tmp"
 - **`mismem-forget` borra de verdad si no le pasás `--dry-run`** (la tool MCP
   `forget`, en cambio, simula por defecto). Probá primero con `--dry-run`.
 - La consolidación marca como ruido lo que el LLM no usó, con saliencia 0,05;
-  el olvido se lo lleva a los 30 días junto con sus episodios. Por eso el
-  ejemplo guarda 30 días de respaldos: con menos, lo que se marcó mal ya no se
-  recupera.
+  el olvido se lo lleva cuando la memoria cumple los 30 días de gracia y todos
+  sus episodios superan `--before-days` (90 en el ejemplo), junto con ellos. Por
+  eso el ejemplo guarda 30 días de respaldos: con menos, lo que se marcó mal ya
+  no se recupera.
 - Los logs del cron nombran ámbitos y los primeros caracteres de algunas
   memorias: tratalos como datos personales y rotalos (`logrotate`).
 - `scripts/backup-mismem-from-server.ps1` hace el mismo respaldo desde Windows.
