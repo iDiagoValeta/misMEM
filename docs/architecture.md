@@ -116,7 +116,10 @@ arriba y dicen de dónde salió cada cosa. Las dos laterales unen memoria ↔ me
 El peso de `co_use` **no** es el conteo crudo, es NPMI: un recuerdo que se usa en todos los turnos
 co-ocurre con todo, así que por conteo sería el centro del grafo sin orientar a ninguno —el mismo error
 de la saliencia midiendo recencia—. En NPMI, `0` es "indistinguible del azar" y `1` es "nunca aparecen
-separados". El denominador es el total de turnos de uso medido, que vive en la tabla `meta`.
+separados". El denominador es el total de turnos de uso medido, que vive en la tabla `meta`. Al abrir una base que
+ya medía co-uso sin ese contador, se siembra con el uso más alto registrado: una cota inferior de los
+turnos que hubo, porque cada uso ocupó un turno. Sin esa cota, el cociente se acota a 1 y los pares
+heredados se leerían como asociación máxima.
 
 Con pocos datos la fuerza es ruido por construcción: dos recuerdos usados una sola vez, esa vez juntos,
 dan 1. Por eso cada arista viaja con su soporte (`n`), `?co_use_min_n=k` lo filtra y la respuesta incluye
