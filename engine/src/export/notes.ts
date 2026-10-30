@@ -54,8 +54,8 @@ export const day = (ts: number): string => new Date(ts).toISOString().slice(0, 1
 export const yaml = (value: string): string => JSON.stringify(value);
 /**
  * Text of a memory inside the note. Obsidian reads a `<word>` (e.g. "fuser -k <port>/tcp") as an
- * HTML tag that stops parsing Markdown, and a stray `[s]` as a broken link; both are escaped with
- * a backslash, not an entity, which shows as is when editing.
+ * HTML tag that opens a block and stops parsing Markdown, and a stray `[s]` as a broken link;
+ * both are escaped with a backslash, not an entity, so the note keeps the literal text.
  */
 export const text = (value: string): string => value.replace(/[<[\]]/g, (c) => `\\${c}`);
 /** An Obsidian tag allows no spaces. */
