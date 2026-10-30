@@ -18,7 +18,7 @@ describe("fitPrompt", () => {
   it("para cuando el siguiente episodio ya no entra en el presupuesto", () => {
     const episodes = [episode(1, "a".repeat(100)), episode(2, "b".repeat(100)), episode(3, "c".repeat(100))];
 
-    // 100 de cuerpo más 60 de sobrecarga por episodio: el tercero ya no cabe en 400.
+    // 100 chars of body plus 60 of per-episode overhead: the third no longer fits in 400.
     const fitted = fitPrompt(episodes, budget({ maxPromptChars: 400 }));
 
     expect(fitted.map((e) => e.id)).toEqual([episodes[0]?.id, episodes[1]?.id]);

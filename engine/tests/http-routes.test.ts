@@ -7,8 +7,8 @@ import { ACTION_MAX_BODY_BYTES, ForgetConfirmations } from "../src/http/viewer/a
 import { createRequestHandler, type HttpRoutesDeps, type RequestHandler } from "../src/http/routes.js";
 import { openDb } from "../src/store/db.js";
 
-// El despacho se prueba aquí sin abrir un puerto: server-http.test.ts sigue cubriendo el
-// proceso real (bind, auth y Host), y este fichero fija el orden de las comprobaciones.
+// The dispatch is tested here without opening a port: server-http.test.ts covers the
+// real process (bind, auth and Host), and this file pins the order of the checks.
 
 const AUTH = { user: "brain", pass: "s3cret" };
 const basic = (user: string, pass: string): string => `Basic ${Buffer.from(`${user}:${pass}`).toString("base64")}`;
@@ -18,7 +18,7 @@ interface MockResponse {
   headers: Record<string, string>;
   body: string;
   headersSent: boolean;
-  /** Cuántas veces se llamó a `end`: el catch del despacho cierra una respuesta ya enviada. */
+  /** How many times `end` was called: the dispatch catch closes a response already sent. */
   endCount: number;
   setHeader(name: string, value: string): void;
   end(payload?: string): void;
@@ -35,7 +35,7 @@ function mockRes(): MockResponse {
       this.headers[name.toLowerCase()] = value;
     },
     end(payload) {
-      // ServerResponse marca headersSent al terminar y un segundo end no reescribe el cuerpo.
+      // ServerResponse sets headersSent on end and a second end does not rewrite the body.
       this.endCount++;
       this.headersSent = true;
       this.body = payload ?? this.body;
@@ -49,8 +49,8 @@ async function request(
   opts: { method?: string; headers?: Record<string, string>; body?: readonly string[] } = {},
 ): Promise<MockResponse> {
   const res = mockRes();
-  // readJsonBody escucha "data"/"end": un Readable es el doble mínimo de un IncomingMessage
-  // con cuerpo. Sin `body` no se emite nada, como en un GET.
+  // readJsonBody listens for "data"/"end": a Readable is the minimal IncomingMessage
+  // stand-in with a body. Without `body` nothing is emitted, as in a GET.
   const req = Object.assign(Readable.from((opts.body ?? []).map((chunk) => Buffer.from(chunk))), {
     method: opts.method ?? "GET",
     url: path,
@@ -88,7 +88,7 @@ function makeHandler(overrides: Partial<HttpRoutesDeps> = {}): RequestHandler {
 
 describe("http/routes: orden y respuestas", () => {
   it("rechaza un Host no permitido antes que nada, también en /healthz", async () => {
-    // Sin auth, el Host es la única guarda: debe ganar a /healthz y a la API.
+    // Without auth the Host is the only guard: it must beat /healthz and the API.
     const handler = makeHandler({ auth: null });
     for (const path of ["/healthz", "/api/stats"]) {
       const res = await request(handler, path, { headers: { host: "evil.example.com" } });
@@ -140,21 +140,21 @@ describe("http/routes: orden y respuestas", () => {
   });
 });
 
-// Los dos 413 no se pueden separar en otro fichero: comparten el `request` que arma el handler.
+// The two 413s cannot move to another file: they share the `request` the handler builds.
 describe("http/routes: cuerpo demasiado grande (413)", () => {
   it("cierra la conexión en /mcp y manda el texto de respond.payloadTooLarge", async () => {
-    // El tope se baja para no depender del valor por defecto de makeHandler.
+    // The cap is lowered so it does not depend on makeHandler's default.
     const res = await request(makeHandler({ maxBodyBytes: 16 }), "/mcp", {
       method: "POST",
       headers: {
         authorization: basic(AUTH.user, AUTH.pass),
         "content-type": "application/json",
       },
-      // Sin Content-Length, el corte ocurre al leer los chunks.
+      // Without Content-Length the cut happens while reading the chunks.
       body: ["x".repeat(17)],
     });
     expect(res.statusCode).toBe(413);
-    // Sin esto el cliente seguiría escribiendo en un socket que nadie drena.
+    // Without this the client would keep writing into a socket nobody drains.
     expect(res.headers.connection).toBe("close");
     expect(res.headers["content-type"]).toBeUndefined();
     expect(res.body).toBe("Cuerpo demasiado grande");
@@ -198,7 +198,7 @@ describe("http/routes: error no controlado (500)", () => {
     expect(res.headers["content-type"]).toBe("application/json");
     expect(res.headers["cache-control"]).toBeUndefined();
     expect(res.body).toBe('{"error":"boom"}');
-    // El motivo va al cliente y al log: lo único que lo deja rastro es esa etiqueta.
+    // The reason goes to the client and the log: that tag is the only trace it leaves.
     expect(logged).toHaveBeenCalledTimes(1);
     expect(logged.mock.calls[0]?.[0]).toBe("[mcp]");
   });
@@ -215,7 +215,7 @@ describe("http/routes: error no controlado (500)", () => {
       "/mcp",
       { headers: { authorization: basic(AUTH.user, AUTH.pass) } },
     );
-    // Un JSON de error aquí corrompería el cuerpo que ya salió.
+    // A JSON error here would corrupt the body that already went out.
     expect(res.statusCode).toBe(200);
     expect(res.headers).toEqual({});
     expect(res.body).toBe("parcial");

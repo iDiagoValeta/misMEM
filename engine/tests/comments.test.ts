@@ -163,40 +163,8 @@ function sources(): { rel: string; text: string }[] {
   }));
 }
 
-// Every entry is code older than the rule: the roll-out change applies the standard and
-// deletes them. The count is part of the key so a new violation in an already excepted
-// file still fails the test.
-const EXCEPTIONS: Record<string, Exception> = {
-  "tests/architecture.test.ts (block)": { reason: "long block predating the 5-line rule", count: 1 },
-  "tests/bench.test.ts (lang)": { reason: "Spanish comment predating the English rule", count: 2 },
-  "tests/cli-usage-exit.test.ts (lang)": { reason: "Spanish comment predating the English rule", count: 1 },
-  "tests/co-use.test.ts (lang)": { reason: "Spanish comment predating the English rule", count: 4 },
-  "tests/consolidate-args.test.ts (lang)": { reason: "Spanish comment predating the English rule", count: 1 },
-  "tests/consolidation-budget.test.ts (lang)": { reason: "Spanish comment predating the English rule", count: 1 },
-  "tests/consolidation-llm.test.ts (lang)": { reason: "Spanish comment predating the English rule", count: 1 },
-  "tests/consolidation.test.ts (lang)": { reason: "Spanish comment predating the English rule", count: 4 },
-  "tests/dedup.test.ts (lang)": { reason: "Spanish comment predating the English rule", count: 2 },
-  "tests/embeddings-provider.test.ts (lang)": { reason: "Spanish comment predating the English rule", count: 1 },
-  "tests/embeddings.test.ts (lang)": { reason: "Spanish comment predating the English rule", count: 4 },
-  "tests/export-notes.test.ts (block)": { reason: "long block predating the 5-line rule", count: 1 },
-  "tests/export-notes.test.ts (lang)": { reason: "Spanish comment predating the English rule", count: 1 },
-  "tests/http-body.test.ts (lang)": { reason: "Spanish comment predating the English rule", count: 1 },
-  "tests/http-routes.test.ts (lang)": { reason: "Spanish comment predating the English rule", count: 13 },
-  "tests/obsidian.test.ts (lang)": { reason: "Spanish comment predating the English rule", count: 7 },
-  "tests/queries.test.ts (lang)": { reason: "Spanish comment predating the English rule", count: 1 },
-  "tests/recall-relaxed.test.ts (lang)": { reason: "Spanish comment predating the English rule", count: 30 },
-  "tests/search-consistency.test.ts (lang)": { reason: "Spanish comment predating the English rule", count: 1 },
-  "tests/support/contrast.ts (lang)": { reason: "Spanish comment predating the English rule", count: 2 },
-  "tests/tools.test.ts (lang)": { reason: "Spanish comment predating the English rule", count: 2 },
-  "tests/ui-contrast.test.ts (lang)": { reason: "Spanish comment predating the English rule", count: 3 },
-  "tests/ui-format.test.ts (lang)": { reason: "Spanish comment predating the English rule", count: 1 },
-  "tests/ui-ink.test.ts (lang)": { reason: "Spanish comment predating the English rule", count: 1 },
-  "tests/ui-theme.test.ts (lang)": { reason: "Spanish comment predating the English rule", count: 2 },
-  "tests/usage.test.ts (lang)": { reason: "Spanish comment predating the English rule", count: 1 },
-  "tests/viewer-actions.test.ts (lang)": { reason: "Spanish comment predating the English rule", count: 2 },
-  "tests/viewer-api.test.ts (lang)": { reason: "Spanish comment predating the English rule", count: 8 },
-  "tests/viewer.test.ts (lang)": { reason: "Spanish comment predating the English rule", count: 3 },
-};
+// The count is part of the key so a new violation in an already excepted file still fails.
+const EXCEPTIONS: Record<string, Exception> = {};
 
 describe("escáner", () => {
   it("encuentra el comentario que sigue a una comilla en texto JSX", () => {

@@ -270,7 +270,7 @@ describe("runConsolidation", () => {
 
     expect(summary.episodes_consolidated).toBe(2);
     expect(summary.episodes_uncited_pending).toBe(1);
-    // Volver a mandarlo en la misma corrida sería pagar dos veces por el mismo episodio.
+    // Sending it again in the same run would pay twice for the same episode.
     expect(distillFn).toHaveBeenCalledTimes(1);
 
     const left = db
@@ -286,7 +286,7 @@ describe("runConsolidation", () => {
       captureOld("mix", "porque npm duplicaba dependencias", 48),
       captureOld("mix", "jaja dale nos vemos", 48),
     ];
-    // Cita siempre el primero que le llega: el último queda sin citar en cada tanda.
+    // Always cites the first one it receives: the last stays uncited on every batch.
     const distillFn = vi.fn(async (_cfg: unknown, _sys: string, user: string) => {
       const first = ids.find((id) => user.includes(id));
       return first ? [{ gist: `memoria de ${first}`, evidence_episode_ids: [first] }] : [];
@@ -605,7 +605,7 @@ describe("runConsolidation", () => {
     for (const scope of ["a", "b", "c"]) {
       for (const n of [1, 2, 3]) ids.push(captureOld(scope, `nota ${scope} ${n} sobre el despliegue`, 48));
     }
-    // Cita todo lo que le llega: cada llamada consolida su ámbito entero.
+    // Cites everything it receives: each call consolidates its whole scope.
     const distillFn = vi.fn().mockResolvedValue([{ gist: "despliegue", evidence_episode_ids: ids }]);
 
     const summary = await runConsolidation(db, {
@@ -639,7 +639,7 @@ describe("runConsolidation", () => {
       log: () => {},
     });
 
-    // Todos caen en L0 → no se llama al LLM, se crea 1 memoria stub
+    // All fall into L0 → no LLM call, one stub memory is created.
     expect(distillFn).not.toHaveBeenCalled();
     expect(summary.episodes_dropped_pareto_l0).toBe(3);
     expect(summary.memories_created).toBe(1);

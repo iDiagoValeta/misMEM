@@ -159,8 +159,8 @@ describe("reinforce", () => {
   });
 
   it("un rasgo se cuenta aparte, no como id inventado", () => {
-    // La inyección también adelanta rasgos; si cayeran en `unknown`, esa alarma
-    // —la de "alguien manda ids que no existen"— sonaría desde el primer día.
+    // Injection also surfaces traits; if they fell into `unknown`, that alarm (someone
+    // sends ids that do not exist) would ring from day one.
     const real = memory("el deploy usa docker compose");
     const rasgo = crystallize(db, {
       scope: "test",

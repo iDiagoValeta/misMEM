@@ -14,7 +14,7 @@ beforeEach(() => {
 
 afterEach(() => rmSync(dir, { recursive: true, force: true }));
 
-/** Arranca el CLI de verdad: el contrato es su exit y su stderr, no lo que devuelve el parser. */
+/** Runs the real CLI: the contract is its exit and stderr, not what the parser returns. */
 function run(cli: string, args: string[]) {
   return spawnSync("npx", ["tsx", join("src", cli), ...args], {
     cwd: ENGINE,

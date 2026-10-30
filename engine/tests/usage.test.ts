@@ -80,7 +80,7 @@ describe("usedMemoryIds", () => {
 });
 
 describe("injectedMemories", () => {
-  // Claude Code guarda el additionalContext de un hook así, no como tool_result.
+  // Claude Code stores a hook's additionalContext this way, not as tool_result.
   const adjunto = (texto: unknown, tipo = "hook_additional_context") => ({
     type: "attachment",
     attachment: { type: tipo, content: texto },

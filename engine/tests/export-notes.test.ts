@@ -41,10 +41,9 @@ const trait = (id: string, name: string, evidence: string[], scope = "a"): NoteT
 const episode = (id: string, body: string, scope = "a"): NoteEpisode => ({ id, scope, body, created_at: AT });
 
 /**
- * Rutas escritas a mano: estas pruebas fijan el cuerpo de cada nota, así que no deben derivar
- * sus enlaces de las funciones de ruta, que tienen su propia prueba más abajo. El cableado real
- * (qué mapa lleva cada id y el resolutor de ámbitos alimentado por toda la base) lo cubre
- * `obsidian.test.ts` a través de `exportObsidian`.
+ * Hand-written paths: these tests pin each note's body, so they must not derive
+ * their links from the path functions (tested below); the real wiring is covered
+ * by `obsidian.test.ts` through `exportObsidian`.
  */
 const PATHS: NotePaths = {
   memory: new Map([

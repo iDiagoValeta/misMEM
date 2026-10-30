@@ -4,12 +4,9 @@ import { dirname, join, relative, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
 import { scan } from "./support/source-scan";
 
-// engine/src used to be flat. It is now grouped by capability, and the point of
-// grouping is lost unless the dependencies stay one-way. The checks below are the
-// contract: a review cannot see an import that skips a layer, and no other test
-// fails when one appears. The rules that need one keep an explicit exception list, and
-// the test fails when a new violation lands and when an exception outlives its cause.
-// The layer rule has none left: `memory` no longer reaches back into `recall`.
+// engine/src is grouped by capability, which only pays off if dependencies stay one-way.
+// No other test fails when an import skips a layer, so these checks are the contract.
+// Each rule that needs exceptions keeps a list that fails when it grows or goes stale.
 
 const ENGINE = fileURLToPath(new URL("../", import.meta.url));
 const SRC = join(ENGINE, "src");

@@ -127,7 +127,6 @@ para el primer grupo antes del primer statement), `block` (cinco líneas consecu
 `/* */`), `lang` (castellano, ignorando URLs y texto entrecomillado), `todo` (sin issue), `dead` (código
 comentado) y `sup` (`biome-ignore` sin motivo). El escáner es el mismo que usa
 `engine/tests/architecture.test.ts` para quitar comentarios. Las excepciones son un
-`Record<"ruta (regla)", { motivo, count }>` que sólo encoge: el test falla si aparece una violación nueva en
-un fichero ya exceptuado (el número crece), si sobra una excepción y si una excepción ya no cubre su cuenta.
-La PR que aplica esta norma vacía el registro; desde entonces, una excepción nueva se justifica en la
-revisión.
+`Record<"ruta (regla)", { motivo, count }>` que se mantiene vacío. El test falla si aparece una violación nueva en
+un fichero ya exceptuado (el número es parte de la clave), si sobra una excepción y si una excepción ya no
+cubre su cuenta. Una excepción nueva se justifica en la revisión.

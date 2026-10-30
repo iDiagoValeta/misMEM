@@ -48,7 +48,7 @@ describe("http-body: readJsonBody", () => {
   });
 
   it("un BOM UTF-8 delante del JSON no impide parsearlo", async () => {
-    // `req.json()` del SDK lo descarta; si acá diera 400, el tope habría roto clientes que antes iban.
+    // The SDK's `req.json()` drops it; returning 400 here would have broken clients that used to work.
     const body = `\uFEFF${JSON.stringify({ jsonrpc: "2.0", id: 2, method: "tools/list" })}`;
     await expect(readJsonBody(request([body]), 1024)).resolves.toEqual({
       jsonrpc: "2.0",
