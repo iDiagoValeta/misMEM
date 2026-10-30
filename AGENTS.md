@@ -89,11 +89,17 @@ pnpm typecheck && pnpm test && pnpm knip && pnpm dup && pnpm lint && pnpm build
 
 ## Convenciones que el código no deja ver
 
-- **Idioma**: identificadores, claves JSON, comentarios nuevos o reescritos y commits (Conventional
-  Commits) en inglés. Mensajes de cara al usuario (errores, logs, ayuda de los CLI, interfaz) y Markdown en
-  español neutro (formas impersonales, ni voseo ni vosotros). Los comentarios en español que ya existen no se traducen en masa.
-- **Comentarios**: dicen el porqué (la restricción, el motivo, lo que se descartó), nunca el qué. Sin código
-  comentado. Una supresión de Biome lleva su motivo; un `TODO` lleva su issue.
+- **Idioma**: identificadores, claves JSON, comentarios y commits (Conventional Commits) en inglés. Mensajes
+  de cara al usuario (errores, logs, ayuda de los CLI, interfaz), Markdown y las descripciones de `it()` y
+  `describe()` en español neutro (formas impersonales, ni voseo ni vosotros). Todo comentario de
+  `engine/src`, `engine/ui/src` y `engine/tests` va en inglés; los que están en castellano se traducen y
+  `engine/tests/comments.test.ts` los cuenta en sus excepciones hasta que la PR de aplicación las vacíe.
+- **Comentarios**: dicen el porqué (la restricción, el motivo, lo que se descartó), nunca el qué. Cabecera de
+  módulo de tres líneas como mucho, sin inventarios; ningún otro bloque pasa de cinco, y una calibración o un
+  razonamiento largo va a `docs/`. Sin código comentado, sin historia ni notas de PR, sin `TODO`/`FIXME` sin
+  issue (`TODO(#123)`) y sin `biome-ignore` sin motivo. Lo comprueba `engine/tests/comments.test.ts` (cabecera,
+  bloque, idioma, `TODO`, código comentado y `biome-ignore`); la longitud del JSDoc y el porqué de cada
+  comentario son revisión. La norma completa está en [`docs/standards/comments.md`](docs/standards/comments.md).
 - **Tipos y módulos**: sin `any`. Los imports relativos a `engine/src` llevan extensión `.js`, también
   en los tests; la interfaz no la lleva y usa el alias `@/`. Ids con `ulid`. Los writes múltiples, dentro de
   `db.transaction`.
