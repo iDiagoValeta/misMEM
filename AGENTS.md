@@ -24,12 +24,12 @@ la interfaz es React, Vite y Tailwind. Gestor de paquetes: pnpm, nunca npm.
 | `engine/src/store/` | `db.ts` (`SCHEMA`, migraciones aditivas en `migrate()`, apertura con permisos `0600`), `connectome.ts` (turnos y pares de uso), `rows.ts` (las formas de fila y `MEMORY_COLUMNS` que comparten el visor y la exportación, más `excludeNoiseSql`) | cambia una tabla, una columna o cómo se abre la base |
 | `engine/src/memory/` | Una herramienta por fichero: `capture.ts`, `consolidate.ts`, `crystallize.ts`, `forget.ts`, `reinforce.ts` (con el registro de uso) y `pending.ts` (los episodios pendientes), más `edit.ts` (las escrituras que dispara el visor) y `salience.ts` (decay y refuerzo) | cambia lo que hace una herramienta, una escritura del visor o la fórmula de saliencia |
 | `engine/src/recall/` | `fts.ts` (sintaxis FTS5), `rescue.ts` (rescate laxo y sus constantes), `lexical.ts` (candidatos léxicos), `fuse.ts` (fusión RRF con la saliencia), `recall.ts` (los dos caminos del recall y la forma del hit) y `bench.ts` (medición del recall) | cambia el ranking (pide `mismem-bench`) |
-| `engine/src/queries/` | Las lecturas del visor y de los CLI `mismem-stats` e `mismem-ingest`: un módulo por recurso (`stats.ts`, `recent.ts`, `scopes.ts`, `memories.ts`, `traits.ts`, `graph.ts`, `forget-impact.ts`), más `views.ts` (la forma de una memoria y un rasgo) y `relations.ts` (memorias parecidas por vector, compartida con la exportación a Obsidian). Reciben la base y devuelven datos planos | cambia una lectura del visor, cómo se relacionan las memorias o la forma que devuelve |
+| `engine/src/queries/` | Las lecturas del visor, de los CLI `mismem-stats` e `mismem-ingest` y del alias `mem_get_observation`: un módulo por recurso (`stats.ts`, `recent.ts`, `scopes.ts`, `memories.ts`, `traits.ts`, `graph.ts`, `forget-impact.ts`, `observation.ts`), más `views.ts` (la forma de una memoria y un rasgo) y `relations.ts` (memorias parecidas por vector, compartida con la exportación a Obsidian). Reciben la base y devuelven datos planos | cambia una lectura del visor o de `mem_get_observation`, cómo se relacionan las memorias o la forma que devuelve |
 | `engine/src/embeddings/` | `provider.ts` (configuración por entorno y cliente HTTP), `store.ts` (SQL de `memory_embeddings`, búsqueda y backfill), `vector.ts` (coseno) | cambia la capa semántica (pide `mismem-bench`) |
 | `engine/src/consolidation/` | `run.ts` (la corrida), `llm.ts` (proveedores), `prompts.ts`, `job.ts` (corrida en segundo plano desde la interfaz), `pareto.ts` (prefiltro heurístico que descarta ruido antes del LLM) y su `README.md` | cambia cómo se destilan los episodios |
-| `engine/src/ingest/` | Importadores de ChatGPT y de VS Code, y el recorrido de ficheros | se importa un formato nuevo |
+| `engine/src/ingest/` | Importadores de ChatGPT y de VS Code, el recorrido de ficheros y `engram.ts` (abre una base de Engram en sólo lectura y la migra a episodios) | se importa un formato nuevo o cambia la migración de Engram |
 | `engine/src/export/` | `obsidian.ts`: la memoria como bóveda de Obsidian | cambia la exportación |
-| `engine/src/mcp/` | `engram-compat.ts`: los alias `mem_*` y su mapeo a las seis herramientas | cambia la compatibilidad con Engram |
+| `engine/src/mcp/` | `engram-tools.ts` (el catálogo `ENGRAM_TOOLS`) y `engram-compat.ts` (el despacho de los alias `mem_*` y los helpers de argumentos; la lectura va por `queries/observation.ts` y la escritura por `memory/engram-update.ts`) | cambia la compatibilidad con Engram |
 | `engine/src/http/` | `routes.ts` (el despacho completo, con sus dependencias inyectadas) y `respond.ts` (sus respuestas JSON y de texto), `guard.ts`, `host.ts`, `body.ts` (dirección de enlace y BasicAuth, guarda de `Host`, lectura del cuerpo con tope) y `viewer/{read,api,actions}.ts` (validan, llaman a `queries/` o `memory/` y responden) | cambia qué petición se atiende o lo que el visor muestra y puede hacer |
 | `engine/src/hooks/` | `inject.ts`, `usage.ts`, `client.ts`, `readiness.ts`: qué inyectar, qué se usó, cliente remoto y espera a que el servidor esté listo | cambia un hook |
 | `engine/src/` (raíz) | Los binarios `mismem-*` (`*-cli.ts`, `*-args.ts`, `cli-args.ts`), `env.ts`, el borde de Zod (`schema.ts`, con el tipo `RecallHit`), las entradas `server.ts`, `server-core.ts` y `server-http.ts`, y `viewer-static.ts` con su CSP | cambia un CLI, un flag o una entrada |
@@ -135,11 +135,12 @@ pnpm typecheck && pnpm test && pnpm knip && pnpm dup && pnpm lint && pnpm build
 - **Los marcadores de ruido** (`[noise] ...`, `[pareto:l0] ...`) no compiten en el recall ni gastan un
   embedding: las consultas que alimentan al modelo y las listas de la interfaz los excluyen con
   `excludeNoiseSql`. `forget` los ve, y el endpoint en bruto `/api/recent?layer=memory` también.
-- **Los alias `mem_*`** (`engine/src/mcp/engram-compat.ts`) tienen que seguir funcionando: hay clientes que
-  vienen de Engram y no se reconfiguran. No todos delegan en las seis herramientas: `mem_save`, `mem_search`,
-  `mem_session_summary` y `mem_save_prompt` sí; `mem_context`, `mem_get_observation` y `mem_update` leen o
-  escriben con SQL propio, y `mem_suggest_topic_key`, `mem_session_start` y `mem_session_end` son una
-  heurística y dos no-ops.
+- **Los alias `mem_*`** (`engine/src/mcp/engram-compat.ts`, con el catálogo en `engram-tools.ts`)
+  tienen que seguir funcionando: hay clientes que vienen de Engram y no se reconfiguran. No todos delegan
+  en las seis herramientas: `mem_save`, `mem_search`, `mem_session_summary` y `mem_save_prompt` sí;
+  `mem_context` lee los episodios pendientes por `memory/pending.ts`, `mem_get_observation` una fila por
+  `queries/observation.ts` y `mem_update` escribe por `memory/engram-update.ts`; `mem_suggest_topic_key`,
+  `mem_session_start` y `mem_session_end` son una heurística y dos no-ops.
 - **Dos sitios para cada herramienta**: los `inputSchema` de `server-core.ts` se escriben a mano y reflejan
   los de `schema.ts`; `engine/tests/tool-schemas.test.ts` falla si se separan.
 - **Borrar desde el visor** está apagado salvo con `MISMEM_VIEWER_ALLOW_DELETE=1`, y aun así va en dos

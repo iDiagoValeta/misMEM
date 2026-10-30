@@ -67,10 +67,8 @@ const ALLOWED: Record<string, string[]> = {
 // http, mcp, hooks, export) only composes, so its queries are debt from the flat
 // layout and each entry moves when its module is split.
 const SQL_EXCEPTIONS: Record<string, string> = {
-  "src/migrate-engram-cli.ts (sql)": "reads the engram database; moves with the ingest split",
   "src/obsidian-cli.ts (sql)": "opens the database itself; moves with the export split",
   "src/export/obsidian.ts (sql)": "queries its own rows; moves with the export split",
-  "src/mcp/engram-compat.ts (sql)": "legacy aliases with their own SQL; moves with the alias split",
 };
 
 // Ratchet: these already exceed 400 lines and are split in later PRs. Entries can

@@ -1,160 +1,22 @@
 /**
  * Engram-compatibility layer.
  *
- * Expone alias `mem_*` (Engram MCP tools) que mapean a las 6 canónicas
- * de misMEM (capture/recall/reinforce/consolidate/crystallize/forget). Permite
- * que clientes existentes (agentes, CLAUDE.md, mcp.json) sigan
- * funcionando sin cambios al migrar de Engram a misMEM.
+ * Dispatches the `mem_*` aliases (Engram MCP tools) to the six canonical misMEM tools
+ * (capture/recall/reinforce/consolidate/crystallize/forget) or to the read and write that
+ * own the SQL: `queries/observation.ts` and `memory/engram-update.ts`. Lets existing clients
+ * (agents, CLAUDE.md, mcp.json) keep working unchanged when they move from Engram to misMEM.
  *
- * Mapeo:
- *   mem_save             → capture
- *   mem_search           → recall
- *   mem_context          → SELECT directo de los episodios sin consolidar más
- *                          recientes; no llama a recall ni ordena por relevancia
- *   mem_get_observation  → SELECT por id en episodes/memories/traits
- *   mem_session_summary  → capture (scope=session)
- *   mem_save_prompt      → capture (scope=prompts)
- *   mem_update           → UPDATE memorias/traits, o append episodio
- *   mem_suggest_topic_key→ heurística sobre title/content
- *   mem_session_start    → no-op informativo
- *   mem_session_end      → no-op informativo
+ * The catalogue itself is in `engram-tools.ts`.
  */
 import type { Database as DB } from "better-sqlite3";
 import { capture } from "../memory/capture.js";
+import { updateEngramTarget } from "../memory/engram-update.js";
 import { pendingEpisodes } from "../memory/pending.js";
+import { observationById } from "../queries/observation.js";
 import { recallHybrid } from "../recall/recall.js";
 import type { EmbedFn } from "../embeddings/provider.js";
 
-export interface EngramToolDef {
-  name: string;
-  description: string;
-  inputSchema: {
-    type: "object";
-    required?: string[];
-    properties: Record<string, unknown>;
-  };
-}
-
-export const ENGRAM_TOOLS: EngramToolDef[] = [
-  {
-    name: "mem_save",
-    description:
-      "[engram-compat] Save a memory. Maps to capture() with scope 'engram-compat' unless 'scope' is given.",
-    inputSchema: {
-      type: "object",
-      required: ["title", "content"],
-      properties: {
-        title: { type: "string" },
-        content: { type: "string" },
-        type: {
-          type: "string",
-          description:
-            "bugfix | decision | architecture | discovery | pattern | config | preference",
-        },
-        scope: { type: "string", description: "engram-compat (default) | any other scope name" },
-        topic_key: { type: "string" },
-      },
-    },
-  },
-  {
-    name: "mem_search",
-    description:
-      "[engram-compat] Hybrid search: FTS5 across all layers plus semantic ranking for memories.",
-    inputSchema: {
-      type: "object",
-      required: ["query"],
-      properties: {
-        query: { type: "string" },
-        scope: { type: "string" },
-        limit: { type: "integer", minimum: 1, maximum: 50, default: 10 },
-      },
-    },
-  },
-  {
-    name: "mem_context",
-    description:
-      "[engram-compat] Recent session context. Direct SELECT of the latest unconsolidated episodes (any scope or filtered); no recall, no ranking.",
-    inputSchema: {
-      type: "object",
-      properties: {
-        scope: { type: "string" },
-        limit: { type: "integer", minimum: 1, maximum: 50, default: 10 },
-      },
-    },
-  },
-  {
-    name: "mem_get_observation",
-    description:
-      "[engram-compat] Fetch full untruncated content of an observation by ID (episode|memory|trait).",
-    inputSchema: {
-      type: "object",
-      required: ["id"],
-      properties: { id: { type: "string" } },
-    },
-  },
-  {
-    name: "mem_session_summary",
-    description:
-      "[engram-compat] Save end-of-session summary. Maps to capture(scope='session').",
-    inputSchema: {
-      type: "object",
-      required: ["content"],
-      properties: {
-        content: { type: "string" },
-        scope: { type: "string" },
-      },
-    },
-  },
-  {
-    name: "mem_save_prompt",
-    description:
-      "[engram-compat] Save user prompt for context. Maps to capture(scope='prompts').",
-    inputSchema: {
-      type: "object",
-      required: ["content"],
-      properties: {
-        content: { type: "string" },
-        scope: { type: "string" },
-      },
-    },
-  },
-  {
-    name: "mem_update",
-    description:
-      "[engram-compat] Update by id: tries memories.gist, then traits.name, else appends a new episode referencing the original.",
-    inputSchema: {
-      type: "object",
-      required: ["id", "content"],
-      properties: {
-        id: { type: "string" },
-        content: { type: "string" },
-      },
-    },
-  },
-  {
-    name: "mem_suggest_topic_key",
-    description:
-      "[engram-compat] Heuristic suggestion: 'category/slug' from title + content.",
-    inputSchema: {
-      type: "object",
-      required: ["title"],
-      properties: {
-        title: { type: "string" },
-        content: { type: "string" },
-      },
-    },
-  },
-  {
-    name: "mem_session_start",
-    description: "[engram-compat] No-op acknowledgement (misMEM is stateless per call).",
-    inputSchema: { type: "object", properties: {} },
-  },
-  {
-    name: "mem_session_end",
-    description: "[engram-compat] No-op acknowledgement (use mem_session_summary instead).",
-    inputSchema: { type: "object", properties: {} },
-  },
-];
+export { ENGRAM_TOOLS } from "./engram-tools.js";
 
 const DEFAULT_SCOPE = "engram-compat";
 
@@ -239,24 +101,8 @@ export function dispatchEngramTool(
     case "mem_get_observation": {
       const id = asString(args.id);
       if (!id) throw new Error("mem_get_observation: falta 'id'");
-      const ep = db
-        .prepare(
-          "SELECT id, scope, body AS text, created_at FROM episodes WHERE id = ?",
-        )
-        .get(id);
-      if (ep) return { layer: "episode", ...ep };
-      const mem = db
-        .prepare(
-          "SELECT id, scope, gist, details, salience, created_at FROM memories WHERE id = ?",
-        )
-        .get(id);
-      if (mem) return { layer: "memory", ...mem };
-      const tr = db
-        .prepare(
-          "SELECT id, scope, name, strength, polarity, created_at, updated_at FROM traits WHERE id = ?",
-        )
-        .get(id);
-      if (tr) return { layer: "trait", ...tr };
+      const observation = observationById(db, id);
+      if (observation) return observation;
       throw new Error(`mem_get_observation: no existe el id: ${id}`);
     }
 
@@ -274,17 +120,8 @@ export function dispatchEngramTool(
       const id = asString(args.id);
       const content = asString(args.content);
       if (!id || !content) throw new Error("mem_update: faltan 'id' y 'content'");
-      const updMem = db
-        .prepare("UPDATE memories SET gist = ? WHERE id = ?")
-        .run(content, id);
-      if (updMem.changes > 0) {
-        db.prepare("DELETE FROM memory_embeddings WHERE memory_id = ?").run(id);
-        return { updated: "memory", id };
-      }
-      const updTr = db
-        .prepare("UPDATE traits SET name = ?, updated_at = ? WHERE id = ?")
-        .run(content, Date.now(), id);
-      if (updTr.changes > 0) return { updated: "trait", id };
+      const target = updateEngramTarget(db, id, content, Date.now());
+      if (target) return { updated: target, id };
       // Fallback: append new episode that references the original id
       const result = capture(db, {
         scope: DEFAULT_SCOPE,

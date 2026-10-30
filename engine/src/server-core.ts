@@ -16,11 +16,8 @@ import { crystallize } from "./memory/crystallize.js";
 import { forget } from "./memory/forget.js";
 import { reinforce } from "./memory/reinforce.js";
 import { embedPendingMemories } from "./embeddings/store.js";
-import {
-  ENGRAM_TOOLS,
-  dispatchEngramTool,
-  isEngramTool,
-} from "./mcp/engram-compat.js";
+import { dispatchEngramTool, isEngramTool } from "./mcp/engram-compat.js";
+import { ENGRAM_TOOLS } from "./mcp/engram-tools.js";
 
 // The advertised inputSchemas are hand-written mirrors of the Zod schemas in schema.ts, which
 // are what actually validates calls. tests/tool-schemas.test.ts fails if the two drift.
