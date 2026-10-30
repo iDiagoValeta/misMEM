@@ -2,6 +2,23 @@
 
 ## Sin publicar
 
+### La documentación dice lo que hace el código (#186)
+
+- `DEPLOY.md` daba a entender que EmbeddingGemma 2 arranca en 0,65: sólo `nomic-embed-text` sube el default a 0,65;
+  cualquier otro modelo, EmbeddingGemma 2 incluido, arranca en 0,5 y hay que fijarlo a mano.
+- `latest` sí se mueve al republicar a mano un tag viejo: el workflow lo habilita para `workflow_dispatch`,
+  y la guía ahora avisa de despachar sólo el release vigente. Los ejemplos de tag pasan a `X.Y.Z` / `X.Y`
+  para no envejecer con cada release.
+- La arquitectura pierde la sección «Pendiente» (un binario con `bun --compile`, que no existe) y la
+  validación menciona la excepción de los hooks, que se parsean a la defensiva.
+- Salen de la guía de operación el relato del incidente de GHCR y las cifras sin base: los 310 MB que el
+  instalador cifra en 296, y la medición del rescate en `docs/recall.md`, sin fecha ni versión. La historia
+  ya está en las versiones anteriores de este fichero.
+- Las tareas programadas se cuentan como son (tres tareas, cuatro entradas de cron) y
+  `docs/standards/tests.md` ubica `distillFn` donde se define.
+- Los tres documentos de operación pasan a formas impersonales, como pide la convención de español neutro, y el comentario del
+  trinquete de tamaño deja de narrar PRs.
+
 ### La norma de comentarios se aplica a todo el código fuente (#171)
 
 - Los comentarios de `engine/src`, `engine/ui/src` (sin `components/ui`, que es shadcn) y `engine/tests` están

@@ -16,9 +16,9 @@ y conserva sólo los candidatos que comparten al menos dos términos informativo
 basta una; en consultas largas, el 30 % de sus palabras. Devuelve hasta 3 por capa. El rescate alcanza a
 rasgos, episodios y memorias, y no altera una búsqueda que ya encontró algo.
 
-Medido sobre 2.527 memorias: con capa semántica el rescate apenas suma aciertos, empuja hacia abajo la
-respuesta buena y trae memorias de preguntas que no vienen al caso; sin ella es lo que lleva el recall de
-0,1 a 2,5 memorias por pregunta. Por eso sólo entra cuando no hay nada que puntuar.
+Con capa semántica el rescate apenas suma aciertos, empuja hacia abajo la respuesta buena y trae
+memorias de preguntas que no vienen al caso; sin ella es lo que hace aparecer la paráfrasis que la
+consulta estricta deja fuera. Por eso sólo entra cuando no hay nada que puntuar.
 
 La rareza de un término que cuenta para el rescate tiene un suelo de 3 documentos y una fracción del 5 % de
 la base, de modo que "pocos" significa lo mismo con 300 memorias que con 3.000. Se calibró con
@@ -36,7 +36,7 @@ La semántica cubre deliberadamente sólo `memories`; `episodes` y `traits` cons
 Backfill y reindexado: `mismem-embed` (`--status`, `--force`).
 
 También habla con cualquier servidor compatible con OpenAI (`/v1/embeddings`, por ejemplo
-`llama-server --embedding`). **Si tus memorias no están en inglés, usa EmbeddingGemma 2**: con memorias en
+`llama-server --embedding`). **Si las memorias no están en inglés, conviene EmbeddingGemma 2**: con memorias en
 castellano encontró 34 de 50 paráfrasis frente a 4 de 50 de `nomic-embed-text` (medido en la issue #72), y
 en CPU no gasta VRAM. Va con sus prefijos y un corte de 0,65 (con 0,68 sale casi igual):
 
