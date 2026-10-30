@@ -40,12 +40,9 @@ const trait = (id: string, name: string, evidence: string[], scope = "a"): NoteT
 
 const episode = (id: string, body: string, scope = "a"): NoteEpisode => ({ id, scope, body, created_at: AT });
 
-/**
- * Hand-written paths: these tests pin each note's body, so they must not derive
- * their links from the path functions (tested below); the real wiring (which map carries
- * each id, and the scope resolver fed by the whole db) is covered by `obsidian.test.ts`
- * through `exportObsidian`.
- */
+// Hand-written paths: these tests pin each note's body, so links must not come from the
+// path functions (tested below). The real wiring (which map carries each id, and the scope
+// resolver fed by the whole db) is covered by `obsidian.test.ts` through `exportObsidian`.
 const PATHS: NotePaths = {
   memory: new Map([
     ["mem-abcdef", "Memorias/una memoria (abcdef)"],
