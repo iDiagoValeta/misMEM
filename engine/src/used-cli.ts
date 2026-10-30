@@ -13,7 +13,7 @@ import { readFileSync } from "node:fs";
 import { defaultDbPath, openDb } from "./store/db.js";
 import { envOptionalPositiveNumber } from "./env.js";
 import { callRemoteTool, readStdin } from "./hooks/client.js";
-import { reinforce } from "./memory/tools.js";
+import { reinforce } from "./memory/reinforce.js";
 import {
   assistantReply,
   injectedMemories,

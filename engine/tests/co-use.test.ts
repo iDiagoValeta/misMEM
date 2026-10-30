@@ -1,7 +1,10 @@
 import { describe, it, expect, beforeEach } from "vitest";
 import type { Database as DB } from "better-sqlite3";
 import { openDb } from "../src/store/db.js";
-import { capture, consolidate, crystallize, reinforce } from "../src/memory/tools.js";
+import { capture } from "../src/memory/capture.js";
+import { consolidate } from "../src/memory/consolidate.js";
+import { crystallize } from "../src/memory/crystallize.js";
+import { reinforce } from "../src/memory/reinforce.js";
 import { reinforceMemories } from "../src/memory/salience.js";
 
 let db: DB;

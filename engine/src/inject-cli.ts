@@ -25,7 +25,7 @@ import {
   worthRecalling,
 } from "./hooks/inject.js";
 import type { RecallHit } from "./schema.js";
-import { recallHybrid } from "./memory/tools.js";
+import { recallHybrid } from "./recall/recall.js";
 
 const DEFAULT_TIMEOUT_MS = 2500;
 /** Cuántos recuerdos pedirle al recall antes de filtrar: el filtro descarta varios. */

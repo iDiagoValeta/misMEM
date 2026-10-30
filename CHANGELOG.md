@@ -2,6 +2,18 @@
 
 ## Sin publicar
 
+### Una herramienta por fichero (#163)
+
+- `engine/src/memory/tools.ts` (419 líneas) queda en `capture.ts`, `pending.ts` (la lista de episodios
+  pendientes), `reinforce.ts` (con el registro de uso), `consolidate.ts`, `crystallize.ts` y `forget.ts`, y
+  el camino del recall se muda a `recall/recall.ts` con `recall`, `recallHybrid` y la forma del hit. No hay
+  barril: cada import nombra el fichero que lo exporta.
+- `memory/` deja de importar de `recall/`: desaparece el único ciclo entre carpetas y, con él, las dos
+  excepciones de capa y la de tamaño de `engine/tests/architecture.test.ts`.
+- Sólo cambian rutas, imports y los nombres de las variables locales en castellano (`registrarUso` pasa a
+  `recordUse`); las consultas y el orden de las operaciones se mueven sin editarlos, y `server-core.ts`
+  sólo cambia sus imports.
+
 ### El ranking del recall se parte por política (#162)
 
 - `engine/src/recall/search.ts` (510 líneas) queda en `fts.ts` (sintaxis de la consulta FTS5), `rescue.ts`

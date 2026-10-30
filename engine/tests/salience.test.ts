@@ -5,7 +5,9 @@ import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
 import { openDb } from "../src/store/db.js";
-import { capture, consolidate, forget } from "../src/memory/tools.js";
+import { capture } from "../src/memory/capture.js";
+import { consolidate } from "../src/memory/consolidate.js";
+import { forget } from "../src/memory/forget.js";
 import {
   decayMemories,
   decayedSalience,

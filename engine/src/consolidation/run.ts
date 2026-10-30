@@ -1,5 +1,5 @@
 import type { Database as DB } from "better-sqlite3";
-import { consolidate } from "../memory/tools.js";
+import { consolidate } from "../memory/consolidate.js";
 import { envNonNegativeNumber, envPositiveNumber } from "../env.js";
 import { embedPendingMemories } from "../embeddings/store.js";
 import type { EpisodeRow } from "../store/rows.js";

@@ -57,5 +57,5 @@ variables, con sus defaults, están en
 
 `mismem-bench` informa la posición del acierto (MRR, 1ª, entre las 3), los recuerdos devueltos por
 pregunta y `noiseHits` (marcadores que se escaparon: tiene que ser 0). Se corre antes y después de tocar
-`memory/tools.ts`, `recall/` o `embeddings/`. El banco de preguntas es privado y sale de la propia memoria.
+`recall/` o `embeddings/`. El banco de preguntas es privado y sale de la propia memoria.
 Cómo usarlo en un servidor: [DEPLOY.md](../DEPLOY.md#medir-el-recall).

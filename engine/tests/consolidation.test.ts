@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import type { Database as DB } from "better-sqlite3";
 import { openDb } from "../src/store/db.js";
-import { capture } from "../src/memory/tools.js";
+import { capture } from "../src/memory/capture.js";
 import { runConsolidation, truncateEpisode } from "../src/consolidation/run.js";
 import { LlmFatalError, LlmInvalidJsonError, LlmTruncatedError } from "../src/consolidation/llm.js";
 

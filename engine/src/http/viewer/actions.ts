@@ -26,7 +26,7 @@ import type { IncomingMessage, ServerResponse } from "node:http";
 import type { Database as DB } from "better-sqlite3";
 import { z } from "zod";
 import { CrystallizeInput, Scope } from "../../schema.js";
-import { crystallize } from "../../memory/tools.js";
+import { crystallize } from "../../memory/crystallize.js";
 import { embedPendingMemories } from "../../embeddings/store.js";
 import { JobError, type ConsolidationJob } from "../../consolidation/job.js";
 import { json } from "./read.js";

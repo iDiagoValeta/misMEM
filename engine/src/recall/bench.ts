@@ -8,7 +8,7 @@ import type { Database as DB } from "better-sqlite3";
 import { z } from "zod";
 import type { EmbedFn } from "../embeddings/provider.js";
 import { isNoiseGist } from "../domain/noise.js";
-import { recallHybrid } from "../memory/tools.js";
+import { recallHybrid } from "../recall/recall.js";
 
 const BankLine = z.object({ id: z.string().min(1) }).catchall(z.string());
 
