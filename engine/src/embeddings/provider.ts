@@ -1,7 +1,7 @@
 // Owns the embedding provider config (env) and the HTTP client that turns text into vectors.
 // Local Ollama or any OpenAI-compatible server; if it does not answer, everything degrades silently to plain FTS5.
 
-import { envPositiveNumber } from "../env.js";
+import { envNonNegativeNumber, envPositiveNumber } from "../env.js";
 
 type EmbeddingProvider = "ollama" | "openai";
 export type EmbedKind = "query" | "document";
@@ -33,9 +33,6 @@ const DEFAULT_MAX_CHARS = 4000;
 export function loadEmbeddingConfig(): EmbeddingConfig {
   const provider: EmbeddingProvider =
     process.env.MISMEM_EMBEDDING_PROVIDER === "openai" ? "openai" : "ollama";
-  // Number("") is 0: without the variable no cut is chosen, and 0 is a valid choice (bring everything).
-  const minScore = Number(process.env.MISMEM_EMBEDDING_MIN_SCORE || Number.NaN);
-  const maxChars = Number(process.env.MISMEM_EMBEDDING_MAX_CHARS);
   const model = process.env.MISMEM_EMBEDDING_MODEL ?? "nomic-embed-text";
   // startsWith: Ollama accepts tags (`nomic-embed-text:latest`) and it is the same model.
   const defaultMinScore = model.startsWith("nomic-embed-text") ? NOMIC_MIN_SCORE : DEFAULT_MIN_SCORE;
@@ -49,8 +46,8 @@ export function loadEmbeddingConfig(): EmbeddingConfig {
     timeoutMs: envPositiveNumber("MISMEM_EMBEDDING_TIMEOUT_MS", 3000),
     queryPrefix: process.env.MISMEM_EMBEDDING_QUERY_PREFIX ?? "",
     docPrefix: process.env.MISMEM_EMBEDDING_DOC_PREFIX ?? "",
-    minScore: Number.isFinite(minScore) && minScore >= 0 ? minScore : defaultMinScore,
-    maxChars: Number.isFinite(maxChars) && maxChars > 0 ? maxChars : DEFAULT_MAX_CHARS,
+    minScore: envNonNegativeNumber("MISMEM_EMBEDDING_MIN_SCORE", defaultMinScore),
+    maxChars: envPositiveNumber("MISMEM_EMBEDDING_MAX_CHARS", DEFAULT_MAX_CHARS),
   };
 }
 
