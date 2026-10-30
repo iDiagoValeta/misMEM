@@ -1,4 +1,4 @@
-/** Lo que devuelve la API del viewer (engine/src/viewer.ts y viewer-api.ts). */
+/** Lo que devuelve la API del viewer (engine/src/http/viewer/). */
 
 export type Layer = "episode" | "memory" | "trait";
 

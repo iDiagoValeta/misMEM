@@ -1,12 +1,12 @@
 import { beforeEach, describe, expect, it } from "vitest";
 import type { Database as DB } from "better-sqlite3";
 import type { ServerResponse } from "node:http";
-import { openDb } from "../src/db.js";
-import { capture, consolidate, recall, recallHybrid } from "../src/tools.js";
+import { openDb } from "../src/store/db.js";
+import { capture, consolidate, recall, recallHybrid } from "../src/memory/tools.js";
 import { embedPendingMemories } from "../src/embeddings/store.js";
 import type { EmbedFn } from "../src/embeddings/provider.js";
-import { dispatchEngramTool } from "../src/engram-compat.js";
-import { handleSearch } from "../src/viewer.js";
+import { dispatchEngramTool } from "../src/mcp/engram-compat.js";
+import { handleSearch } from "../src/http/viewer/read.js";
 
 let db: DB;
 

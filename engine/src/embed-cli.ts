@@ -9,7 +9,7 @@
  * Uso:
  *   mismem-embed [--scope <name>] [--batch 32] [--status] [--force]
  */
-import { defaultDbPath, openDefaultDb } from "./db.js";
+import { defaultDbPath, openDefaultDb } from "./store/db.js";
 import { embedPendingMemories, getEmbeddingIndexStatus } from "./embeddings/store.js";
 import { loadEmbeddingConfig } from "./embeddings/provider.js";
 import { ArgsError, EXIT_USAGE } from "./cli-args.js";

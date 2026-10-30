@@ -4,7 +4,7 @@
  * Usado por VS Code/Claude Desktop como child process.
  */
 import { StdioServerTransport } from "@modelcontextprotocol/sdk/server/stdio.js";
-import { openDefaultDb } from "./db.js";
+import { openDefaultDb } from "./store/db.js";
 import { createServer } from "./server-core.js";
 
 const db = openDefaultDb();

@@ -9,13 +9,13 @@ import {
   ListToolsRequestSchema,
 } from "@modelcontextprotocol/sdk/types.js";
 import type { Database as DB } from "better-sqlite3";
-import { capture, recallHybrid, consolidate, crystallize, forget, reinforce } from "./tools.js";
+import { capture, recallHybrid, consolidate, crystallize, forget, reinforce } from "./memory/tools.js";
 import { embedPendingMemories } from "./embeddings/store.js";
 import {
   ENGRAM_TOOLS,
   dispatchEngramTool,
   isEngramTool,
-} from "./engram-compat.js";
+} from "./mcp/engram-compat.js";
 
 // The advertised inputSchemas are hand-written mirrors of the Zod schemas in schema.ts, which
 // are what actually validates calls. tests/tool-schemas.test.ts fails if the two drift.

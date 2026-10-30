@@ -4,7 +4,7 @@
  *
  * Usado por consumers externos para mostrar el estado de la memoria.
  */
-import { openDefaultDb, defaultDbPath } from "./db.js";
+import { openDefaultDb, defaultDbPath } from "./store/db.js";
 import { ArgsError, EXIT_USAGE } from "./cli-args.js";
 import { parseStatsArgs } from "./stats-args.js";
 

@@ -10,7 +10,7 @@
  */
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
-import { remoteToolNames } from "./hook-client.js";
+import { remoteToolNames } from "./client.js";
 
 const READY_TTL_MS = 6 * 3_600_000;
 const NOT_READY_TTL_MS = 10 * 60_000;

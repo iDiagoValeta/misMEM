@@ -17,11 +17,11 @@
  */
 import type { ServerResponse } from "node:http";
 import type { Database as DB } from "better-sqlite3";
-import { excludeNoiseSql, isNoiseGist } from "./noise.js";
-import { coUseLinks, parseIds, relatedLinks, type GraphLink } from "./relations.js";
-import { hubs, turnsRegistered } from "./connectome.js";
-import { effectiveSalience, type SalienceRow } from "./salience.js";
-import { clampLimit, json, parseOffset } from "./viewer.js";
+import { excludeNoiseSql, isNoiseGist } from "../../domain/noise.js";
+import { coUseLinks, parseIds, relatedLinks, type GraphLink } from "../../queries/relations.js";
+import { hubs, turnsRegistered } from "../../store/connectome.js";
+import { effectiveSalience, type SalienceRow } from "../../memory/salience.js";
+import { clampLimit, json, parseOffset } from "./read.js";
 
 interface MemoryRow extends SalienceRow {
   id: string;

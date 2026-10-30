@@ -21,9 +21,9 @@ import { createHash } from "node:crypto";
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve, sep } from "node:path";
 import type { Database as DB } from "better-sqlite3";
-import { excludeNoiseSql } from "./noise.js";
-import { effectiveSalience, type SalienceRow } from "./salience.js";
-import { parseIds, relatedLinks } from "./relations.js";
+import { excludeNoiseSql } from "../domain/noise.js";
+import { effectiveSalience, type SalienceRow } from "../memory/salience.js";
+import { parseIds, relatedLinks } from "../queries/relations.js";
 
 export const EXPORT_ROOT = "misMEM";
 const MANIFEST = ".mismem-export.json";

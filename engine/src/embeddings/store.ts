@@ -7,7 +7,7 @@
  * sin agregar fragilidad de instalación al paquete.
  */
 import type { Database as DB } from "better-sqlite3";
-import { excludeNoiseSql } from "../noise.js";
+import { excludeNoiseSql } from "../domain/noise.js";
 import { embedTexts, loadEmbeddingConfig, type EmbedFn } from "./provider.js";
 import { cosine } from "./vector.js";
 

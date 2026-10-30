@@ -1,5 +1,5 @@
 import type { Database as DB } from "better-sqlite3";
-import { envPositiveNumber } from "./env.js";
+import { envPositiveNumber } from "../env.js";
 
 const DEFAULT_SALIENCE_HALF_LIFE_DAYS = 90;
 

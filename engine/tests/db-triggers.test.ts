@@ -3,8 +3,8 @@ import Database from "better-sqlite3";
 import { mkdtempSync, rmSync } from "node:fs";
 import { tmpdir } from "node:os";
 import { join } from "node:path";
-import { openDb } from "../src/db.js";
-import { capture, consolidate, crystallize } from "../src/tools.js";
+import { openDb } from "../src/store/db.js";
+import { capture, consolidate, crystallize } from "../src/memory/tools.js";
 
 const triggerSql = (db: ReturnType<typeof openDb>, name: string): string[] =>
   (db.prepare("SELECT sql FROM sqlite_master WHERE type = 'trigger' AND name = ?").all(name) as Array<{ sql: string }>).map(

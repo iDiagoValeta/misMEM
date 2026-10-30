@@ -1,10 +1,10 @@
 import { beforeEach, describe, expect, it, vi } from "vitest";
 import type { ServerResponse } from "node:http";
 import type { Database as DB } from "better-sqlite3";
-import { openDb } from "../src/db.js";
-import { dispatchEngramTool } from "../src/engram-compat.js";
-import { capture, consolidate, countPendingEpisodes, pendingEpisodes } from "../src/tools.js";
-import { handleRecent } from "../src/viewer.js";
+import { openDb } from "../src/store/db.js";
+import { dispatchEngramTool } from "../src/mcp/engram-compat.js";
+import { capture, consolidate, countPendingEpisodes, pendingEpisodes } from "../src/memory/tools.js";
+import { handleRecent } from "../src/http/viewer/read.js";
 
 let db: DB;
 beforeEach(() => {

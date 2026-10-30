@@ -24,17 +24,17 @@
 import { createServer as createHttpServer } from "node:http";
 import type { ServerResponse } from "node:http";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
-import { openDefaultDb } from "./db.js";
-import { hostAllowed, parseHostList } from "./http-host.js";
-import { BodyTooLargeError, InvalidJsonError, isJsonContentType, loadMaxBodyBytes, readJsonBody } from "./http-body.js";
-import { bindHost, checkBasicAuth, httpPort, loadAuth } from "./http-guard.js";
+import { openDefaultDb } from "./store/db.js";
+import { hostAllowed, parseHostList } from "./http/host.js";
+import { BodyTooLargeError, InvalidJsonError, isJsonContentType, loadMaxBodyBytes, readJsonBody } from "./http/body.js";
+import { bindHost, checkBasicAuth, httpPort, loadAuth } from "./http/guard.js";
 import { createServer } from "./server-core.js";
 import {
   handleStats,
   handleRecent,
   handleSearch,
   json,
-} from "./viewer.js";
+} from "./http/viewer/read.js";
 import {
   handleGraph,
   handleMemories,
@@ -42,7 +42,7 @@ import {
   handleScopes,
   handleTrait,
   parseDetailPath,
-} from "./viewer-api.js";
+} from "./http/viewer/api.js";
 import { serveUi } from "./viewer-static.js";
 import {
   ACTION_MAX_BODY_BYTES,
@@ -50,7 +50,7 @@ import {
   handleAction,
   loadAllowDelete,
   writeGuard,
-} from "./viewer-actions.js";
+} from "./http/viewer/actions.js";
 import { ConsolidationJob } from "./consolidation/job.js";
 
 const PORT = httpPort();

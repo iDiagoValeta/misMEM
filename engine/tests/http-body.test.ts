@@ -1,7 +1,7 @@
 import { describe, it, expect } from "vitest";
 import { Readable } from "node:stream";
 import type { IncomingMessage } from "node:http";
-import { BodyTooLargeError, InvalidJsonError, isJsonContentType, readJsonBody } from "../src/http-body.js";
+import { BodyTooLargeError, InvalidJsonError, isJsonContentType, readJsonBody } from "../src/http/body.js";
 
 function request(chunks: string[], headers: Record<string, string> = {}): IncomingMessage {
   const stream = Readable.from(chunks.map((c) => Buffer.from(c))) as unknown as IncomingMessage;

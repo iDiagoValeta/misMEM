@@ -8,7 +8,7 @@
  * que es el lado barato: un recuerdo útil que no suma saliencia sigue encontrándose.
  */
 import { parseInjection } from "./inject.js";
-import { contentTerms } from "./terms.js";
+import { contentTerms } from "../domain/terms.js";
 
 export interface RecalledMemory {
   id: string;

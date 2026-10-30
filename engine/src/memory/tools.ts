@@ -8,12 +8,12 @@ import {
   ForgetInput,
   ReinforceInput,
   type RecallHit,
-} from "./schema.js";
-import { contentHash } from "./hash.js";
-import { registerTurn } from "./connectome.js";
-import { CANDIDATE_POOL_LIMIT, fuseMemories, hasComparableVectors, lexicalCandidates } from "./search.js";
-import { embedTexts, loadEmbeddingConfig, type EmbedFn } from "./embeddings/provider.js";
-import { semanticSearchMemories } from "./embeddings/store.js";
+} from "../schema.js";
+import { contentHash } from "../domain/hash.js";
+import { registerTurn } from "../store/connectome.js";
+import { CANDIDATE_POOL_LIMIT, fuseMemories, hasComparableVectors, lexicalCandidates } from "../recall/search.js";
+import { embedTexts, loadEmbeddingConfig, type EmbedFn } from "../embeddings/provider.js";
+import { semanticSearchMemories } from "../embeddings/store.js";
 import {
   decayMemories,
   effectiveSalience,

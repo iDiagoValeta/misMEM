@@ -1,7 +1,7 @@
 import { describe, it, expect, beforeEach } from "vitest";
 import type { Database as DB } from "better-sqlite3";
-import { openDb } from "../src/db.js";
-import { capture, consolidate, crystallize, recall, recallHybrid } from "../src/tools.js";
+import { openDb } from "../src/store/db.js";
+import { capture, consolidate, crystallize, recall, recallHybrid } from "../src/memory/tools.js";
 import { embedPendingMemories, saveMemoryEmbedding } from "../src/embeddings/store.js";
 import type { EmbedFn } from "../src/embeddings/provider.js";
 

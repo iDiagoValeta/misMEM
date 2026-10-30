@@ -11,10 +11,10 @@
  * cualquier problema no inyecta nada: un hook que rompe no vale un recuerdo.
  */
 import { readFileSync } from "node:fs";
-import { defaultDbPath, openDb } from "./db.js";
+import { defaultDbPath, openDb } from "./store/db.js";
 import { envPositiveNumber } from "./env.js";
-import { callRemoteTool, readStdin } from "./hook-client.js";
-import { serverReady } from "./hook-readiness.js";
+import { callRemoteTool, readStdin } from "./hooks/client.js";
+import { serverReady } from "./hooks/readiness.js";
 import {
   DEFAULT_MAX_CHARS,
   DEFAULT_MAX_MEMORIES,
@@ -23,9 +23,9 @@ import {
   parseScopeList,
   selectForInjection,
   worthRecalling,
-} from "./inject.js";
+} from "./hooks/inject.js";
 import type { RecallHit } from "./schema.js";
-import { recallHybrid } from "./tools.js";
+import { recallHybrid } from "./memory/tools.js";
 
 const DEFAULT_TIMEOUT_MS = 2500;
 /** Cuántos recuerdos pedirle al recall antes de filtrar: el filtro descarta varios. */

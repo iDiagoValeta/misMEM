@@ -10,10 +10,10 @@
  * rompe no vale un punto de saliencia.
  */
 import { readFileSync } from "node:fs";
-import { defaultDbPath, openDb } from "./db.js";
+import { defaultDbPath, openDb } from "./store/db.js";
 import { envOptionalPositiveNumber } from "./env.js";
-import { callRemoteTool, readStdin } from "./hook-client.js";
-import { reinforce } from "./tools.js";
+import { callRemoteTool, readStdin } from "./hooks/client.js";
+import { reinforce } from "./memory/tools.js";
 import {
   assistantReply,
   injectedMemories,
@@ -21,7 +21,7 @@ import {
   recalledMemories,
   usedMemoryIds,
   type UsageOptions,
-} from "./usage.js";
+} from "./hooks/usage.js";
 
 const REMOTE_TIMEOUT_MS = 5000;
 

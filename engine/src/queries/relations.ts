@@ -1,8 +1,8 @@
 // Owns the read queries shared by the viewer API and the Obsidian export: lateral memory-to-memory
 // links — by similarity from stored vectors, and by measured co-use — and id-array parsing.
 import type { Database as DB } from "better-sqlite3";
-import { cosine } from "./embeddings/vector.js";
-import { coUseEdges } from "./connectome.js";
+import { cosine } from "../embeddings/vector.js";
+import { coUseEdges } from "../store/connectome.js";
 
 // Con nomic-embed-text hasta lo que no tiene nada que ver da 0,6-0,7 de coseno: medido en
 // una base real (118 memorias), la vecina más cercana tiene mediana 0,795. Con 0,75 y tres

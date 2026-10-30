@@ -1,8 +1,8 @@
 import { describe, it, expect, beforeEach } from "vitest";
 import type { ServerResponse } from "node:http";
 import type { Database as DB } from "better-sqlite3";
-import { openDb } from "../src/db.js";
-import { capture, consolidate, crystallize, reinforce } from "../src/tools.js";
+import { openDb } from "../src/store/db.js";
+import { capture, consolidate, crystallize, reinforce } from "../src/memory/tools.js";
 import { saveMemoryEmbedding } from "../src/embeddings/store.js";
 import {
   handleGraph,
@@ -11,8 +11,8 @@ import {
   handleScopes,
   handleTrait,
   parseDetailPath,
-} from "../src/viewer-api.js";
-import { relatedLinks } from "../src/relations.js";
+} from "../src/http/viewer/api.js";
+import { relatedLinks } from "../src/queries/relations.js";
 
 const DAY = 86_400_000;
 let db: DB;

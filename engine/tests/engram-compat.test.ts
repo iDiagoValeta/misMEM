@@ -1,12 +1,12 @@
 import { describe, it, expect, beforeEach } from "vitest";
 import type { Database as DB } from "better-sqlite3";
-import { openDb } from "../src/db.js";
-import { capture, consolidate, crystallize } from "../src/tools.js";
+import { openDb } from "../src/store/db.js";
+import { capture, consolidate, crystallize } from "../src/memory/tools.js";
 import {
   dispatchEngramTool,
   isEngramTool,
   ENGRAM_TOOLS,
-} from "../src/engram-compat.js";
+} from "../src/mcp/engram-compat.js";
 
 let db: DB;
 

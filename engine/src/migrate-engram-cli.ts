@@ -12,7 +12,7 @@
  */
 import Database from "better-sqlite3";
 import { createHash } from "node:crypto";
-import { openDefaultDb, defaultDbPath } from "./db.js";
+import { openDefaultDb, defaultDbPath } from "./store/db.js";
 import { ArgsError, EXIT_USAGE } from "./cli-args.js";
 import { parseMigrateEngramArgs } from "./migrate-engram-args.js";
 

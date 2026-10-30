@@ -1,5 +1,5 @@
 import { describe, it, expect } from "vitest";
-import { formatInjection } from "../src/inject.js";
+import { formatInjection } from "../src/hooks/inject.js";
 import {
   assistantReply,
   injectedMemories,
@@ -7,7 +7,7 @@ import {
   overlap,
   recalledMemories,
   usedMemoryIds,
-} from "../src/usage.js";
+} from "../src/hooks/usage.js";
 
 const user = (text: string) => ({ type: "user", message: { content: [{ type: "text", text }] } });
 const assistant = (text: string) => ({
