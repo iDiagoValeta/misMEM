@@ -6,6 +6,7 @@ import { api, type GraphLink, type GraphNode, type Layer } from "../api";
 import { errorMessage } from "../lib/errors";
 import { escapeHtml, filterGraph, neighborsOf, scopePalette, type GraphFilters } from "../lib/graph";
 import { DEFAULT_SETTINGS, GraphPanel, type GraphSettings } from "./GraphPanel";
+import { ConnectomePanel } from "./graph/ConnectomePanel";
 import { colorOfLink, colorOfNode, nodeWeight, paintNode, type Link, type Node, widthOfLink } from "./graph/paint";
 
 interface Props {
@@ -31,8 +32,9 @@ export default function GraphView({ scope, query, selectedId, active: visible, o
   // Switching scope never shows the previous scope's graph: it is only kept while the same
   // scope reloads (for example, when episodes are turned on).
   const graphQuery = useQuery({
-    queryKey: ["graph", scope ?? "", settings.episodes],
-    queryFn: ({ signal }) => api.graph(scope, settings.episodes, signal),
+    queryKey: ["graph", scope ?? "", settings.episodes, settings.coUse, settings.coUseMinN],
+    queryFn: ({ signal }) =>
+      api.graph(scope, settings.episodes, { enabled: settings.coUse, minN: settings.coUseMinN }, signal),
     placeholderData: (previous, previousQuery) =>
       previousQuery?.queryKey[1] === (scope ?? "") ? previous : undefined,
   });
@@ -48,6 +50,7 @@ export default function GraphView({ scope, query, selectedId, active: visible, o
       orphans: settings.orphans,
       related: settings.related,
       episodes: settings.episodes,
+      coUse: settings.coUse,
       query,
       local: { enabled: settings.localEnabled, depth: settings.depth, centerId },
     }),
@@ -56,6 +59,7 @@ export default function GraphView({ scope, query, selectedId, active: visible, o
       settings.orphans,
       settings.related,
       settings.episodes,
+      settings.coUse,
       settings.localEnabled,
       settings.depth,
       query,
@@ -80,6 +84,17 @@ export default function GraphView({ scope, query, selectedId, active: visible, o
 
   const scopes = useMemo(() => data?.nodes.map((node) => node.scope) ?? [], [data]);
   const palette = useMemo(() => scopePalette(scopes), [scopes]);
+
+  // The halo is normalized against what is drawn, so it is measured over the filtered graph and
+  // not over everything the server sent.
+  const maxHubStrength = useMemo(
+    () => graphData.nodes.reduce((top, node) => Math.max(top, node.co_use?.strength ?? 0), 0),
+    [graphData.nodes],
+  );
+  const labels = useMemo(
+    () => new Map((data?.nodes ?? []).map((node) => [node.id, node.label])),
+    [data],
+  );
 
   // An episode has no detail of its own: it opens the memory it was consolidated into.
   const origins = useMemo(() => {
@@ -120,8 +135,9 @@ export default function GraphView({ scope, query, selectedId, active: visible, o
         isLit,
         color: nodeColor,
         positions: positions.current,
+        maxHubStrength,
       }),
-    [active, isLit, nodeColor, selectedId, settings.nodeSize, settings.textThreshold],
+    [active, isLit, maxHubStrength, nodeColor, selectedId, settings.nodeSize, settings.textThreshold],
   );
 
   const linkColor = useCallback((link: Link) => colorOfLink(link, active), [active]);
@@ -254,6 +270,14 @@ export default function GraphView({ scope, query, selectedId, active: visible, o
       )}
 
       <GraphPanel settings={settings} onChange={changeSettings} scopes={scopes} width={size.width} />
+
+      {settings.coUse && data?.connectome && (
+        <ConnectomePanel
+          summary={data.connectome}
+          labels={labels}
+          onSelect={(id) => onSelect("memory", id)}
+        />
+      )}
 
       {data === undefined && graphQuery.isPending && (
         <div className="pointer-events-none absolute inset-0 grid place-items-center">

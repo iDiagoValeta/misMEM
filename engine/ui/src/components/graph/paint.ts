@@ -1,5 +1,6 @@
 import type { LinkObject, NodeObject } from "react-force-graph-2d";
 import type { GraphLink, GraphNode } from "../../api";
+import { coUseGlow, hubGlow } from "../../lib/graph";
 import { tokensNow } from "../../lib/graph-tokens";
 
 export type Node = NodeObject<GraphNode>;
@@ -37,6 +38,8 @@ interface NodePaint {
   isLit: (id: string) => boolean;
   color: (node: Node) => string;
   positions: Map<string, { x: number; y: number }>;
+  /** Strongest accumulated association in view; 0 turns the halos off. */
+  maxHubStrength: number;
 }
 
 /** Draws one node; every piece of state it needs arrives in `paint`, never through a closure. */
@@ -51,6 +54,23 @@ export function paintNode(node: Node, ctx: CanvasRenderingContext2D, scale: numb
 
   // Outside the active node and its neighbours the graph dims: focus reads at a glance.
   ctx.globalAlpha = lit ? 1 : 0.15;
+
+  // The halo is the whole point of the connectome view: a node that orients others glows,
+  // and it is drawn under the circle so it never hides the colour of its scope.
+  const glow = hubGlow(node.co_use?.strength, paint.maxHubStrength);
+  if (glow > 0 && lit) {
+    const halo = radius * (1.8 + 1.4 * glow);
+    const gradient = ctx.createRadialGradient(node.x, node.y, radius, node.x, node.y, halo);
+    gradient.addColorStop(0, tokens.brand);
+    gradient.addColorStop(1, "transparent");
+    ctx.globalAlpha = 0.5 * glow;
+    ctx.beginPath();
+    ctx.arc(node.x, node.y, halo, 0, 2 * Math.PI);
+    ctx.fillStyle = gradient;
+    ctx.fill();
+    ctx.globalAlpha = 1;
+  }
+
   ctx.beginPath();
   ctx.arc(node.x, node.y, radius, 0, 2 * Math.PI);
   ctx.fillStyle = paint.color(node);
@@ -80,13 +100,33 @@ export function paintNode(node: Node, ctx: CanvasRenderingContext2D, scale: numb
 
 export function colorOfLink(link: Link, active: string | null): string {
   const tokens = tokensNow();
-  if (active === null) return tokens.edge;
-  const touching = endId(link.source) === active || endId(link.target) === active;
-  return touching ? tokens.brand : tokens.edge;
+  const touching = active !== null && (endId(link.source) === active || endId(link.target) === active);
+  if (touching) return tokens.brand;
+  // A measured path is the one worth following, so it keeps its colour when nothing is hovered
+  // and fades with its own strength instead of with the rest of the drawing.
+  if (link.kind === "co_use") return withAlpha(tokens.brand, coUseGlow(link.strength).alpha);
+  return tokens.edge;
 }
 
 export function widthOfLink(link: Link, active: string | null): number {
   const touching = active !== null && (endId(link.source) === active || endId(link.target) === active);
   if (touching) return 1.6;
+  if (link.kind === "co_use") return coUseGlow(link.strength).width;
   return link.kind === "related" ? 0.7 : 0.6;
+}
+
+/** The token may arrive as #rgb, #rrggbb or a colour function: only the first two can be mixed. */
+function withAlpha(color: string, alpha: number): string {
+  const hex = /^#([0-9a-f]{3}|[0-9a-f]{6})$/i.exec(color);
+  if (!hex) return color;
+  const digits = hex[1] as string;
+  const full =
+    digits.length === 3
+      ? digits
+          .split("")
+          .map((d) => d + d)
+          .join("")
+      : digits;
+  const value = Number.parseInt(full, 16);
+  return `rgb(${(value >> 16) & 255} ${(value >> 8) & 255} ${value & 255} / ${alpha})`;
 }

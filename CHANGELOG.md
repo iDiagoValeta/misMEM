@@ -192,6 +192,23 @@
 - Nada de eso cambia lo que se publica: `dist/server.js`, `dist/server-http.js` y `dist/*-cli.js` conservan
   su ruta y su nombre.
 
+### El conectoma se puede ver
+
+- El visor gana un modo de iluminación sobre el mismo grafo: en *Ajustes del grafo* → **Conectoma**
+  se encienden las aristas por co-uso, y los caminos y los nodos se alumbran según su asociación.
+  El dibujo que abre no cambia: el modo nace apagado y lo que ya había se pinta igual.
+- La luz sale de la fuerza, no del conteo. Una arista se vuelve más viva y más gruesa cuanto más
+  arriba de lo que predice el azar aparece el par; en 0 o por debajo no se ilumina, porque un par
+  que se evita no es un camino. Cada nodo lleva un halo con su asociación acumulada, normalizado
+  contra el más fuerte a la vista: un grafo de asociaciones flojas se lee solo, sin quedar negro.
+- El costado deja de ser decorativo: dice **cuántos turnos** se midieron, cuántos pares hay y
+  cuántos se dibujan, y lista *por dónde entrar* — los nodos ordenados por asociación acumulada y
+  no por vecinos, cada uno clicable. Un control de soporte mínimo filtra los pares de poca
+  evidencia, y viaja al servidor para que los hubs describan las mismas aristas que se pintan.
+- **Por debajo de 20 turnos medidos el panel lo dice en vez de dejar que el dibujo mienta**: con
+  pocos datos, dos recuerdos usados una vez y juntos esa vez dan el máximo. Comprobado con una
+  base de un solo turno, que es como se ve una instalación recién actualizada.
+
 ## 0.6.0 — 2026-10-29
 
 ### El olvido respeta `before_days` también al borrar memorias
