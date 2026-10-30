@@ -7,8 +7,8 @@ import { Switch } from "@/components/ui/switch";
 import { scopePalette } from "@/lib/graph";
 
 /**
- * Todo lo que el panel deja ajustar, en un solo objeto plano. La consulta y el nodo
- * seleccionado no viven aquí: los manda App, y el grafo los mezcla al filtrar.
+ * Everything the panel lets you adjust, in one flat object. The query and the selected node do
+ * not live here: App sends them and the graph mixes them in when filtering.
  */
 export interface GraphSettings {
   traits: boolean;
@@ -27,7 +27,7 @@ export interface GraphSettings {
   distance: number;
 }
 
-/** Los valores de la maqueta aprobada: los mismos que se ven al abrir el grafo. */
+/** The values of the approved mock-up: the same ones seen when the graph opens. */
 export const DEFAULT_SETTINGS: GraphSettings = {
   traits: true,
   orphans: true,
@@ -36,7 +36,7 @@ export const DEFAULT_SETTINGS: GraphSettings = {
   localEnabled: false,
   depth: 2,
   colorByScope: true,
-  // Apagadas por defecto: la maqueta aprobada no las tenía y suman tinta al dibujo.
+  // Off by default: the approved mock-up had none and they add ink to the drawing.
   arrows: false,
   textThreshold: 1.6,
   nodeSize: 1,
@@ -49,9 +49,9 @@ export const DEFAULT_SETTINGS: GraphSettings = {
 interface Props {
   settings: GraphSettings;
   onChange: (patch: Partial<GraphSettings>) => void;
-  /** Un ámbito por nodo, en el orden en que llegan: el panel cuenta y colorea. */
+  /** One scope per node, in arrival order: the panel counts and colours. */
   scopes: string[];
-  /** Ancho del contenedor del grafo: decide si el panel arranca desplegado. */
+  /** Width of the graph container: decides whether the panel starts expanded. */
   width: number;
 }
 
@@ -127,9 +127,9 @@ function Section({ title, defaultOpen, children }: { title: string; defaultOpen?
 }
 
 export function GraphPanel({ settings, onChange, scopes, width }: Props) {
-  // En un contenedor estrecho el panel tapa medio grafo: arranca plegado y se abre al
-  // tocarlo. Mientras el padre no ha medido (width 0) se queda plegado y se despliega
-  // en cuanto llega un ancho de escritorio; después manda lo que elija la persona.
+  // In a narrow container the panel covers half the graph: it starts collapsed and opens when
+  // touched. While the parent has not measured (width 0) it stays collapsed and expands as soon
+  // as a desktop width arrives; after that the person's choice rules.
   const [open, setOpen] = useState<boolean>();
   const expanded = open ?? width >= 900;
 

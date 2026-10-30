@@ -14,12 +14,12 @@ export interface ListProps {
   onSelect: (selection: Selection) => void;
 }
 
-/** Selección para cristalizar: id → ámbito, para exigir que sean del mismo. */
+/** Selection for crystallizing: id → scope, so they can be required to share one. */
 export type Picked = ReadonlyMap<string, string>;
 
 /**
- * La tinta mezcla `ink` con `ink-muted`: el mínimo (0 %) sigue pasando AA, así que
- * una memoria vieja se aclara sin volverse ilegible.
+ * The tint mixes `ink` with `ink-muted`: the floor (0 %) still passes AA, so an old memory
+ * fades without becoming unreadable.
  */
 const tint = (salience: number): string =>
   `color-mix(in oklab, var(--color-ink) ${inkPercent(salience)}%, var(--color-ink-muted))`;
@@ -96,7 +96,7 @@ export function Loading({ label }: { label: string }) {
   );
 }
 
-/** Un fallo de recarga no borra lo que ya se veía: avisa encima y deja la lista. */
+/** A refetch failure does not erase what was already shown: it warns above and leaves the list. */
 export function Failure({ what, error, stale }: { what: string; error: unknown; stale: boolean }) {
   if (stale) {
     return (
@@ -163,7 +163,7 @@ export function PagedList<T>({
 }) {
   return (
     <>
-      {/* The load-more footer stays outside the empty check, as it was before the extraction. */}
+      {/* The load-more footer stays outside the empty check so it still shows when no row did. */}
       {rows.length === 0 ? empty : <ul className="flex flex-col gap-2">{rows.map(renderRow)}</ul>}
       {hasNextPage && <LoadMore remaining={remaining} busy={fetchingNextPage} onClick={onLoadMore} />}
     </>

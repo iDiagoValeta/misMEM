@@ -14,8 +14,9 @@ export function useMemoryActions(memoryId: string | undefined, onChanged: (next?
   const [busy, setBusy] = useState(false);
   const [actionError, setActionError] = useState<string>();
 
-  // Olvidar va en dos pasos (viewer-actions.ts): el servidor dice qué se pierde y da el token
-  // que confirma; sin él no borra. El diálogo enseña ese impacto, no uno calculado aquí.
+  // Forgetting takes two steps (viewer-actions.ts): the server says what would be lost and gives
+  // the confirming token; without it nothing is deleted. The dialog shows that impact, not one
+  // computed here.
   const askForget = async () => {
     if (!memoryId) return;
     setConfirm("forget");
@@ -56,7 +57,7 @@ export function useMemoryActions(memoryId: string | undefined, onChanged: (next?
       const message = errorMessage(err);
       setActionError(message);
       toast.error(`No se pudo: ${message}`);
-      // El token se gastó en el intento: sin uno nuevo, el siguiente clic tampoco borraría.
+      // The token was spent on the attempt: without a new one, the next click would not delete either.
       if (kind === "forget") {
         setChallenge(undefined);
         actions.forgetMemoryChallenge(memoryId).then(setChallenge, () => undefined);

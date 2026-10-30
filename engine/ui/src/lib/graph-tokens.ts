@@ -18,8 +18,8 @@ let cachedTheme: string | undefined;
 let cachedTokens: Tokens = FALLBACK_TOKENS;
 
 /**
- * Los tokens se leen del CSS, no se copian: el canvas repinta con el tema nuevo sin
- * remontar el grafo. La caché se tira cuando cambia `data-theme`, no en cada fotograma.
+ * Tokens are read from the CSS, not copied: the canvas repaints with the new theme without
+ * remounting the graph. The cache is dropped when `data-theme` changes, not on every frame.
  */
 export function tokensNow(): Tokens {
   const theme = document.documentElement.dataset.theme ?? "dark";

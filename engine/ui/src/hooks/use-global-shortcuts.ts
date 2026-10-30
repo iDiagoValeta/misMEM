@@ -1,7 +1,7 @@
 import { useEffect, type RefObject } from "react";
 import type { Selection } from "@/lib/selection";
 
-/** Radix monta los diálogos fuera de <dialog>: Escape debe respetar ambos mundos. */
+/** Radix mounts its dialogs outside <dialog>: Escape must respect both worlds. */
 function hasOpenDialog(): boolean {
   return Boolean(
     document.querySelector(
@@ -11,8 +11,8 @@ function hasOpenDialog(): boolean {
 }
 
 /**
- * `/` enfoca la búsqueda y Escape cierra el detalle, salvo que haya un diálogo abierto:
- * ése se cierra solo y el detalle debe seguir detrás.
+ * `/` focuses the search and Escape closes the detail, unless a dialog is open: that one closes
+ * itself and the detail must stay behind.
  */
 export function useGlobalShortcuts(
   searchRef: RefObject<HTMLInputElement | null>,
@@ -33,7 +33,7 @@ export function useGlobalShortcuts(
         searchRef.current?.focus();
         return;
       }
-      // Escape cierra el detalle salvo que lo esté usando un diálogo abierto, que se cierra solo.
+      // Escape closes the detail unless an open dialog is using it, since that one closes itself.
       if (event.key === "Escape" && !hasOpenDialog()) setSelected(undefined);
     };
     window.addEventListener("keydown", onKey);

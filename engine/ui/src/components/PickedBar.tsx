@@ -1,6 +1,6 @@
 import { Button } from "@/components/ui/button";
 
-/** La barra de selección para cristalizar: cuántas memorias van y si comparten ámbito. */
+/** The selection bar for crystallizing: how many memories go and whether they share a scope. */
 export function PickedBar({
   picked,
   pickedScope,

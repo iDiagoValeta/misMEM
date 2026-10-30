@@ -13,8 +13,8 @@ export function SearchResults({ term, scope, selected, onSelect }: ListProps & {
     queryKey: ["search", scope ?? "", trimmed],
     queryFn: ({ signal }) => api.search(trimmed, scope, signal),
     enabled: trimmed.length > 0,
-    // Al afinar la consulta se conserva la lista anterior mientras llega la nueva, pero
-    // cambiar de ámbito no puede enseñar los hits del anterior bajo la cabecera nueva.
+    // Refining the query keeps the previous list while the new one arrives, but switching scope
+    // cannot show the previous scope's hits under the new header.
     placeholderData: (previous, previousQuery) =>
       previousQuery?.queryKey[1] === (scope ?? "") ? previous : undefined,
   });
@@ -61,7 +61,7 @@ export function SearchResults({ term, scope, selected, onSelect }: ListProps & {
   );
 }
 
-/** Un episodio llega con su texto en el hit; el detalle no tiene otra forma de pedirlo. */
+/** An episode arrives with its text in the hit; the detail has no other way to ask for it. */
 function selectionOf(hit: SearchHit): Selection {
   if (hit.layer === "episode") {
     return {

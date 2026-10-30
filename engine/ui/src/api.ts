@@ -1,4 +1,4 @@
-/** Lo que devuelve la API del viewer (engine/src/http/viewer/). */
+/** What the viewer API returns (engine/src/http/viewer/). */
 
 export type Layer = "episode" | "memory" | "trait";
 
@@ -92,7 +92,7 @@ export interface GraphData {
   truncated: { memories: boolean; traits: boolean; episodes: boolean };
 }
 
-/** Una página de `/api/recent?layer=episode&pending=1`. */
+/** One page of `/api/recent?layer=episode&pending=1`. */
 export interface RecentPage {
   rows: EpisodeItem[];
   total: number;
@@ -103,7 +103,7 @@ export interface MemoriesPage {
   memories: MemoryItem[];
 }
 
-/** Cuántas filas se piden por página. El tope del servidor es 200. */
+/** Rows requested per page. The server cap is 200. */
 const PAGE_SIZE = 50;
 
 export const isMissing = (item: object): item is Missing => "missing" in item;
@@ -116,7 +116,7 @@ async function get<T>(
   const query = new URLSearchParams();
   for (const [key, value] of Object.entries(params)) if (value) query.set(key, value);
   const qs = query.toString();
-  // Relativo a /viewer/: funciona igual detrás de un proxy que monte misMEM en otra ruta.
+  // Relative to /viewer/: works the same behind a proxy that mounts misMEM on another path.
   const res = await fetch(`../api/${path}${qs ? `?${qs}` : ""}`, { signal });
   if (!res.ok) {
     const body = (await res.json().catch(() => null)) as { error?: string } | null;
@@ -125,7 +125,7 @@ async function get<T>(
   return (await res.json()) as T;
 }
 
-/** Las escrituras: POST con JSON, que es lo que pide el servidor (viewer-actions.ts). */
+/** Writes: a JSON POST, which is what the server requires (viewer-actions.ts). */
 async function post<T>(path: string, body: unknown = {}): Promise<T> {
   const res = await fetch(`../api/${path}`, {
     method: "POST",
@@ -139,7 +139,7 @@ async function post<T>(path: string, body: unknown = {}): Promise<T> {
   return (await res.json()) as T;
 }
 
-/** El primer paso de un forget: no borra, devuelve lo que se perdería y el token para confirmar. */
+/** First step of a forget: deletes nothing, returns what would be lost and the confirmation token. */
 export interface ForgetChallenge {
   confirm_token: string;
   expires_in: number;
@@ -210,7 +210,7 @@ export const api = {
     ),
   traits: (scope: string | undefined, signal?: AbortSignal) =>
     get<{ rows: TraitItem[] }>("recent", { layer: "trait", scope, limit: "200" }, signal),
-  // Los 50 mejores: es una lista por relevancia y la cola no aporta.
+  // The top 50: this is a relevance list and the tail adds nothing.
   search: (q: string, scope: string | undefined, signal?: AbortSignal) =>
     get<{ hits: SearchHit[] }>("search", { q, scope, limit: "50" }, signal),
   graph: (scope: string | undefined, episodes: boolean, signal?: AbortSignal) =>
