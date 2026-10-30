@@ -1,29 +1,6 @@
-/**
- * Escrituras desde la interfaz: corregir, deshacer una consolidación, olvidar y cristalizar.
- *
- *   POST /api/memory/:id/edit           {gist, details?}
- *   POST /api/memory/:id/unconsolidate  la memoria se borra y sus episodios vuelven a pendientes
- *   POST /api/memory/:id/forget         la memoria y sus episodios se borran (en dos pasos)
- *   POST /api/trait/:id/forget          el rasgo se borra (en dos pasos)
- *   POST /api/crystallize               {scope, name, polarity?, evidence_memory_ids}
- *   POST /api/consolidate               {scope?}: arranca una corrida en segundo plano
- *
- * Hasta acá toda la API del viewer era GET y la seguridad se apoyaba en eso. Una escritura
- * pide además (writeGuard): POST con cuerpo JSON, que desde otro origen obliga a un preflight
- * CORS que el servidor no contesta, y un Origin igual al propio servidor, que corta un
- * formulario o un fetch desde otra web. La auth y el filtro de Host de server-http siguen
- * delante, y el filtro de Host es el que cubre el DNS rebinding.
- *
- * Los dos forget no tienen vuelta atrás y el de memoria borra también la evidencia, sus
- * episodios (deshacer la consolidación borra el resumen, pero los episodios vuelven), así que piden
- * más: sólo existen con MISMEM_VIEWER_ALLOW_DELETE encendido (si no, 403), y el primer POST
- * no borra. Responde 409 con lo que se perdería y un token de un solo uso, ligado a ese id y
- * válido 60 s; borra el segundo POST, el que trae {confirm_token}. Así la UI tiene que enseñar
- * el impacto antes de preguntar, y un request forjado suelto no alcanza.
- *
- * Las escrituras y su SQL viven en engine/src/memory/edit.ts; el impacto que se enseña antes
- * de confirmar y los ámbitos que valida la evidencia, en engine/src/queries/.
- */
+// Writes from the interface: edit, undo a consolidation, forget and crystallize. The read API
+// counts on GET having no side effects, so a write needs writeGuard (a POST with a JSON body and
+// a same-origin Origin), and the two forgets need a single-use confirmation token.
 import { randomBytes } from "node:crypto";
 import type { IncomingMessage, ServerResponse } from "node:http";
 import type { Database as DB } from "better-sqlite3";
@@ -42,10 +19,10 @@ import { entityExists, memoryScopes } from "../../queries/memories.js";
 import { JobError, type ConsolidationJob } from "../../consolidation/job.js";
 import { json } from "../respond.js";
 
-/** Una acción no necesita más: lo grande va por capture o la ingesta. */
+/** An action needs no more: anything large goes through capture or ingest. */
 export const ACTION_MAX_BODY_BYTES = 256 * 1024;
 
-/** Por qué se rechaza una escritura, o null si pasa. */
+/** Why a write is rejected, or null when it passes. */
 export function writeGuard(req: IncomingMessage): { status: number; error: string } | null {
   if (req.method !== "POST") return { status: 405, error: "las acciones van por POST" };
   const type = req.headers["content-type"] ?? "";
@@ -66,7 +43,7 @@ export function writeGuard(req: IncomingMessage): { status: number; error: strin
 
 const CONFIRM_TTL_SECONDS = 60;
 
-/** Tokens de confirmación de los forget: de un solo uso, ligados a la capa y el id, con TTL. */
+/** Forget confirmation tokens: single use, bound to the layer and id, with a TTL. */
 export class ForgetConfirmations {
   private readonly pending = new Map<string, { target: string; expiresAt: number }>();
 
@@ -80,7 +57,7 @@ export class ForgetConfirmations {
     return token;
   }
 
-  /** true si el token vale para esta capa e id. Lo gasta siempre, valga o no. */
+  /** True if the token is valid for this layer and id. It is always spent, valid or not. */
   consume(token: string, layer: string, id: string): boolean {
     const entry = this.pending.get(token);
     this.pending.delete(token);
@@ -88,14 +65,14 @@ export class ForgetConfirmations {
   }
 }
 
-/** El interruptor del borrado desde la interfaz: apagado salvo que se encienda a propósito. */
+/** The switch for deleting from the interface: off unless turned on on purpose. */
 export function loadAllowDelete(env: NodeJS.ProcessEnv = process.env): boolean {
   return ["1", "true", "on"].includes((env.MISMEM_VIEWER_ALLOW_DELETE ?? "").trim().toLowerCase());
 }
 
 const ConfirmInput = z.object({ confirm_token: z.string().min(1).max(128).optional() });
 
-/** Como la tool `crystallize`, pero sin aceptar memorias que no existen o de otro ámbito. */
+/** Like the `crystallize` tool, but rejecting memories that do not exist or belong to another scope. */
 export function crystallizeFromUi(db: DB, raw: unknown): ReturnType<typeof crystallize> {
   const input = CrystallizeInput.parse(raw);
   const ids = [...new Set(input.evidence_memory_ids)];
@@ -119,10 +96,7 @@ class ActionError extends Error {
 
 const ROUTE = /^\/api\/(memory|trait)\/([^/]+)\/(edit|unconsolidate|forget)$/;
 
-/**
- * Despacha una acción ya autorizada (writeGuard) con su cuerpo leído. Devuelve false si la
- * ruta no es una acción, para que el llamador siga con su 404.
- */
+/** Dispatches an action already authorized by writeGuard with its body read; false if the route is not an action, so the caller goes on to its 404. */
 export async function handleAction(
   db: DB,
   res: ServerResponse,

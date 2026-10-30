@@ -1,13 +1,9 @@
-/**
- * Respuestas HTTP que comparten el despacho (routes.ts) y los handlers del visor.
- *
- * Cada helper fija el estado y las cabeceras que ya enviaba server-http.ts, sin unificarlas:
- * el visor y el SDK del MCP leen content-type y caché tal cual, y cambiarlos altera el
- * contrato aunque el cuerpo sea el mismo.
- */
+// HTTP responses shared by the dispatch (routes.ts) and the viewer handlers. Each helper fixes
+// the status and headers without unifying them: the viewer and the MCP SDK read content-type
+// and cache-control as they are, so changing them alters the contract even with the same body.
 import type { ServerResponse } from "node:http";
 
-/** JSON de la interfaz: UTF-8 explícito y sin caché. */
+/** Interface JSON: explicit UTF-8 and no cache. */
 export function json(res: ServerResponse, status: number, payload: unknown): void {
   res.statusCode = status;
   res.setHeader("content-type", "application/json; charset=utf-8");
@@ -15,41 +11,41 @@ export function json(res: ServerResponse, status: number, payload: unknown): voi
   res.end(JSON.stringify(payload));
 }
 
-/** JSON sin charset ni caché: los errores JSON-RPC de /mcp y el 500 general. */
+/** JSON without charset or cache headers: the /mcp JSON-RPC errors and the generic 500. */
 export function jsonBare(res: ServerResponse, status: number, payload: unknown): void {
   res.statusCode = status;
   res.setHeader("content-type", "application/json");
   res.end(JSON.stringify(payload));
 }
 
-/** JSON UTF-8 y sin cabecera de caché: el 404 de una ruta /api que no existe. */
+/** UTF-8 JSON with no cache header: the 404 of an /api route that does not exist. */
 export function jsonPlain(res: ServerResponse, status: number, payload: unknown): void {
   res.statusCode = status;
   res.setHeader("content-type", "application/json; charset=utf-8");
   res.end(JSON.stringify(payload));
 }
 
-/** 401 de BasicAuth: sin el reto, el navegador no pide credenciales. */
+/** BasicAuth 401: without the challenge the browser does not ask for credentials. */
 export function unauthorized(res: ServerResponse): void {
   res.statusCode = 401;
   res.setHeader("WWW-Authenticate", 'Basic realm="misMEM"');
   res.end("No autorizado");
 }
 
-/** 404 de una ruta que no es de nadie. Sin content-type, como lo enviaba el servidor. */
+/** 404 of a route that belongs to nobody, without content-type. */
 export function notFound(res: ServerResponse): void {
   res.statusCode = 404;
   res.end("No encontrado");
 }
 
-/** 405 de /api para lo que no es GET ni POST. */
+/** /api 405 for anything that is not GET or POST. */
 export function methodNotAllowed(res: ServerResponse): void {
   res.statusCode = 405;
   res.setHeader("allow", "GET, POST");
   res.end("Método no permitido");
 }
 
-/** 413 de /mcp: se cierra la conexión porque lo que queda del cuerpo no se drena. */
+/** /mcp 413: the connection closes because the rest of the body is not drained. */
 export function payloadTooLarge(res: ServerResponse): void {
   res.statusCode = 413;
   res.setHeader("connection", "close");

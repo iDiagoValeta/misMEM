@@ -8,7 +8,7 @@ export const EXPORT_ROOT = "misMEM";
 const MANIFEST = ".mismem-export.json";
 
 export interface VaultOptions {
-  /** La bóveda: la carpeta que abre Obsidian. */
+  /** The vault: the folder Obsidian opens. */
   dir: string;
   scope?: string;
   dryRun?: boolean;
@@ -23,15 +23,15 @@ export interface ExportStats {
   written: number;
   unchanged: number;
   removed: number;
-  /** Entradas del manifiesto que no se han borrado por no poder demostrar que son nuestras. */
+  /** Manifest entries not removed because they cannot be proven to be ours. */
   skipped: number;
   dry_run: boolean;
 }
 
-/** Lo que se escribe de cada nota: su contenido y lo que el manifiesto necesitará después. */
+/** What is written for each note: its content and what the manifest will need later. */
 export interface WrittenFile {
   content: string;
-  /** Id completo del recuerdo, rasgo o episodio; en una nota de ámbito, el propio scope. */
+  /** Full id of the memory, trait or episode; on a scope note, the scope itself. */
   id: string;
   scope: string;
 }
@@ -47,10 +47,9 @@ interface Manifest {
 }
 
 /**
- * Lee el manifiesto. `null` si no se puede interpretar (ilegible o con forma desconocida);
- * quien llama decide: si el fichero existe, el export se niega a seguir para no reescribirlo
- * y dejar huérfanas las notas que apuntaba. Un array es el formato viejo y se lee como
- * entradas sin id ni scope: no hay forma de demostrar que esos ficheros son nuestros.
+ * Reads the manifest, or null when it cannot be interpreted (unreadable or unknown shape); the
+ * caller decides, and a present file makes the export refuse rather than overwrite it and orphan
+ * the notes it pointed at. An array is the old format: entries with no id or scope, unprovable.
  */
 function readManifest(path: string): Map<string, ManifestEntry | null> | null {
   let parsed: unknown;
@@ -79,7 +78,7 @@ function readManifest(path: string): Map<string, ManifestEntry | null> | null {
   return entries;
 }
 
-/** El fichero es nuestro sólo si su frontmatter sigue declarando el id que apuntó el manifiesto. */
+/** The file is ours only if its frontmatter still declares the id the manifest recorded. */
 function ownedBy(file: string, id: string): boolean {
   let content: string;
   try {
@@ -101,9 +100,9 @@ export function writeVault(
   const manifestPath = join(root, MANIFEST);
   const manifestExists = existsSync(manifestPath);
   const previous = readManifest(manifestPath);
-  // Escribir un manifiesto nuevo encima de uno ilegible pierde el rastro de las notas viejas
-  // para siempre: ya nadie sabrá que eran nuestras y ningún export las borrará. Se para
-  // antes de escribir nada; arreglarlo o borrarlo es una decisión de la persona.
+  // Writing a new manifest over an unreadable one loses the trail of the old notes forever:
+  // nobody will know they were ours and no export will remove them. Stop before writing;
+  // fixing or deleting it is the person's decision.
   if (previous === null && manifestExists) {
     throw new Error(
       `el manifiesto no se puede interpretar: ${manifestPath}. Arréglalo o bórralo a mano: no se toca la bóveda`,
@@ -136,8 +135,8 @@ export function writeVault(
     writeFileSync(file, content);
   }
 
-  // El manifiesto se fusiona con el anterior, no se reemplaza: con --scope, lo exportado
-  // antes para otros ámbitos sigue siendo nuestro y no puede quedar huérfano ni borrarse.
+  // The manifest merges with the previous one instead of replacing it: with --scope, what was
+  // exported before for other scopes is still ours and must not be orphaned or removed.
   const manifest: Manifest = { version: 2, files: {} };
   for (const [rel, { id, scope }] of files) manifest.files[rel] = { id, scope };
 
@@ -145,7 +144,7 @@ export function writeVault(
   let skipped = 0;
   for (const [rel, entry] of previous ?? []) {
     if (files.has(rel)) continue;
-    // Formato viejo: sin id no hay forma de distinguir nuestra nota de una de la persona.
+    // Old format: without an id there is no telling our note from one of the person's.
     if (entry === null) {
       skipped++;
       continue;
@@ -157,7 +156,7 @@ export function writeVault(
     const file = inside(rel);
     if (!file) continue;
     if (!existsSync(file)) {
-      // La nota ya no está: la entrada sobra, igual que antes.
+      // The note is gone: the entry is stale.
       removed++;
       continue;
     }

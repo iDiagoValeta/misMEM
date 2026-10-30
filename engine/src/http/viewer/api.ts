@@ -1,23 +1,6 @@
-/**
- * API de sólo lectura para la interfaz: de dónde sale cada recuerdo.
- *
- * Endpoints (misma auth y mismo filtro de Host que el resto de /api):
- *   GET /api/scopes          → ámbitos con sus conteos por capa
- *   GET /api/memories        → memorias por salience efectiva (?scope=&limit=&offset=&noise=1)
- *   GET /api/memory/:id      → la memoria, sus episodios de origen y los rasgos que la citan
- *   GET /api/trait/:id       → el rasgo y las memorias que lo sostienen
- *   GET /api/graph           → nodos y aristas episodio → memoria → rasgo (?scope=&episodes=1),
- *                              memoria ↔ memoria por parecido (?related=1) y memoria ↔ memoria
- *                              por co-uso medido (?co_use=1, soporte con ?co_use_min_n=k), que
- *                              añade el grado de cada nodo y un resumen del tamaño de la
- *                              muestra; sin el parámetro no aparece nada de eso
- *
- * La salience que devuelve es la efectiva (con el decaimiento aplicado a hoy), la misma que
- * usa el recall. La guardada sólo es el valor del último checkpoint.
- *
- * Las consultas viven en engine/src/queries/; acá sólo se valida la entrada, se llama y se
- * responde.
- */
+// Read-only API for the interface: where each memory comes from. The queries live in
+// engine/src/queries/; here the input is validated, the query called and the answer sent. The
+// salience it returns is the effective one, the same the recall uses.
 import type { ServerResponse } from "node:http";
 import type { Database as DB } from "better-sqlite3";
 import { graphData, type GraphCaps } from "../../queries/graph.js";
@@ -32,9 +15,9 @@ export type { GraphCaps } from "../../queries/graph.js";
 export type DetailPath = { layer: "memory" | "trait"; id: string };
 
 /**
- * Una ruta de detalle con el id mal codificado (% suelto o una secuencia UTF-8 a medias)
- * es culpa de quien llama, no del servidor: devuelve "bad" para responder 400 en vez de
- * dejar que decodeURIComponent lance URIError y el catch general lo disfrace de 500.
+ * A detail path with a malformed id (a stray % or a half UTF-8 sequence) is the caller's
+ * fault, not the server's: return "bad" for a 400 instead of letting decodeURIComponent
+ * throw a URIError that the general catch disguises as a 500.
  */
 export function parseDetailPath(pathname: string): DetailPath | "bad" | null {
   const match = /^\/api\/(memory|trait)\/([^/]+)$/.exec(pathname);

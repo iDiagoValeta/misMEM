@@ -1,13 +1,6 @@
-/**
- * Engram-compatibility layer.
- *
- * Dispatches the `mem_*` aliases (Engram MCP tools) to the six canonical misMEM tools
- * (capture/recall/reinforce/consolidate/crystallize/forget) or to the read and write that
- * own the SQL: `queries/observation.ts` and `memory/engram-update.ts`. Lets existing clients
- * (agents, CLAUDE.md, mcp.json) keep working unchanged when they move from Engram to misMEM.
- *
- * The catalogue itself is in `engram-tools.ts`.
- */
+// Engram compatibility: dispatches the `mem_*` aliases to the canonical tools or to the read and
+// write that own the SQL, so clients coming from Engram (agents, CLAUDE.md, mcp.json) keep
+// working unchanged. The catalogue is in `engram-tools.ts`.
 import type { Database as DB } from "better-sqlite3";
 import { capture } from "../memory/capture.js";
 import { updateEngramTarget } from "../memory/engram-update.js";

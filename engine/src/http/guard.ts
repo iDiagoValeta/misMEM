@@ -1,7 +1,5 @@
-/**
- * Lo que el servidor HTTP decide antes de atender una petición. Vive aparte de
- * server-http.ts, que escucha al importarse, para poder probarlo.
- */
+// What the HTTP server decides before answering a request. Kept out of server-http.ts, which
+// listens on import, so it can be tested.
 import { timingSafeEqual } from "node:crypto";
 import { envPositiveNumber } from "../env.js";
 
@@ -28,9 +26,8 @@ export interface BasicCredentials {
 }
 
 /**
- * Sin ninguna de las dos variables no hay auth (uso local). Con una sola, el servidor
- * no arranca: antes arrancaba abierto y sin avisar, que es justo lo contrario de lo que
- * quería quien definió la otra.
+ * With neither variable there is no auth (local use). With only one, the server refuses to
+ * start: coming up open instead would be the opposite of what whoever set the other one wanted.
  */
 export function loadAuth(env: NodeJS.ProcessEnv = process.env): BasicCredentials | null {
   const user = env.MISMEM_AUTH_USER;

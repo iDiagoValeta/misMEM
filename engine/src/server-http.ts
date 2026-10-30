@@ -1,29 +1,7 @@
 #!/usr/bin/env node
-/**
- * HTTP MCP server (Streamable HTTP transport).
- *
- * Diseñado para deploy detrás de Traefik con BasicAuth.
- * Reemplazo drop-in de Engram (mismo path /mcp, mismas tools mem_*).
- *
- * Env vars:
- *   MISMEM_HTTP_PORT     (default 3200)
- *   MISMEM_HTTP_HOST     (default 127.0.0.1; containers set 0.0.0.0)
- *   MISMEM_AUTH_USER     opcional: con MISMEM_AUTH_PASS, BasicAuth en /mcp, /viewer y /api
- *   MISMEM_AUTH_PASS     pareja del anterior; con una sola de las dos no arranca
- *   MISMEM_DB            ruta SQLite (default ~/.mismem/mem.db)
- *   MISMEM_ALLOWED_HOSTS sin auth, nombres de Host aceptados además de loopback (coma)
- *   MISMEM_HTTP_MAX_BODY_BYTES  tope del cuerpo de POST /mcp (default 4 MiB); más, 413
- *   MISMEM_VIEWER_ALLOW_DELETE  1 para que la interfaz pueda olvidar memorias y rasgos (default apagado)
- *
- * Endpoints:
- *   GET  /healthz   →  200 ok (liveness)
- *   POST /mcp       →  MCP JSON-RPC (Streamable HTTP)
- *   GET  /mcp       →  SSE stream (Streamable HTTP)
- *   DELETE /mcp     →  cierra stream
- *
- * El despacho vive en http/routes.ts: acá sólo se lee el entorno, se abre la base, se
- * compone el handler y se escucha.
- */
+// HTTP MCP server (Streamable HTTP): reads the environment, opens the database, composes the
+// handler and listens. The dispatch lives in `http/routes.ts`; the environment table is in
+// DEPLOY.md.
 import { createServer as createHttpServer } from "node:http";
 import { StreamableHTTPServerTransport } from "@modelcontextprotocol/sdk/server/streamableHttp.js";
 import { openDefaultDb } from "./store/db.js";
@@ -50,7 +28,7 @@ try {
 }
 
 const db = openDefaultDb();
-// La corrida de consolidación que se lanza desde la interfaz: una a la vez por proceso.
+// The consolidation run started from the interface: one at a time per process.
 const consolidationJob = new ConsolidationJob(db);
 const ALLOW_DELETE = loadAllowDelete();
 const forgetConfirmations = new ForgetConfirmations();
@@ -63,8 +41,8 @@ const handler = createRequestHandler({
   job: consolidationJob,
   allowDelete: ALLOW_DELETE,
   confirmations: forgetConfirmations,
-  // Stateless: cada request es independiente, con server y transport por petición.
-  // Coincide con el ejemplo oficial simpleStatelessStreamableHttp.ts del SDK.
+  // Stateless: every request is independent, with its own server and transport, as in the
+  // SDK's simpleStatelessStreamableHttp.ts example.
   handleMcp: async (req, res, parsedBody) => {
     const mcpServer = createServer(db);
     const transport = new StreamableHTTPServerTransport({

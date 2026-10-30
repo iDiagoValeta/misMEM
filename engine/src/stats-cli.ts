@@ -1,9 +1,6 @@
 #!/usr/bin/env node
-/**
- * mismem-stats CLI: reporta métricas básicas de la DB en formato texto o JSON.
- *
- * Usado por consumers externos para mostrar el estado de la memoria.
- */
+// mismem-stats: reports basic database metrics as text or JSON, for external consumers that
+// show the state of the memory.
 import { openDefaultDb, defaultDbPath } from "./store/db.js";
 import { statsSummary } from "./queries/stats.js";
 import { ArgsError, EXIT_USAGE } from "./cli-args.js";

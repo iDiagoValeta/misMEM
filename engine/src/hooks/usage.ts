@@ -1,12 +1,6 @@
-/**
- * Qué recuerdos usó de verdad una respuesta, leído del transcript de Claude Code.
- *
- * El recall devuelve varios y el modelo usa uno o ninguno: reforzar todo lo devuelto
- * premia al que siempre aparece y nunca sirve. Acá la señal es el solapamiento de
- * palabras distintivas entre el recuerdo y la respuesta. Es una aproximación —una
- * paráfrasis sin palabras compartidas no se detecta— pero falla hacia no reforzar,
- * que es el lado barato: un recuerdo útil que no suma saliencia sigue encontrándose.
- */
+// Which memories an answer really used, read from the Claude Code transcript. Reinforcing
+// everything recall returned would reward what always shows up, so the signal is the overlap of
+// distinctive words; it errs towards not reinforcing, the cheap side.
 import { parseInjection } from "./inject.js";
 import { contentTerms } from "../domain/terms.js";
 
@@ -16,15 +10,15 @@ export interface RecalledMemory {
 }
 
 export interface UsageOptions {
-  /** Fracción de las palabras distintivas del recuerdo que la respuesta tiene que repetir. */
+  /** Fraction of the memory's distinctive words the answer has to repeat. */
   minOverlap?: number;
-  /** Piso absoluto: con pocas palabras compartidas el solapamiento alto es casualidad. */
+  /** Absolute floor: with few shared words a high overlap is chance. */
   minShared?: number;
 }
 
-// Calibrado sobre 573 recuerdos devueltos en turnos reales con recall: la mediana de
-// solapamiento es 0,07 y el percentil 90 es 0,25. Con estos umbrales cuenta como usado
-// el 9 %, más o menos uno por llamada a recall; con 0,30/4 baja al 4 %.
+// Calibrated on 573 memories returned in real turns: the median overlap is 0.07 and the 90th
+// percentile 0.25. These thresholds count 9% as used, about one per recall call; 0.30/4 drops
+// it to 4%.
 const DEFAULT_MIN_OVERLAP = 0.2;
 const DEFAULT_MIN_SHARED = 3;
 
@@ -51,8 +45,8 @@ function roleOf(line: unknown): string | undefined {
 }
 
 /**
- * El último turno: desde el último mensaje escrito por la persona hasta el final.
- * Un mensaje de usuario que sólo transporta `tool_result` no abre un turno nuevo.
+ * The last turn: from the last message the person wrote to the end. A user message that only
+ * carries a `tool_result` does not open a new turn.
  */
 export function lastTurn(lines: readonly unknown[]): unknown[] {
   for (let i = lines.length - 1; i >= 0; i--) {
@@ -67,7 +61,7 @@ export function lastTurn(lines: readonly unknown[]): unknown[] {
   return [...lines];
 }
 
-/** Los recuerdos que `recall` devolvió dentro de estas líneas. */
+/** The memories `recall` returned inside these lines. */
 export function recalledMemories(lines: readonly unknown[]): RecalledMemory[] {
   const out = new Map<string, RecalledMemory>();
   for (const line of lines) {
@@ -99,9 +93,9 @@ export function recalledMemories(lines: readonly unknown[]): RecalledMemory[] {
 }
 
 /**
- * Los recuerdos que el hook de inyección puso en el contexto dentro de estas líneas. Claude
- * Code guarda su `additionalContext` como un adjunto `hook_additional_context`, no como un
- * `tool_result`, así que `recalledMemories` no los ve y nunca se reforzaban.
+ * The memories the injection hook put in the context inside these lines. Claude Code stores its
+ * `additionalContext` as a `hook_additional_context` attachment, not a `tool_result`, so
+ * `recalledMemories` does not see them.
  */
 export function injectedMemories(lines: readonly unknown[]): RecalledMemory[] {
   const out = new Map<string, RecalledMemory>();
@@ -120,7 +114,7 @@ export function injectedMemories(lines: readonly unknown[]): RecalledMemory[] {
   return [...out.values()];
 }
 
-/** Lo que el asistente escribió para la persona, sin los resultados de herramientas. */
+/** What the assistant wrote to the person, without the tool results. */
 export function assistantReply(lines: readonly unknown[]): string {
   return lines
     .filter((line) => roleOf(line) === "assistant")

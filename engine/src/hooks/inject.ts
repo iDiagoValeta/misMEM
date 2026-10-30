@@ -1,11 +1,6 @@
-/**
- * Qué recuerdos vale la pena poner delante del modelo antes de que responda.
- *
- * El modelo no siempre pide lo que necesita: si no llama a `recall`, no recuerda.
- * Pero inyectar en cada turno cuesta tokens y mete ruido, así que acá se decide
- * poco y con criterio: una pregunta con sustancia, pocos recuerdos, ninguno de un
- * ámbito que el usuario no quiere mandar afuera, y nada que ya esté en el contexto.
- */
+// Which memories are worth putting in front of the model before it answers. The model does not
+// always ask for what it needs, but injecting every turn costs tokens and adds noise: few
+// memories, none from a scope the user keeps private, and nothing the context already holds.
 import type { RecallHit } from "../schema.js";
 import { contentTerms } from "../domain/terms.js";
 
@@ -13,24 +8,24 @@ interface InjectOptions {
   maxMemories?: number;
   maxChars?: number;
   minPromptTerms?: number;
-  /** Prefijos de ámbito que no viajan: lo personal no entra a un prompt que va a la nube. */
+  /** Scope prefixes that do not travel: personal notes must not enter a prompt bound for the cloud. */
   excludeScopes?: readonly string[];
-  /** Ids que el contexto ya tiene: repetirlos es pagar dos veces. */
+  /** Ids the context already holds: repeating them pays twice. */
   alreadyPresent?: ReadonlySet<string>;
 }
 
 export const DEFAULT_MAX_MEMORIES = 3;
 export const DEFAULT_MAX_CHARS = 1200;
-// "dale", "ok", "y eso?" no tienen nada que buscar y la llamada se paga igual. Con 3
-// se caía también "deploy florfitt", que es una pregunta corta pero legítima.
+// "dale", "ok", "y eso?" have nothing to search yet cost the same; with 3 this also dropped
+// "deploy florfitt", a short but legitimate question.
 export const DEFAULT_MIN_PROMPT_TERMS = 2;
 
-/** Un prompt sin palabras con sustancia no justifica una búsqueda. */
+/** A prompt without substantive words does not justify a search. */
 export function worthRecalling(prompt: string, minTerms = DEFAULT_MIN_PROMPT_TERMS): boolean {
   return contentTerms(prompt).size >= minTerms;
 }
 
-/** `lucas` tapa `lucas/profile`, pero no `lucas-publico`. */
+/** `lucas` covers `lucas/profile` but not `lucas-publico`. */
 export function inExcludedScope(scope: string, excluded: readonly string[]): boolean {
   return excluded.some((prefix) => scope === prefix || scope.startsWith(`${prefix}/`));
 }
@@ -43,8 +38,8 @@ export function parseScopeList(raw: string | undefined): string[] {
 }
 
 /**
- * Los episodios quedan afuera a propósito: son verbatim, ruidosos y `forget` los
- * borra. Lo que vale la pena adelantar son memorias y rasgos.
+ * Episodes stay out on purpose: they are verbatim, noisy and `forget` removes them. What is
+ * worth bringing forward is memories and traits.
  */
 export function selectForInjection(
   hits: readonly RecallHit[],
@@ -69,11 +64,11 @@ export function selectForInjection(
   return out;
 }
 
-/** Primera línea del bloque: es lo que identifica la inyección de misMEM en un transcript. */
+/** The block's first line: it identifies a misMEM injection in a transcript. */
 const INJECTION_HEADER =
   "Recuerdos de misMEM que pueden venir al caso. Son notas guardadas de antes, no algo";
 
-/** Deja claro que son notas viejas y no algo que la persona acabe de decir. */
+/** Makes clear these are old notes, not something the person just said. */
 export function formatInjection(hits: readonly RecallHit[]): string {
   if (hits.length === 0) return "";
   const lines = hits.map((hit) => `- [${hit.id}] ${hit.scope} — ${hit.text}`);
@@ -93,9 +88,9 @@ interface InjectedLine {
 const INJECTED_LINE = /^- \[([^\]]+)\] (.*?) — (.*)$/;
 
 /**
- * Lo inverso de `formatInjection`, para que el hook de refuerzo vea qué se inyectó. Vive al
- * lado del formato a propósito: si uno cambia sin el otro, lo inyectado deja de reforzarse
- * sin que nada falle. Un texto sin la cabecera de misMEM no aporta nada.
+ * The inverse of `formatInjection`, so the reinforcement hook sees what was injected. It lives
+ * next to the format on purpose: if one changes without the other, what was injected stops
+ * being reinforced with nothing failing. Text without the misMEM header contributes nothing.
  */
 export function parseInjection(text: string): InjectedLine[] {
   if (!text.includes(INJECTION_HEADER)) return [];

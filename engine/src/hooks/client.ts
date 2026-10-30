@@ -1,12 +1,8 @@
-/**
- * Cliente mínimo para que los hooks le hablen a misMEM: al servidor remoto por
- * JSON-RPC si hay MISMEM_HOOK_URL, o a la base local si no.
- *
- * Un hook corre en cada turno, así que todo tiene tope de tiempo y nada tira
- * excepciones hacia arriba sin que el llamador decida qué hacer.
- */
+// Minimal client for the hooks to talk to misMEM: the remote server over JSON-RPC when
+// MISMEM_HOOK_URL is set, the local database otherwise. A hook runs every turn, so everything
+// has a timeout and nothing throws upwards without the caller deciding what to do.
 
-/** El servidor enmarca el JSON-RPC como SSE: la carga viene en una línea `data:`. */
+/** The server frames JSON-RPC as SSE: the payload comes in a `data:` line. */
 function parseRpc(body: string): unknown {
   const line = body.split("\n").find((l) => l.startsWith("data: "));
   return JSON.parse(line ? line.slice(6) : body);
@@ -18,15 +14,15 @@ interface RpcResponse {
 }
 
 function authHeader(): string | undefined {
-  // El header entero evita copiar la credencial a una variable nueva: el hook la
-  // puede sacar de donde ya vive (la config MCP del cliente) y pasarla tal cual.
+  // The whole header avoids copying the credential into a new variable: the hook can take it
+  // from where it already lives (the client's MCP config) and pass it through as is.
   const direct = process.env.MISMEM_HOOK_AUTH_HEADER;
   if (direct) return direct;
   const basic = process.env.MISMEM_HOOK_AUTH;
   return basic ? `Basic ${Buffer.from(basic).toString("base64")}` : undefined;
 }
 
-/** Un JSON-RPC contra `/mcp`. El servidor no pide handshake para `tools/*`. */
+/** One JSON-RPC call to `/mcp`. The server requests no handshake for `tools/*`. */
 async function rpc(
   url: string,
   method: string,
@@ -74,7 +70,7 @@ export function readStdin(): Promise<string> {
   });
 }
 
-/** Llama una tool y devuelve el JSON que puso en el texto. */
+/** Calls a tool and returns the JSON it put in the text. */
 export async function callRemoteTool(
   url: string,
   name: string,
@@ -88,7 +84,7 @@ export async function callRemoteTool(
   return text ? JSON.parse(text) : undefined;
 }
 
-/** Qué tools expone el servidor: sirve para no hablarle de más a una versión vieja. */
+/** Which tools the server exposes, so an old version is not asked for more. */
 export async function remoteToolNames(url: string, timeoutMs: number): Promise<string[]> {
   const result = (await rpc(url, "tools/list", {}, timeoutMs)) as {
     tools?: Array<{ name?: string }>;
