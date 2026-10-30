@@ -2,6 +2,19 @@
 
 ## Sin publicar
 
+### La corrida de consolidación recibe un contexto y deja su estado aparte (#168)
+
+- `engine/src/consolidation/run.ts` queda en `runConsolidation`: lee el entorno, arma el contexto de la
+  corrida, recorre los ámbitos y cierra el resumen. `processScope` pasa a
+  `engine/src/consolidation/scope.ts` con dos objetos con nombre, `RunContext` (db, cutoff, limits, llm,
+  distillFn, dryRun, paretoPrefilter, log y uncitedStrikes) y `RunState` (llamadas gastadas, tope de la
+  tanda y episodios saltados o aplazados), en vez de catorce posicionales.
+- El presupuesto del prompt y el recorte pasan a `engine/src/consolidation/budget.ts`: `truncateEpisode`,
+  `PROMPT_OVERHEAD_PER_EPISODE`, `TRUNCATION_MARK` y `fitPrompt`, que arma la tanda.
+- Mismos episodios leídos, mismas llamadas al LLM en el mismo orden, mismos topes, mismos registros de log y
+  mismo `RunSummary`. `engine/tests/architecture.test.ts` pierde la excepción de tamaño de
+  `consolidation/run.ts`; `engine/tests/consolidation-budget.test.ts` fija el presupuesto como pieza pura.
+
 ### La exportación a Obsidian separa sus lecturas, su formato y su bóveda (#167)
 
 - `engine/src/export/obsidian.ts` queda en `exportObsidian`, que orquesta: lee, arma los mapas de enlaces y
