@@ -64,8 +64,7 @@ const ALLOWED: Record<string, string[]> = {
 // SQL belongs to the capabilities that own the schema. The delivery layer (root,
 // http, mcp, hooks, export) only composes: its reads live in `queries/`.
 
-// Ratchet: these already exceed 400 lines and are split in later PRs. Entries can
-// only be removed; nothing new may be added. None is left: consolidation is split.
+// Ratchet: SIZE_EXCEPTIONS only shrinks; adding an entry means splitting the file instead.
 const SIZE_EXCEPTIONS: Record<string, string> = {};
 
 const MAX_LINES = 400;

@@ -16,9 +16,9 @@ y conserva sólo los candidatos que comparten al menos dos términos informativo
 basta una; en consultas largas, el 30 % de sus palabras. Devuelve hasta 3 por capa. El rescate alcanza a
 rasgos, episodios y memorias, y no altera una búsqueda que ya encontró algo.
 
-Medido sobre 2.527 memorias: con capa semántica el rescate apenas suma aciertos, empuja hacia abajo la
-respuesta buena y trae memorias de preguntas que no vienen al caso; sin ella es lo que lleva el recall de
-0,1 a 2,5 memorias por pregunta. Por eso sólo entra cuando no hay nada que puntuar.
+Con capa semántica el rescate apenas suma aciertos, empuja hacia abajo la respuesta buena y trae
+memorias de preguntas que no vienen al caso; sin ella es lo que hace aparecer la paráfrasis que la
+consulta estricta deja fuera. Por eso sólo entra cuando no hay nada que puntuar.
 
 La rareza de un término que cuenta para el rescate tiene un suelo de 3 documentos y una fracción del 5 % de
 la base, de modo que "pocos" significa lo mismo con 300 memorias que con 3.000. Se calibró con
