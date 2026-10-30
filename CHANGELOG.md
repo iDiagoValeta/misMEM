@@ -2,6 +2,14 @@
 
 ## Sin publicar
 
+### La exportación a Obsidian no escribe fuera de `<bóveda>/misMEM/` (#206)
+
+- Las rutas se comparan por su ruta real: una nota que es un enlace simbólico, o una carpeta enlazada que
+  lleva fuera de `<bóveda>/misMEM/`, se omite y cuenta en `skipped`, y la pasada de borrado no la atraviesa.
+  Un manifiesto que es un enlace detiene el export sin tocar la bóveda. Una carpeta enlazada colgante o en
+  bucle cuenta como fuera, en vez de abortar la corrida a medias. Que la propia `misMEM/` sea un enlace sigue
+  valiendo.
+
 ### Las dos variables de embeddings que quedaban fuera de `env.ts` (#187)
 
 - `MISMEM_EMBEDDING_MIN_SCORE` y `MISMEM_EMBEDDING_MAX_CHARS` pasan por `envNonNegativeNumber` y
