@@ -77,9 +77,9 @@ export function relaxedTerms(query: string): RelaxedQuery {
 }
 
 /**
- * Merges the terms that search by the same start: `decidir` (`deci`) and `decision`
- * (`decis`) are satisfied by the same token, so keeping both would reach the minimum of two
- * matches with a single word. The longest prefix wins: it is the most specific.
+ * Merges the terms that search by the same start: `decidir` (`deci`) and `decision` (`decis`)
+ * are satisfied by the same token, so keeping both would reach the minimum of two matches with
+ * one word. The longest prefix wins: most specific, fewest foreign candidates.
  */
 function dedupeByPrefix(terms: RelaxedTerm[]): RelaxedTerm[] {
   const kept: RelaxedTerm[] = [];
@@ -127,11 +127,11 @@ function documentFrequency(db: DB, term: RelaxedTerm): number {
   return row.n;
 }
 
-// The terms that can tell things apart in this corpus. A term absent from the memories
-// scores 0, the rarest value, and is kept: it cannot match a memory, but it can match an
-// episode or a trait, which is the degraded path where something loose beats nothing (a
-// brand-new install has no memories at all). A term in every memory also counts, because in
-// a tiny corpus "all documents" is the topic. Total and frequency share one noise-free set.
+// The terms that tell things apart. An absent term scores 0, the rarest value, and is kept: it
+// cannot match a memory but can match an episode or trait (a new install has no memories).
+// The price, however big the base: an episode sharing two absent words with an unrelated
+// question ("cambiar la configuración del móvil" vs the server's) is rescued anyway, and only
+// words common in the memories, above `rare`, stop it. A term in every memory is the topic.
 export function informativeTerms(db: DB, terms: RelaxedTerm[]): RelaxedTerm[] {
   const total = (
     db

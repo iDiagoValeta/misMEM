@@ -54,8 +54,8 @@ export const day = (ts: number): string => new Date(ts).toISOString().slice(0, 1
 export const yaml = (value: string): string => JSON.stringify(value);
 /**
  * Text of a memory inside the note. Obsidian reads a `<word>` (e.g. "fuser -k <port>/tcp") as an
- * HTML tag that opens a block and stops parsing Markdown, and a stray `[s]` as a broken link.
- * Both are escaped with a backslash, which Obsidian shows clean in reading and editing.
+ * HTML tag that stops parsing Markdown, and a stray `[s]` as a broken link; both are escaped with
+ * a backslash, not an entity, which shows as is when editing.
  */
 export const text = (value: string): string => value.replace(/[<[\]]/g, (c) => `\\${c}`);
 /** An Obsidian tag allows no spaces. */
@@ -80,9 +80,9 @@ const scopeBase = (s: string): string => safeName(s.replace(/\//g, " - "));
 const scopeKey = (s: string): string => scopeBase(s).normalize("NFC").toLowerCase();
 
 /**
- * Scope notes carry no id suffix, so two scopes differing only by truncation, case or Unicode
- * normalisation would write the same file and one would vanish; the scope's hash separates them
- * and disambiguates Windows names. Collisions count across all scopes so a one-scope export keeps it.
+ * Scope notes carry no id suffix, so truncation, case or Unicode normalisation alone would
+ * collide; the hash separates them and disambiguates Windows names (`CON`, `NUL`). Collisions
+ * count across every scope, so a one-scope export keeps its suffix and does not break links.
  */
 export function scopePathResolver(allScopes: readonly string[]): (scope: string) => string {
   const scopeCount = new Map<string, number>();

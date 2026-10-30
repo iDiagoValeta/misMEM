@@ -10,7 +10,7 @@ const STEPS: Array<[Intl.RelativeTimeFormatUnit, number]> = [
   ["minute", 60_000],
 ];
 
-/** "3 days ago": what matters about a memory is how long ago, not the exact date. */
+/** "hace 3 días": what matters about a memory is how long ago, not the exact date. */
 export function ago(ts: number | null | undefined, now = Date.now()): string {
   if (!ts) return "nunca";
   const diff = ts - now;

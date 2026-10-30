@@ -132,6 +132,8 @@ export async function handleAction(
     if (action === "edit") json(res, 200, await editMemory(db, id, body, opts.reembed));
     else if (action === "unconsolidate") json(res, 200, unconsolidateMemory(db, id));
     else {
+      // Forgetting a memory also deletes the episodes that back it and cannot be undone;
+      // unconsolidating only drops the summary, which is why it asks for no token.
       if (!opts.allowDelete || !opts.confirmations) {
         json(res, 403, {
           error: "borrar desde la interfaz está desactivado: arranca el servidor con MISMEM_VIEWER_ALLOW_DELETE=1",

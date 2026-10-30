@@ -1,6 +1,6 @@
 // Read-only API for the interface: where each memory comes from. The queries live in
-// engine/src/queries/; here the input is validated, the query called and the answer sent. The
-// salience it returns is the effective one, the same the recall uses.
+// engine/src/queries/; here the input is validated, the query called and the answer sent. Its
+// salience is the effective one, as in recall; the stored one is the last checkpoint's.
 import type { ServerResponse } from "node:http";
 import type { Database as DB } from "better-sqlite3";
 import { graphData, type GraphCaps } from "../../queries/graph.js";

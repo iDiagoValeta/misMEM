@@ -1,6 +1,6 @@
 // HTTP dispatch: Host, /healthz, /mcp, the viewer and its API. Kept out of server-http.ts, which
-// listens on import, so it can be tested without a port; its dependencies come in as arguments,
-// and the order of the checks (Host, healthz, /mcp, viewer, POST, method, routes) is the contract.
+// listens on import, so it can be tested without a port; dependencies come in as arguments, and
+// the order (Host, healthz, /mcp, viewer, POST, method, routes, 404) is the contract.
 import type { IncomingMessage, ServerResponse } from "node:http";
 import type { Database as DB } from "better-sqlite3";
 import type { ConsolidationJob } from "../consolidation/job.js";

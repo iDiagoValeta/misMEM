@@ -35,8 +35,8 @@ function recordUse(db: DB, memoryIds: readonly string[], at: number): void {
 
 /**
  * Reinforces the memories a response actually used. Traits are counted apart, not as
- * `unknown`: injection forwards them too, and mixing them kept that alarm ringing. A trait
- * gains strength on crystallization, not on use.
+ * `unknown`: injection forwards them too, and mixing them kept the unknown-id alarm ringing
+ * from day one. A trait gains strength on crystallization, not on use.
  */
 export function reinforce(
   db: DB,

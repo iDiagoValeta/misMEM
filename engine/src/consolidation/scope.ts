@@ -206,10 +206,10 @@ export async function processScope(
   }
 
   // What the LLM read and did not cite may carry no signal, or it may have missed it. Each
-  // uncited batch adds a strike and only at the last one does it become noise; while strikes
-  // remain it comes back next run. An empty list ("no signal") counts for the whole batch:
-  // before, it sent everything to noise on the first try, and one bad model day (or an
-  // episode asking for the empty list) wiped up to maxBatch episodes. All invented keeps them unstruck.
+  // uncited batch adds a strike, and only at the last one does it become noise; while strikes
+  // remain it returns next run. An empty list ("no signal") counts for the whole batch: before,
+  // it sent everything to noise on the first try, and one bad model day (or an episode asking
+  // for the empty list) wiped up to maxBatch; all invented leaves them pending and unstruck.
   if (distilled.length === 0) {
     log(`[consolidation] scope="${scope}" -> LLM dijo "sin se\u00f1al" para ${candidates.length} episodios: strike a todos`);
   }

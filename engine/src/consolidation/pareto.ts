@@ -1,5 +1,6 @@
 // Pareto classifier inspired by PAMPAr-Coder: scores each episode [0,1] and buckets it L0..L3
-// with no LLM and no DB, so it runs before the costly call. L0 is noise, a candidate for forget.
+// with no LLM and no DB, so it runs before the costly call. L0 is noise, a candidate for forget;
+// L1..L3 are only a score today, since consolidation reads nothing but `level === 0`.
 import { contentTerms } from "../domain/terms.js";
 
 /** Content words from which a short text stops being filler. */
