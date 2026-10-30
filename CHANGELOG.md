@@ -2,6 +2,31 @@
 
 ## Sin publicar
 
+### Los comentarios tienen forma, y un test la comprueba (#171)
+
+- `docs/standards/comments.md` fija la norma: todos los comentarios de `engine/src`, `engine/ui/src` y
+  `engine/tests` en inglés; cabecera de módulo de tres líneas como mucho y sin inventarios; cualquier otro
+  bloque de cinco como mucho, con la calibración en `docs/`; JSDoc de una o dos líneas sólo si la firma no
+  dice el contrato; y nada de código comentado, historia, `TODO` sin issue ni `biome-ignore` sin motivo,
+  cada regla con su ejemplo. `AGENTS.md` recoge lo mismo en sus convenciones.
+- `engine/tests/comments.test.ts` extrae los comentarios y aplica seis reglas con etiqueta: `header`, `block`,
+  `lang`, `todo`, `dead` y `sup`. Cada regla tiene su caso sintético, incluido el límite: tres líneas de
+  cabecera pasan y cuatro no. El escáner vive en `engine/tests/support/source-scan.ts` y es el mismo que usa
+  `architecture.test.ts`: entiende texto JSX con comillas, expresiones `${...}` anidadas y la diferencia entre
+  división y expresión regular.
+- `lang` ignora URLs y texto entrecomillado, exige dos palabras funcionales o un acento en una palabra en
+  minúscula, y ya no basta con `sin` o `los`; `dead` reconoce llamadas, condicionales, funciones, `await`,
+  asignaciones y `console.`, sin marcar prosa que acaba en punto y coma. `sup` exige motivo en cada
+  `biome-ignore`.
+- Las excepciones son un `Record<"ruta (regla)", { motivo, count }>` calculado ejecutando el test sobre el
+  código actual: 173 entradas y 648 violaciones (49 de cabecera, 12 de bloque, 112 de idioma), ninguna de
+  `TODO`, código comentado ni `biome-ignore`. Sólo encogen: el test falla si aparece una violación nueva en un
+  fichero ya exceptuado, si sobra una excepción o si su cuenta cambia. Ningún comentario del código cambia en
+  esta PR; la siguiente aplica la norma y vacía el registro.
+- La norma corrige dos ejemplos que describían mal el código (el contrato de `isMismemDb` y el peso de la
+  saliencia en RRF), alarga el ejemplo "Mal" de bloque a seis líneas, deja de usar `#171` como issue de
+  `TODO`, y dice qué mide el test y qué queda en revisión (la longitud del JSDoc y el porqué).
+
 ### La interfaz parte `GraphView.tsx` y `MemoryView.tsx` (#170)
 
 - El grafo deja en `GraphView.tsx` la consulta, el estado y la composición: los colores leídos del tema pasan a `lib/graph-tokens.ts` y el pintado de nodos y aristas a `components/graph/paint.ts`. La ficha de memoria saca el formulario de edición a `components/memory/EditForm.tsx`, los dos pasos de deshacer y olvidar a `hooks/use-memory-actions.ts` y sus textos a `lib/memory-text.ts`, que ahora tiene test. Nada visible cambia.

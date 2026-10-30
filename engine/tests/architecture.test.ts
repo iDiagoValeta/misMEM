@@ -2,6 +2,7 @@ import { describe, it, expect } from "vitest";
 import { readFileSync, readdirSync, statSync } from "node:fs";
 import { dirname, join, relative, resolve, sep } from "node:path";
 import { fileURLToPath } from "node:url";
+import { scan } from "./support/source-scan";
 
 // engine/src used to be flat. It is now grouped by capability, and the point of
 // grouping is lost unless the dependencies stay one-way. The checks below are the
@@ -81,36 +82,6 @@ function walk(dir: string, extensions: string[], out: string[] = []): string[] {
   return out;
 }
 
-// Comments carry examples (`from "./x.js"`, `.prepare(`), and matching those would
-// report imports that do not exist. Scanning characters keeps strings intact, which
-// a pair of regexes does not.
-function stripComments(text: string): string {
-  let out = "";
-  let quote: string | null = null;
-  for (let i = 0; i < text.length; i++) {
-    const char = text[i];
-    const next = text[i + 1];
-    if (quote) {
-      out += char;
-      if (char === "\\") out += text[++i] ?? "";
-      else if (char === quote) quote = null;
-    } else if (char === '"' || char === "'" || char === "`") {
-      quote = char;
-      out += char;
-    } else if (char === "/" && next === "/") {
-      while (i < text.length && text[i] !== "\n") i++;
-      out += "\n";
-    } else if (char === "/" && next === "*") {
-      i += 2;
-      while (i < text.length && !(text[i] === "*" && text[i + 1] === "/")) i++;
-      i++;
-    } else {
-      out += char;
-    }
-  }
-  return out;
-}
-
 // Every way a module can pull another one in: `from`, a bare side-effect `import`,
 // a dynamic `import()` and `require()`, with either quote style.
 const SPECIFIER = /(?:\bfrom|\bimport|\brequire)\s*\(?\s*["']([^"']+)["']/g;
@@ -122,7 +93,7 @@ function specifiers(code: string): string[] {
 function sources(): { file: string; rel: string; code: string; raw: string }[] {
   return walk(SRC, [".ts", ".tsx"]).map((file) => {
     const raw = readFileSync(file, "utf8");
-    return { file, rel: file.slice(ENGINE.length).split(sep).join("/"), code: stripComments(raw), raw };
+    return { file, rel: file.slice(ENGINE.length).split(sep).join("/"), code: scan(raw).code, raw };
   });
 }
 
