@@ -67,10 +67,8 @@ const ALLOWED: Record<string, string[]> = {
 // http, mcp, hooks, export) only composes: its reads live in `queries/`.
 
 // Ratchet: these already exceed 400 lines and are split in later PRs. Entries can
-// only be removed; nothing new may be added.
-const SIZE_EXCEPTIONS: Record<string, string> = {
-  "src/consolidation/run.ts (400 líneas)": "awaits the consolidation split",
-};
+// only be removed; nothing new may be added. None is left: consolidation is split.
+const SIZE_EXCEPTIONS: Record<string, string> = {};
 
 const MAX_LINES = 400;
 

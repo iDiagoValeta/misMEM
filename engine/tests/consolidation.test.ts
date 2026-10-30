@@ -2,7 +2,8 @@ import { describe, it, expect, beforeEach, afterEach, vi } from "vitest";
 import type { Database as DB } from "better-sqlite3";
 import { openDb } from "../src/store/db.js";
 import { capture } from "../src/memory/capture.js";
-import { runConsolidation, truncateEpisode } from "../src/consolidation/run.js";
+import { runConsolidation } from "../src/consolidation/run.js";
+import { truncateEpisode } from "../src/consolidation/budget.js";
 import { LlmFatalError, LlmInvalidJsonError, LlmTruncatedError } from "../src/consolidation/llm.js";
 
 let db: DB;
@@ -548,6 +549,55 @@ describe("runConsolidation", () => {
     expect(summary.episodes_consolidated).toBe(5);
     expect(summary.episodes_skipped).toBe(1);
     expect(summary.scopes_failed).toBe(0);
+  });
+
+  it("el tope estrechado por una respuesta cortada no se filtra al ámbito siguiente", async () => {
+    const big = [1, 2, 3, 4, 5, 6, 7, 8].map((n) => captureOld("cortado-a", `charla ${n} con decisiones`, 48));
+    const small = [1, 2, 3, 4, 5, 6].map((n) => captureOld("cortado-b", `nota ${n} con decisiones`, 48));
+    const sizes: number[] = [];
+    const distillFn = vi.fn(async (_cfg: unknown, _sys: string, user: string) => {
+      const batch = [...big, ...small].filter((id) => user.includes(id));
+      sizes.push(batch.length);
+      // 8 gets cut, so the scope narrows its cap to 4; a full 6-episode batch still fits.
+      if (batch.length > 6) throw new LlmTruncatedError("cortada");
+      return [{ gist: `tanda de ${batch.length}`, evidence_episode_ids: batch }];
+    });
+
+    const summary = await runConsolidation(db, {
+      minEpisodesPerScope: 1,
+      paretoPrefilter: false,
+      maxEpisodesPerBatch: 8,
+      llm: llmCfg,
+      distillFn,
+      log: () => {},
+    });
+
+    // The cap is per scope: the 6 of the second one must ride in a single call, not 4 + 2.
+    expect(sizes).toEqual([8, 4, 4, 6]);
+    expect(summary.episodes_consolidated).toBe(big.length + small.length);
+  });
+
+  it("un episodio salteado en un ámbito no se cuenta como salteado en el siguiente", async () => {
+    const poison = captureOld("salta-a", "episodio que el LLM no logra procesar", 48);
+    const ok = [1, 2].map((n) => captureOld("salta-a", `decisión ${n} sobre el stack elegido`, 47));
+    const later = captureOld("salta-b", "decisión suelta sobre el despliegue", 46);
+    const distillFn = vi.fn(async (_cfg: unknown, _sys: string, user: string) => {
+      if (user.includes(poison)) throw new LlmTruncatedError("cortada");
+      const batch = [poison, ...ok, later].filter((id) => user.includes(id));
+      return [{ gist: `tanda de ${batch.length}`, evidence_episode_ids: batch }];
+    });
+
+    const summary = await runConsolidation(db, {
+      minEpisodesPerScope: 1,
+      paretoPrefilter: false,
+      llm: llmCfg,
+      distillFn,
+      log: () => {},
+    });
+
+    // Only the poison episode is skipped; a leaked set would make the next scope add it again.
+    expect(summary.episodes_skipped).toBe(1);
+    expect(pendingIds()).toEqual([poison]);
   });
 
   it("respeta el tope de llamadas por corrida y deja el resto para la próxima", async () => {
