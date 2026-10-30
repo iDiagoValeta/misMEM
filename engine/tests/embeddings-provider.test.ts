@@ -15,6 +15,7 @@ const ENV_KEYS = [
   "MISMEM_EMBEDDING_QUERY_PREFIX",
   "MISMEM_EMBEDDING_DOC_PREFIX",
   "MISMEM_EMBEDDING_MIN_SCORE",
+  "MISMEM_EMBEDDING_MAX_CHARS",
   "MISMEM_EMBEDDING_TIMEOUT_MS",
 ] as const;
 const saved = Object.fromEntries(ENV_KEYS.map((k) => [k, process.env[k]]));
@@ -68,12 +69,15 @@ describe("loadEmbeddingConfig", () => {
     expect(loadEmbeddingConfig().minScore).toBe(0);
   });
 
-  it.each(["alto", ""])("un corte que no es un número (%j) vuelve al default del modelo", (value) => {
-    setEnv({ MISMEM_EMBEDDING_MIN_SCORE: value });
-    expect(loadEmbeddingConfig().minScore).toBe(0.65);
-    setEnv({ MISMEM_EMBEDDING_MIN_SCORE: value, MISMEM_EMBEDDING_MODEL: "embeddinggemma-2" });
-    expect(loadEmbeddingConfig().minScore).toBe(0.5);
-  });
+  it.each(["alto", "", "  ", "-1"])(
+    "un corte vacío, en blanco, no numérico o negativo (%j) vuelve al default del modelo",
+    (value) => {
+      setEnv({ MISMEM_EMBEDDING_MIN_SCORE: value });
+      expect(loadEmbeddingConfig().minScore).toBe(0.65);
+      setEnv({ MISMEM_EMBEDDING_MIN_SCORE: value, MISMEM_EMBEDDING_MODEL: "embeddinggemma-2" });
+      expect(loadEmbeddingConfig().minScore).toBe(0.5);
+    },
+  );
 
   it.each(["nomic-embed-text", "nomic-embed-text:latest"])(
     "con %s y sin corte elegido, el default es 0,65",
@@ -112,6 +116,19 @@ describe("loadEmbeddingConfig", () => {
     (value) => {
       setEnv({ MISMEM_EMBEDDING_TIMEOUT_MS: value });
       expect(loadEmbeddingConfig().timeoutMs).toBe(3000);
+    },
+  );
+
+  it("MISMEM_EMBEDDING_MAX_CHARS se lee tal cual", () => {
+    setEnv({ MISMEM_EMBEDDING_MAX_CHARS: "2000" });
+    expect(loadEmbeddingConfig().maxChars).toBe(2000);
+  });
+
+  it.each(["", "  ", "abc", "0", "-5"])(
+    "un tope imposible (%j) vuelve a 4000",
+    (value) => {
+      setEnv({ MISMEM_EMBEDDING_MAX_CHARS: value });
+      expect(loadEmbeddingConfig().maxChars).toBe(4000);
     },
   );
 

@@ -2,6 +2,14 @@
 
 ## Sin publicar
 
+### Las dos variables de embeddings que quedaban fuera de `env.ts` (#187)
+
+- `MISMEM_EMBEDDING_MIN_SCORE` y `MISMEM_EMBEDDING_MAX_CHARS` pasan por `envNonNegativeNumber` y
+  `envPositiveNumber`, la convención de `engine/src/env.ts`.
+- Sólo cambia un caso: con `MISMEM_EMBEDDING_MIN_SCORE` en blanco (`" "`) el corte quedaba en `0` y cualquier
+  memoria con vector competía en los candidatos; ahora vuelve al default del modelo. El `0` explícito sigue
+  valiendo como elección, y `MAX_CHARS` no cambia para ningún valor.
+
 ### La documentación dice lo que hace el código (#186)
 
 - `DEPLOY.md` daba a entender que EmbeddingGemma 2 arranca en 0,65: sólo `nomic-embed-text` sube el default a 0,65;
