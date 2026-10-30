@@ -8,9 +8,9 @@
  */
 import { existsSync } from "node:fs";
 import { parseArgs } from "node:util";
-import Database from "better-sqlite3";
 import { EXIT_USAGE } from "./cli-args.js";
 import { defaultDbPath, openDb } from "./store/db.js";
+import { isMismemDb } from "./store/probe.js";
 import { EXPORT_ROOT, exportObsidian } from "./export/obsidian.js";
 
 const HELP = `misMEM obsidian export
@@ -31,19 +31,6 @@ Opciones:
 Variables:
   MISMEM_DB        default ${defaultDbPath()} (debe existir: el export no crea la base)
 `;
-
-function isMismemDb(path: string): boolean {
-  try {
-    const probe = new Database(path, { readonly: true, fileMustExist: true });
-    try {
-      return probe.prepare("SELECT 1 FROM sqlite_master WHERE type = 'table' AND name = 'memories'").get() !== undefined;
-    } finally {
-      probe.close();
-    }
-  } catch {
-    return false;
-  }
-}
 
 function main(): void {
   let values: { out?: string; scope?: string; episodes: boolean; "dry-run": boolean; help: boolean };
