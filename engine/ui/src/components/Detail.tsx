@@ -2,7 +2,7 @@ import { useEffect, useRef, useState, type RefObject } from "react";
 import { m } from "motion/react";
 import { Button } from "@/components/ui/button";
 import { Sheet, SheetContent, SheetDescription, SheetHeader, SheetTitle } from "@/components/ui/sheet";
-import type { Selection } from "../App";
+import type { Selection } from "@/lib/selection";
 import { EpisodeView } from "./EpisodeView";
 import { MemoryView } from "./MemoryView";
 import { TraitView } from "./TraitView";
