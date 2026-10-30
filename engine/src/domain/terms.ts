@@ -1,11 +1,8 @@
-/**
- * Tokenización compartida entre la búsqueda por palabras y la medición de uso.
- * Si las dos no parten el texto igual, un recuerdo se encuentra con unas palabras
- * y se da por usado con otras.
- */
+// Shared tokenization for word search and usage measurement: if the two split the text
+// differently, a memory is found with some words and counted as used with others.
 
-// Palabras que una pregunta trae y un recuerdo no: como FTS5 exige todas las de la consulta,
-// con ellas adentro una pregunta entera ("¿qué decidimos sobre el deploy?") no encontraba nada.
+// Words a question brings and a memory does not: FTS5 requires every query term, so with
+// them in it a whole question ("¿qué decidimos sobre el deploy?") matched nothing.
 const STOPWORDS = new Set(
   (
     "a al como con cual cuales cuando cuanta cuanto de del donde el en es estar fue la las le lo los me mi " +
@@ -24,19 +21,19 @@ export const plain = (word: string): string =>
 
 const split = (text: string): string[] => text.split(/[^\p{L}\p{N}_]+/u).filter(Boolean);
 
-// Un número corto (un puerto, una versión) distingue; una palabra de dos letras casi nunca.
+// A short number (a port, a version) distinguishes; a two-letter word almost never does.
 const carries = (word: string): boolean =>
   (word.length >= MIN_TERM_LENGTH || /\p{N}/u.test(word)) && !STOPWORDS.has(plain(word));
 
-/** Las palabras de la consulta que sirven para buscar por coincidencia. */
+/** The query words that are worth searching for. */
 export function searchTerms(query: string): string[] {
   const words = split(query);
   const terms = words.filter(carries);
-  // Si no quedó ninguna, la consulta va como vino: mejor una búsqueda estricta que una vacía.
+  // If none is left, the query goes as it came: a strict search beats an empty one.
   return terms.length > 0 ? terms : words;
 }
 
-/** Las palabras que distinguen a un texto, normalizadas y sin repetir. */
+/** The words that distinguish a text, normalized and deduplicated. */
 export function contentTerms(text: string): Set<string> {
   return new Set(split(text).filter(carries).map(plain));
 }

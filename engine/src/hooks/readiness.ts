@@ -1,13 +1,6 @@
-/**
- * ¿El servidor ya entiende lo que el hook le va a pedir?
- *
- * `recall` acepta `reinforce` desde 0.5.0. Contra un servidor anterior, Zod descarta
- * ese campo en silencio: el hook inyectaría Y reforzaría, justo lo contrario de lo que
- * se busca. Así que antes de inyectar se confirma que el servidor expone `reinforce`.
- *
- * El resultado se cachea para no preguntar en cada turno. El "no" dura poco a propósito:
- * así el hook se enciende solo al poco tiempo de desplegar, sin que nadie se acuerde.
- */
+// Whether the server understands what the hook asks for: `recall` accepts `reinforce` since
+// 0.5.0 and an older server drops it silently, so the hook would inject AND reinforce. The result
+// is cached, and the "no" is short-lived so the hook turns itself on after a deploy.
 import { mkdirSync, readFileSync, writeFileSync } from "node:fs";
 import { dirname, join } from "node:path";
 import { remoteToolNames } from "./client.js";
@@ -38,7 +31,7 @@ function write(path: string, state: State): void {
     mkdirSync(dirname(path), { recursive: true });
     writeFileSync(path, JSON.stringify(state));
   } catch {
-    /* sin caché se vuelve a preguntar: molesta, no rompe */
+    /* without a cache it asks again: annoying, not broken */
   }
 }
 
@@ -48,7 +41,7 @@ export function isFresh(state: State | undefined, url: string, at: number): bool
   return at - state.checked < ttl;
 }
 
-/** `probe` existe para poder testear sin red. */
+/** `probe` exists so it can be tested without network. */
 export async function serverReady(
   url: string,
   dbPath: string,
@@ -65,7 +58,7 @@ export async function serverReady(
   try {
     ready = (await probe(url, timeoutMs)).includes("reinforce");
   } catch {
-    // Servidor caído o lento: no inyectar es más barato que inyectar mal.
+    // Server down or slow: not injecting is cheaper than injecting wrong.
     ready = false;
   }
   write(path, { url, ready, checked: at });

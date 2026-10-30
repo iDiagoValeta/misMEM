@@ -212,7 +212,7 @@ describe("ranking híbrido", () => {
     const noise = makeNoiseMarker("[noise] 4 episodios sin señal consolidable de finanzas");
     makeMemory("la deuda del cashflow quedó saldada");
     await embedPendingMemories(db, { embedFn: fakeEmbed, model: "fake" });
-    // Una base de antes del filtro ya tiene vectores de marcadores: hay que atajarlos igual.
+    // A db from before the filter already has marker vectors: they must be stopped all the same.
     db.prepare(
       "INSERT INTO memory_embeddings (memory_id, model, dims, vec, created_at) VALUES (?, ?, ?, ?, ?)",
     ).run(noise, "fake", 2, Buffer.from(fakeVec("finanzas").buffer), Date.now());

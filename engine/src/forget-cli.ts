@@ -1,8 +1,6 @@
 #!/usr/bin/env node
-/**
- * mismem-forget CLI: purga episodios consolidados antiguos + memorias de baja salience.
- * Ideal para correr después de mismem-consolidate.
- */
+// mismem-forget: prunes old consolidated episodes and low-salience memories.
+// Meant to run right after mismem-consolidate.
 import { defaultDbPath, openDefaultDb } from "./store/db.js";
 import { ArgsError, EXIT_USAGE } from "./cli-args.js";
 import { parseForgetArgs } from "./forget-args.js";

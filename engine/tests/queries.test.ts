@@ -183,7 +183,7 @@ describe("queries/graph", () => {
     expect(graph.truncated).toEqual({ memories: false, traits: false, episodes: false });
     expect(graph.connectome).toBeUndefined();
 
-    // Exactamente el tope no es un recorte.
+    // Exactly the cap is not a truncation.
     expect(graphData(db, { ...base, at: Date.now(), caps: { memories: 1 } }).truncated.memories).toBe(false);
     memoryFrom("a", "otra", ["e2"]);
     expect(graphData(db, { ...base, at: Date.now(), caps: { memories: 1 } }).truncated.memories).toBe(true);

@@ -1,27 +1,6 @@
-/**
- * The connectome: memory's lateral layer.
- *
- * `origin` and `evidence` are vertical edges — where each thing came from — and
- * always point upwards: episode → memory → trait. `related` joins memories that
- * look alike. Co-use is the only edge drawn from what actually happened: which
- * memories a single turn used together.
- *
- * The weight is not the raw count. A memory used in every turn co-occurs with
- * everything, so counting would put it at the centre of the graph while orienting
- * nobody: the same mistake as salience measuring recency. This uses NPMI, which
- * asks whether the pair shows up together *more than chance*:
- *
- *   -1  they avoid each other   0  indistinguishable from chance   1  never apart
- *
- * With little data it is noisy by construction: two memories used once, that once
- * together, score 1. So every edge travels with its own `n` and the caller picks
- * the support floor. Nothing is hidden here.
- *
- * Turns that happened before this counter existed are missing from the
- * denominator, so on the first open `seedTurnsFromUse` puts it on the same clock
- * as the counts it divides. From there the bias is conservative — the denominator
- * is a lower bound, so strength is understated — and shrinks with use.
- */
+// The connectome: memory's lateral layer, pairing the memories one turn used together.
+// The weight is NPMI, not a raw count: see `docs/architecture.md#el-índice-hebbiano`.
+// `origin` and `evidence` stay vertical: episode -> memory -> trait.
 import type { Database as DB } from "better-sqlite3";
 
 const TURNS_KEY = "connectome.turns";
@@ -72,14 +51,9 @@ export function registerTurn(db: DB): void {
 }
 
 /**
- * Puts the counter on the same clock as the counts it divides. A DB written before
- * the counter existed carries `n` and `use_count` from turns nobody counted, and a
- * denominator of zero makes the quotient clamp to 1: every inherited pair would
- * read as a maximal association, which is the rich club the weight exists to avoid.
- *
- * The seed is the highest use on record, a lower bound on the turns that must have
- * happened, because each use took one turn. Only when the counter is absent: one
- * already running is the real measurement and nothing may overwrite it.
+ * Puts the counter on the same clock as the counts it divides: a DB written before it carries
+ * `n` and `use_count` from uncounted turns, and a zero denominator clamps every pair to a maximal
+ * association. Seeds with the highest use on record, only when the counter is absent.
  */
 export function seedTurnsFromUse(db: DB): void {
   const existing = db.prepare("SELECT 1 FROM meta WHERE key = ?").get(TURNS_KEY);

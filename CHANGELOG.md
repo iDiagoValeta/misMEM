@@ -2,6 +2,18 @@
 
 ## Sin publicar
 
+### La norma de comentarios se aplica a todo el código fuente (#171)
+
+- Los comentarios de `engine/src`, `engine/ui/src` (sin `components/ui`, que es shadcn) y `engine/tests` están
+  en inglés, con la cabecera y los bloques dentro de sus límites y sin historia ni notas de PR. Las
+  descripciones de `it()` y `describe()`, los textos de la interfaz y los mensajes de error siguen en castellano.
+- El registro de excepciones de `engine/tests/comments.test.ts` queda vacío: el mecanismo sigue ahí para una
+  excepción justificada, pero el test ya no perdona ninguna violación.
+- La calibración del rescate laxo que vivía en `recall/rescue.ts` pasa a `docs/recall.md`, y el comentario
+  enlaza la sección. Los razonamientos largos que quedaban en tests van con el código que explican.
+- Sólo cambian comentarios: el texto sin comentarios es idéntico antes y después. `docs/standards/comments.md`
+  y `AGENTS.md` dejan de describir una lista de excepciones pendiente.
+
 ### Los comentarios tienen forma, y un test la comprueba (#171)
 
 - `docs/standards/comments.md` fija la norma: todos los comentarios de `engine/src`, `engine/ui/src` y

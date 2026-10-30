@@ -9,7 +9,7 @@ import {
   type ThemeChoice,
 } from "@/lib/theme";
 
-/** La elección guardada, la preferencia del sistema y el tema resuelto que se pinta. */
+/** The stored choice, the system preference and the resolved theme that gets painted. */
 export function useTheme(): {
   choice: ThemeChoice;
   setChoice: (choice: ThemeChoice) => void;

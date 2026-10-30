@@ -19,7 +19,7 @@ import { useTheme } from "./hooks/use-theme";
 import type { Selection } from "./lib/selection";
 import { viewAfterQuery, type View } from "./lib/search-view";
 
-// El grafo pesa más que el resto: se baja sólo al abrir su pestaña.
+// The graph is heavier than the rest: it is only downloaded when its tab opens.
 const GraphView = lazy(() => import("./components/GraphView"));
 
 const VIEWS: Array<{ id: View; label: string; short: string }> = [
@@ -45,7 +45,7 @@ export function App() {
   const scopesQuery = useQuery({ queryKey: ["scopes"], queryFn: ({ signal }) => api.scopes(signal) });
   const scopeList = scopesQuery.data?.scopes;
 
-  // Buscar espera 250 ms tras la última tecla; el `signal` de TanStack cancela la anterior.
+  // Search waits 250 ms after the last keystroke; TanStack's `signal` cancels the previous one.
   const debouncedDraft = useDebounced(draft, 250);
   useEffect(() => {
     const next = debouncedDraft.trim();
@@ -53,8 +53,8 @@ export function App() {
     setView((current) => viewAfterQuery(current, next));
   }, [debouncedDraft]);
 
-  // El grafo se monta la primera vez que se abre y ya no se desmonta: Radix tira las
-  // pestañas inactivas, y con ellas la cámara, la simulación asentada y los ajustes.
+  // The graph mounts the first time it opens and is never unmounted: Radix drops inactive
+  // tabs, and with them the camera, the settled simulation and the settings.
   const [graphSeen, setGraphSeen] = useState(false);
   useEffect(() => {
     if (view === "graph") setGraphSeen(true);
@@ -73,9 +73,9 @@ export function App() {
   };
 
   const changeView = (next: View) => {
-    // Las listas no filtran por texto: al entrar en una se limpia la caja, porque un texto
-    // visible que no filtra nada engaña. El grafo sí la usa como filtro local, así que al
-    // entrar en él la consulta se conserva.
+    // Lists do not filter by text: entering one clears the box, because a visible text that
+    // filters nothing is misleading. The graph does use it as a local filter, so entering it
+    // keeps the query.
     if (next === "memories" || next === "traits" || next === "pending") {
       setDraft("");
       setQuery("");
@@ -114,8 +114,8 @@ export function App() {
   };
 
   const crystallized = (traitId: string) => {
-    // Sin esto el diálogo sigue marcado como abierto y reaparece al elegir la primera
-    // memoria de la siguiente selección, sin volver a pulsar "Cristalizar como rasgo".
+    // Without this the dialog stays marked as open and reappears when picking the first memory
+    // of the next selection, without pressing "Cristalizar como rasgo" again.
     setCrystallizing(false);
     setPicked(null);
     refresh();
@@ -123,8 +123,8 @@ export function App() {
     setView("traits");
   };
 
-  // En el grafo sin selección la columna de detalle vacía no aporta: el grafo se queda
-  // su ancho. Por debajo de md el detalle va en un Sheet y no ocupa columna.
+  // In the graph with no selection the empty detail column adds nothing: the graph keeps its
+  // width. Below md the detail goes in a Sheet and takes no column.
   const graphAlone = view === "graph" && !selected;
 
   return (
@@ -203,7 +203,7 @@ export function App() {
               <TabsContent value="results" className="m-0">
                 <SearchResults term={query} scope={scope} selected={selected} onSelect={setSelected} />
               </TabsContent>
-              {/* forceMount: cambiar de pestaña no puede tirar la cámara ni la simulación. */}
+              {/* forceMount: switching tabs cannot drop the camera or the simulation. */}
               {(graphSeen || view === "graph") && (
                 <TabsContent
                   value="graph"
@@ -229,8 +229,8 @@ export function App() {
           )}
         </main>
 
-        {/* `contents` mantiene el <aside> como celda; en el grafo sin selección se oculta y la
-            rejilla pierde esa columna para que el grafo respire. */}
+        {/* `contents` keeps the <aside> as a cell; in the graph with no selection it is hidden
+            and the grid loses that column so the graph can breathe. */}
         <div className={graphAlone ? "hidden" : "contents"}>
           <DetailPanel
             selected={selected}

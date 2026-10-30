@@ -1,21 +1,6 @@
-/**
- * Catalogue of the `mem_*` aliases (Engram MCP tools).
- *
- * The definitions live apart from the dispatch so a client can list them without pulling
- * in what each one does: `engram-compat.ts` maps them to the six canonical misMEM tools.
- *
- * Mapping:
- *   mem_save             → capture
- *   mem_search           → recall
- *   mem_context          → the newest unconsolidated episodes; no recall, no ranking
- *   mem_get_observation  → one row by id from episodes/memories/traits
- *   mem_session_summary  → capture (scope=session)
- *   mem_save_prompt      → capture (scope=prompts)
- *   mem_update           → update a memory/trait, or append an episode
- *   mem_suggest_topic_key→ heuristic over title/content
- *   mem_session_start    → informational no-op
- *   mem_session_end      → informational no-op
- */
+// Catalogue of the `mem_*` aliases (Engram MCP tools), kept apart from the dispatch so a client
+// can list them without pulling in what each one does. What each maps to is in
+// `engram-compat.ts`.
 export interface EngramToolDef {
   name: string;
   description: string;

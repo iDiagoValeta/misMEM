@@ -12,7 +12,7 @@ interface Props {
   scope: string | undefined;
   query: string;
   selectedId?: string;
-  /** La pestaña está a la vista: si no, se pausa la animación aunque el grafo siga montado. */
+  /** The tab is on screen: otherwise the animation pauses even though the graph stays mounted. */
   active: boolean;
   onSelect: (layer: Layer, id: string) => void;
 }
@@ -28,8 +28,8 @@ export default function GraphView({ scope, query, selectedId, active: visible, o
   const fitted = useRef(false);
   const positions = useRef(new Map<string, { x: number; y: number }>());
 
-  // Al cambiar de ámbito no se enseña el grafo del anterior: sólo se conserva mientras
-  // se recarga el mismo ámbito (por ejemplo, al encender los episodios).
+  // Switching scope never shows the previous scope's graph: it is only kept while the same
+  // scope reloads (for example, when episodes are turned on).
   const graphQuery = useQuery({
     queryKey: ["graph", scope ?? "", settings.episodes],
     queryFn: ({ signal }) => api.graph(scope, settings.episodes, signal),
@@ -38,8 +38,8 @@ export default function GraphView({ scope, query, selectedId, active: visible, o
   });
   const data = graphQuery.data;
 
-  // El centro del grafo local sólo importa si el modo está encendido: así seleccionar
-  // con el modo apagado no reconstruye los datos ni despierta la simulación.
+  // The local graph's centre only matters when the mode is on: that way selecting with the
+  // mode off neither rebuilds the data nor wakes the simulation.
   const centerId = settings.localEnabled ? selectedId : undefined;
 
   const filters = useMemo<GraphFilters>(
@@ -65,8 +65,8 @@ export default function GraphView({ scope, query, selectedId, active: visible, o
 
   const graphData = useMemo(() => {
     const filtered = data ? filterGraph(data, filters) : EMPTY;
-    // force-graph recibe copias y las coloca desde cero: se les devuelve su último sitio
-    // para que filtrar o seleccionar no reinicie el dibujo bajo una cámara que no se mueve.
+    // force-graph receives copies and lays them out from scratch: each gets its last position
+    // back so filtering or selecting does not restart the drawing under a camera that stays put.
     for (const node of filtered.nodes) {
       const saved = positions.current.get(node.id);
       if (saved) {
@@ -81,7 +81,7 @@ export default function GraphView({ scope, query, selectedId, active: visible, o
   const scopes = useMemo(() => data?.nodes.map((node) => node.scope) ?? [], [data]);
   const palette = useMemo(() => scopePalette(scopes), [scopes]);
 
-  // Un episodio no tiene detalle propio: abre la memoria en la que se consolidó.
+  // An episode has no detail of its own: it opens the memory it was consolidated into.
   const origins = useMemo(() => {
     const map = new Map<string, string>();
     for (const link of data?.links ?? []) if (link.kind === "origin") map.set(link.source, link.target);
@@ -149,7 +149,7 @@ export default function GraphView({ scope, query, selectedId, active: visible, o
     graphRef.current?.zoomToFit(500, 40);
   }, [graphData.nodes.length]);
 
-  // Fuerzas de la maqueta: gravedad al centro, repulsión, enlace y distancia ajustables.
+  // Forces from the mock-up: gravity to the centre, repulsion, link and distance adjustable.
   useEffect(() => {
     const graph = graphRef.current;
     if (!graph) return;
@@ -162,7 +162,7 @@ export default function GraphView({ scope, query, selectedId, active: visible, o
     graph.d3ReheatSimulation();
   }, [settings.center, settings.repulsion, settings.link, settings.distance, size.width]);
 
-  // El tamaño lo pone el contenedor, no la ventana: el grafo vive dentro de una pestaña.
+  // The container sets the size, not the window: the graph lives inside a tab.
   useEffect(() => {
     const element = containerRef.current;
     if (!element) return;
@@ -171,8 +171,8 @@ export default function GraphView({ scope, query, selectedId, active: visible, o
       if (!entry) return;
       const width = Math.round(entry.contentRect.width);
       const height = Math.round(entry.contentRect.height);
-      // La pestaña inactiva se oculta con display:none y mediría cero: aceptarlo
-      // desmontaría el canvas y se perderían cámara y simulación al volver.
+      // The inactive tab is hidden with display:none and would measure zero: accepting that
+      // would unmount the canvas and lose camera and simulation on return.
       if (width === 0 || height === 0) return;
       setSize((previous) => (previous.width === width && previous.height === height ? previous : { width, height }));
     });
@@ -180,20 +180,20 @@ export default function GraphView({ scope, query, selectedId, active: visible, o
     return () => observer.disconnect();
   }, []);
 
-  // Oculto sigue montado, pero no debe gastar CPU: se pausa la animación y se reanuda
-  // al volver, sin reiniciar ni la simulación ni la cámara. `size.width` reaplica el
-  // estado cuando el canvas termina de montarse después del primer efecto.
+  // Hidden it stays mounted but must not burn CPU: the animation pauses and resumes on return,
+  // restarting neither the simulation nor the camera. `size.width` reapplies the state when the
+  // canvas finishes mounting after the first effect.
   useEffect(() => {
     if (visible) graphRef.current?.resumeAnimation();
     else graphRef.current?.pauseAnimation();
   }, [visible, size.width]);
 
-  // force-graph muta los nodos y les añade x/y; este ref da acceso a esas coordenadas.
+  // force-graph mutates the nodes and adds x/y; this ref grants access to those coordinates.
   const positioned = graphData.nodes as Array<GraphNode & { x?: number; y?: number }>;
   const nodesRef = useRef(positioned);
   nodesRef.current = positioned;
 
-  // Seleccionar desde fuera (lista o detalle) lleva la cámara al nodo, sin tocar el zoom.
+  // Selecting from outside (list or detail) moves the camera to the node, without touching zoom.
   useEffect(() => {
     if (!selectedId) return;
     let attempts = 0;
@@ -244,7 +244,7 @@ export default function GraphView({ scope, query, selectedId, active: visible, o
           linkColor={linkColor}
           linkWidth={linkWidth}
           linkLineDash={(link) => (link.kind === "related" ? [2, 2] : null)}
-          // En la punta de la arista; longitud 0 deja la línea limpia cuando están apagadas.
+          // At the tip of the edge; length 0 leaves the line clean when they are off.
           linkDirectionalArrowLength={settings.arrows ? 3 : 0}
           linkDirectionalArrowRelPos={1}
           onNodeHover={onNodeHover}

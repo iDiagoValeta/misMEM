@@ -44,7 +44,7 @@ export function MemoryView({ id, onSelect, onChanged, onAnnounce }: DetailViewPr
 
   const save = async (gist: string, details: string | null) => {
     await actions.editMemory(memory.id, gist, details);
-    // D6: el detalle pinta el texto nuevo antes de que termine la recarga.
+    // D6: the detail renders the new text before the refetch finishes.
     queryClient.setQueryData<MemoryDetail>(["memory", memory.id], (previous) =>
       previous ? { ...previous, memory: { ...previous.memory, text: gist, details } } : previous,
     );

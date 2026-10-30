@@ -1,14 +1,6 @@
-/**
- * Despacho de las peticiones HTTP del servidor: Host, /healthz, /mcp, el visor y su API.
- *
- * Vive aparte de server-http.ts, que escucha al importarse, para poder probarlo sin abrir
- * un puerto. Todo lo que era global del módulo (base, auth, topes, el job de consolidación,
- * el transporte del MCP y la interfaz compilada) entra por parámetro; http/ no puede
- * importar la raíz salvo env.ts, cli-args.ts y schema.ts.
- *
- * El orden de las comprobaciones es parte del contrato: Host → healthz → /mcp con auth →
- * visor y API con auth → POST → método → rutas → 404.
- */
+// HTTP dispatch: Host, /healthz, /mcp, the viewer and its API. Kept out of server-http.ts, which
+// listens on import, so it can be tested without a port; dependencies come in as arguments, and
+// the order (Host, healthz, /mcp, viewer, POST, method, routes, 404) is the contract.
 import type { IncomingMessage, ServerResponse } from "node:http";
 import type { Database as DB } from "better-sqlite3";
 import type { ConsolidationJob } from "../consolidation/job.js";
@@ -28,17 +20,17 @@ import { handleRecent, handleSearch, handleStats } from "./viewer/read.js";
 export interface HttpRoutesDeps {
   db: DB;
   auth: BasicCredentials | null;
-  /** `MISMEM_ALLOWED_HOSTS`: nombres de Host aceptados además de loopback sin auth. */
+  /** `MISMEM_ALLOWED_HOSTS`: Host names accepted besides loopback when there is no auth. */
   allowedHosts: readonly string[];
-  /** Tope del cuerpo de POST /mcp (`MISMEM_HTTP_MAX_BODY_BYTES`). */
+  /** Cap for the POST /mcp body (`MISMEM_HTTP_MAX_BODY_BYTES`). */
   maxBodyBytes: number;
-  /** La corrida de consolidación que lanza la interfaz: una a la vez por proceso. */
+  /** The consolidation run the interface starts: one at a time per process. */
   job: ConsolidationJob;
   allowDelete: boolean;
   confirmations: ForgetConfirmations;
-  /** Atiende /mcp ya autorizado y con el cuerpo leído; el transporte vive en la raíz. */
+  /** Answers /mcp once authorized and with the body read; the transport lives in the root. */
   handleMcp: (req: IncomingMessage, res: ServerResponse, parsedBody: unknown) => Promise<void>;
-  /** La interfaz compilada; vive en la raíz porque lee dist/ui. */
+  /** The compiled interface; it lives in the root because it reads dist/ui. */
   serveUi: (res: ServerResponse, pathname: string) => void;
 }
 
@@ -68,7 +60,7 @@ export function createRequestHandler(deps: HttpRoutesDeps): RequestHandler {
         }
         let parsedBody: unknown;
         if (req.method === "POST") {
-          // Antes de leer un byte: el SDK tira 415 igual, pero sólo después de parsear.
+          // Before reading a byte: the SDK throws 415 anyway, but only after parsing.
           if (!isJsonContentType(req.headers["content-type"])) {
             jsonBare(res, 415, {
               jsonrpc: "2.0",
@@ -102,7 +94,7 @@ export function createRequestHandler(deps: HttpRoutesDeps): RequestHandler {
         return;
       }
 
-      // Viewer + su API. Misma BasicAuth que /mcp; las escrituras, además, con writeGuard.
+      // Viewer and its API, same BasicAuth as /mcp; writes also go through writeGuard.
       if (
         url.pathname === "/viewer" ||
         url.pathname.startsWith("/viewer/") ||

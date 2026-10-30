@@ -1,14 +1,6 @@
-/**
- * Reads an Engram SQLite database and writes its rows into misMEM as episodes.
- *
- * Mapping:
- *   engram.observations   → episodes (scope = `engram/${project||'global'}`)
- *   engram.sessions       → episodes (scope = `engram/${project||'global'}/sessions`) if they have summary
- *   engram.user_prompts   → episodes (scope = `engram/${project||'global'}/prompts`)
- *
- * Idempotent: a deterministic hash is used as the id, so re-running skips the duplicates.
- * The source is opened read-only and closed before returning; the caller owns the target.
- */
+// Reads an Engram SQLite database and writes its rows into misMEM as episodes. Idempotent: the
+// id is a deterministic hash, so re-running skips duplicates. The source is opened read-only and
+// closed before returning; the caller owns the target.
 import Database from "better-sqlite3";
 import type { Database as DB } from "better-sqlite3";
 import { createHash } from "node:crypto";

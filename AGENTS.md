@@ -92,8 +92,7 @@ pnpm typecheck && pnpm test && pnpm knip && pnpm dup && pnpm lint && pnpm build
 - **Idioma**: identificadores, claves JSON, comentarios y commits (Conventional Commits) en inglés. Mensajes
   de cara al usuario (errores, logs, ayuda de los CLI, interfaz), Markdown y las descripciones de `it()` y
   `describe()` en español neutro (formas impersonales, ni voseo ni vosotros). Todo comentario de
-  `engine/src`, `engine/ui/src` y `engine/tests` va en inglés; los que están en castellano se traducen y
-  `engine/tests/comments.test.ts` los cuenta en sus excepciones hasta que la PR de aplicación las vacíe.
+  `engine/src`, `engine/ui/src` y `engine/tests` va en inglés.
 - **Comentarios**: dicen el porqué (la restricción, el motivo, lo que se descartó), nunca el qué. Cabecera de
   módulo de tres líneas como mucho, sin inventarios; ningún otro bloque pasa de cinco, y una calibración o un
   razonamiento largo va a `docs/`. Sin código comentado, sin historia ni notas de PR, sin `TODO`/`FIXME` sin

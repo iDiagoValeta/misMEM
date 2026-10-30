@@ -71,7 +71,7 @@ describe("acciones sobre memorias", () => {
       details: "más",
     });
     expect(count("SELECT COUNT(*) AS n FROM memory_embeddings WHERE memory_id = ?", memoryId)).toBe(0);
-    // Y el índice FTS ve el texto nuevo, no el viejo.
+    // And the FTS index sees the new text, not the old.
     expect(count("SELECT COUNT(*) AS n FROM memories_fts WHERE memories_fts MATCH 'nuevo'")).toBe(1);
     expect(count("SELECT COUNT(*) AS n FROM memories_fts WHERE memories_fts MATCH 'viejo'")).toBe(0);
   });
@@ -237,7 +237,7 @@ describe("handleAction", () => {
     const wrongId = await act(`/api/memory/${b}/forget`, { confirm_token: forA });
     expect(wrongId.status).toBe(409);
     expect(wrongId.body.error).toMatch(/caducó/);
-    // Se gastó al intentarlo con otro id: tampoco sirve ya para el suyo.
+    // It was spent trying another id: it no longer works for its own either.
     expect((await act(`/api/memory/${a}/forget`, { confirm_token: forA })).status).toBe(409);
     expect(remaining()).toBe(2);
 

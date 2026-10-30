@@ -33,7 +33,7 @@ function setEnv(values: Partial<Record<(typeof ENV_KEYS)[number], string>>): voi
 }
 
 function openAiResponse(vectors: number[][]): Response {
-  // Desordenado a propósito: el orden lo da `index`, no la posición.
+  // Deliberately out of order: `index` sets the order, not the position.
   const data = vectors.map((embedding, index) => ({ index, embedding })).reverse();
   return new Response(JSON.stringify({ data }));
 }

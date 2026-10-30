@@ -1,17 +1,10 @@
-/**
- * Qué `Host` atiende el servidor HTTP cuando corre sin auth.
- *
- * Sin credenciales, lo único que separa la memoria de una web cualquiera es que el
- * navegador no la deja hablar con otro origen. DNS rebinding se salta eso: el dominio
- * del atacante pasa a resolver a 127.0.0.1 y, para el navegador, la petición es del
- * mismo origen. Lo que la delata es el `Host`, que sigue siendo el del atacante.
- * Con auth no hace falta: el navegador no manda credenciales a un origen ajeno, y
- * detrás de un proxy el `Host` es el dominio público.
- */
+// Which `Host` the server answers without auth: browsers do not talk across origins and DNS
+// rebinding defeats that, so `Host` is what gives the attacker away. With auth the browser sends
+// no credentials to a foreign origin, and behind a proxy `Host` is the public domain.
 
 const LOOPBACK = new Set(["localhost", "127.0.0.1", "::1"]);
 
-/** El nombre de la cabecera `Host`, sin puerto, sin corchetes y en minúsculas. */
+/** The `Host` header name, without port, without brackets and lowercased. */
 export function hostName(header: string | undefined): string | undefined {
   if (!header) return undefined;
   let name = header.trim().toLowerCase();
@@ -25,7 +18,7 @@ export function hostName(header: string | undefined): string | undefined {
   return name || undefined;
 }
 
-/** `MISMEM_ALLOWED_HOSTS`: nombres separados por comas. */
+/** `MISMEM_ALLOWED_HOSTS`: comma-separated names. */
 export function parseHostList(raw: string | undefined): string[] {
   return (raw ?? "")
     .split(",")

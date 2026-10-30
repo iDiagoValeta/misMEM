@@ -7,7 +7,7 @@ export type Link = LinkObject<GraphNode, GraphLink>;
 
 type End = string | number | NodeObject<GraphNode> | undefined;
 
-/** force-graph sustituye los ids por nodos en cuanto calcula: aquí se aceptan los dos. */
+/** force-graph swaps ids for nodes as soon as it computes: both are accepted here. */
 const endId = (end: End): string | undefined => {
   if (end === undefined || end === null) return undefined;
   return typeof end === "object" ? (end.id === undefined ? undefined : String(end.id)) : String(end);
@@ -20,7 +20,7 @@ const endId = (end: End): string | undefined => {
 export const nodeWeight = (node: Node): number =>
   node.layer === "trait" ? 5 : 1 + 2.5 * (node.salience ?? 0.5);
 
-/** El radio crece con la saliencia y con el tamaño elegido; los rasgos tienen base propia. */
+/** The radius grows with salience and the chosen size; traits have their own base. */
 const radiusOf = (node: Node, size: number): number => Math.sqrt(nodeWeight(node) * size) * 2.2;
 
 export function colorOfNode(node: Node, palette: Map<string, string>, colorByScope: boolean): string {
@@ -49,7 +49,7 @@ export function paintNode(node: Node, ctx: CanvasRenderingContext2D, scale: numb
   const lit = paint.isLit(id);
   const radius = radiusOf(node, paint.nodeSize);
 
-  // Fuera del activo y sus vecinos el grafo se apaga: el foco se lee de un vistazo.
+  // Outside the active node and its neighbours the graph dims: focus reads at a glance.
   ctx.globalAlpha = lit ? 1 : 0.15;
   ctx.beginPath();
   ctx.arc(node.x, node.y, radius, 0, 2 * Math.PI);
@@ -66,7 +66,7 @@ export function paintNode(node: Node, ctx: CanvasRenderingContext2D, scale: numb
   if (scale > paint.textThreshold || focused) {
     const fontSize = 11 / scale;
     const text = node.label.length > 48 ? `${node.label.slice(0, 47)}…` : node.label;
-    // Al hacer hover la etiqueta del vecino se lee sin depender del zoom.
+    // On hover a neighbour's label reads regardless of the zoom.
     ctx.globalAlpha *= Math.min(1, scale - paint.textThreshold + (focused ? 1 : 0.4));
     ctx.font = `${fontSize}px "JetBrains Mono Variable", ui-monospace, monospace`;
     ctx.textAlign = "center";

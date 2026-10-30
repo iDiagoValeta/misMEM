@@ -1,22 +1,6 @@
-/**
- * Exporta la memoria como bóveda de Obsidian.
- *
- * Obsidian ya resuelve navegar notas enlazadas y ver su grafo; la memoria de misMEM es
- * justo eso. Cada memoria, rasgo y ámbito es una nota, y lo que los une (de dónde sale
- * una memoria, qué rasgos la citan, a qué otras se parece) son [[enlaces]], que es lo
- * que dibuja el grafo de Obsidian.
- *
- * Todo va dentro de <bóveda>/misMEM/ y se lleva un manifiesto de lo escrito: re-exportar
- * reescribe lo suyo y borra sólo las notas propias que ya no existen, nunca algo que la
- * persona haya escrito en la bóveda. "Propia" se comprueba, no se supone: antes de borrar,
- * el frontmatter de la nota tiene que seguir declarando el id que apuntó el manifiesto.
- * Con --scope sólo se tocan las entradas de ese ámbito; las demás se conservan.
- *
- * Antes de tocar nada, la base tiene que tener algo que exportar: con 0 memorias y 0 rasgos
- * (en el ámbito pedido, si hay --scope) se niega, también en --dry-run. Si el manifiesto
- * existe pero no se puede interpretar, también se niega: reescribirlo en silencio dejaría
- * las notas viejas huérfanas, sin nadie que las rastree para borrarlas algún día.
- */
+// Exports the memory as an Obsidian vault: one note per memory, trait and scope, linked by
+// origin and similarity so Obsidian draws the graph. Everything goes under <vault>/misMEM/
+// with a manifest, and a note is removed only after its frontmatter proves it is ours.
 import type { Database as DB } from "better-sqlite3";
 import { effectiveSalience } from "../memory/salience.js";
 import { consolidatedEpisodes, exportMemories, exportScopes, exportTraits } from "../queries/export.js";
@@ -37,12 +21,12 @@ import { writeVault, type ExportStats, type VaultOptions, type WrittenFile } fro
 export { EXPORT_ROOT } from "./vault.js";
 export type { ExportStats } from "./vault.js";
 
-// Las parejas crecen con el cuadrado: por encima de esto, los parecidos se calculan sólo
-// entre las memorias con más salience.
+// Pairs grow with the square: above this, similarity is computed only among the highest-salience
+// memories.
 const RELATED_MAX_MEMORIES = 2000;
 
 export interface ExportOptions extends VaultOptions {
-  /** Los episodios como notas propias en vez de citados dentro de su memoria. */
+  /** Episodes as notes of their own instead of quoted inside their memory. */
   episodes?: boolean;
   at?: number;
 }
@@ -52,9 +36,9 @@ export function exportObsidian(db: DB, opts: ExportOptions): ExportStats {
   const scope = opts.scope;
   const memories = exportMemories(db, scope);
   const traits = exportTraits(db, scope);
-  // Una base recién creada (o la ruta equivocada a otro SQLite) no tiene nada que exportar:
-  // seguir adelante borraría todas las notas propias del manifiesto y la bóveda quedaría
-  // vacía sin error. Mejor negarse antes de escribir o borrar, también en --dry-run.
+  // A fresh database (or the wrong path to another SQLite) has nothing to export: going on
+  // would remove every note the manifest owns and leave the vault empty without an error.
+  // Refuse before writing or removing, also in --dry-run.
   if (memories.length === 0 && traits.length === 0) {
     throw new Error(
       `no hay memorias ni rasgos que exportar${scope === undefined ? "" : ` en el ámbito ${scope}`}: no se toca la bóveda`,

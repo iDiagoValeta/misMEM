@@ -35,11 +35,11 @@ export interface NotePaths {
   readonly scope: (scope: string) => string;
 }
 
-/** Un nombre de fichero válido en Obsidian y en Windows, legible y corto. */
+/** A file name valid in Obsidian and Windows, readable and short. */
 export function safeName(text: string, max = 60): string {
   const clean = text
-    // Los caracteres de control (incluidos \n\r\t y \0) rompen la escritura, la sincronización
-    // y algunos backups: un NUL en el nombre hace fallar el export entero.
+    // Control characters (including \n\r\t and \0) break writing, syncing and some backups:
+    // a NUL in the name makes the whole export fail.
     // biome-ignore lint/suspicious/noControlCharactersInRegex: stripping control characters is the point of this regex.
     .replace(/[\\/:*?"<>|#^[\]\u0000-\u001f\u007f]+/g, " ")
     .replace(/\s+/g, " ")
@@ -50,20 +50,18 @@ export function safeName(text: string, max = 60): string {
 
 const shortId = (id: string): string => id.slice(-6);
 export const day = (ts: number): string => new Date(ts).toISOString().slice(0, 10);
-/** YAML entre comillas dobles: JSON es un subconjunto válido. */
+/** YAML in double quotes: JSON is a valid subset. */
 export const yaml = (value: string): string => JSON.stringify(value);
 /**
- * Texto de un recuerdo dentro de la nota. Un `<palabra>` (p. ej. "fuser -k <puerto>/tcp")
- * Obsidian lo toma por una etiqueta HTML que abre un bloque, y todo lo que sigue deja de
- * leerse como Markdown: los enlaces de Origen salían en crudo. Un `[s]` suelto sale como
- * enlace roto. Se escapan con barra, que Obsidian muestra limpio en lectura y en edición
- * (una entidad `&lt;` se ve tal cual al editar).
+ * Text of a memory inside the note. Obsidian reads a `<word>` (e.g. "fuser -k <port>/tcp") as an
+ * HTML tag that opens a block and stops parsing Markdown, and a stray `[s]` as a broken link;
+ * both are escaped with a backslash, not an entity, so the note keeps the literal text.
  */
 export const text = (value: string): string => value.replace(/[<[\]]/g, (c) => `\\${c}`);
-/** Una etiqueta de Obsidian no admite espacios. */
+/** An Obsidian tag allows no spaces. */
 const tag = (value: string): string => value.replace(/\s+/g, "-");
-// Una etiqueta de wikilink no puede contener el cierre del enlace ni partir la línea: un
-// `\` final escapaba el `]]` y un salto dejaba el enlace abierto en dos líneas.
+// A wikilink label cannot contain the link's closing brackets nor break the line: a trailing
+// `\` escaped the `]]` and a newline left the link open across two lines.
 const linkLabel = (label: string): string => label.replace(/[[\]|\\<>]/g, " ").replace(/\s+/g, " ").trim();
 export const link = (path: string, label?: string): string =>
   label ? `[[${path}|${linkLabel(label)}]]` : `[[${path}]]`;
@@ -82,12 +80,9 @@ const scopeBase = (s: string): string => safeName(s.replace(/\//g, " - "));
 const scopeKey = (s: string): string => scopeBase(s).normalize("NFC").toLowerCase();
 
 /**
- * Las notas de ámbito no llevan sufijo de id, así que dos ámbitos que sólo difieran por
- * truncado, mayúsculas o normalización Unicode escribirían el mismo fichero y uno
- * desaparecería sin error. El hash del scope los separa, y también desambigua los nombres
- * reservados de Windows (CON, NUL...). Las colisiones se cuentan sobre todos los ámbitos de
- * la base, no sólo los del `--scope`: si no, exportar un ámbito suelto le quitaría el sufijo
- * y rompería los enlaces que le apuntan.
+ * Scope notes carry no id suffix, so truncation, case or Unicode normalisation alone would
+ * collide; the hash separates them and disambiguates Windows names (`CON`, `NUL`). Collisions
+ * count across every scope, so a one-scope export keeps its suffix and does not break links.
  */
 export function scopePathResolver(allScopes: readonly string[]): (scope: string) => string {
   const scopeCount = new Map<string, number>();

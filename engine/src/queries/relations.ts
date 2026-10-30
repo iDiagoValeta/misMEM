@@ -4,9 +4,9 @@ import type { Database as DB } from "better-sqlite3";
 import { cosine } from "../embeddings/vector.js";
 import { coUseEdges } from "../store/connectome.js";
 
-// Con nomic-embed-text hasta lo que no tiene nada que ver da 0,6-0,7 de coseno: medido en
-// una base real (118 memorias), la vecina más cercana tiene mediana 0,795. Con 0,75 y tres
-// vecinas por memoria salen grupos; más bajo, todo se conecta con todo.
+// With nomic-embed-text even unrelated text scores 0.6-0.7 cosine: measured on a real DB
+// (118 memories), the closest neighbour has a median of 0.795. At 0.75 with three
+// neighbours per memory clusters appear; lower, everything connects to everything.
 const RELATED_MIN_SCORE = 0.75;
 const RELATED_PER_NODE = 3;
 
@@ -23,10 +23,9 @@ export type GraphLink = {
 };
 
 /**
- * Aristas entre memorias parecidas, con los vectores ya guardados (no llama al embedder).
- * Cada memoria aporta sus vecinas más cercanas por encima del umbral; la arista no tiene
- * sentido, así que a-b y b-a cuentan una vez. Sólo compara vectores del modelo más usado:
- * los de modelos distintos no son comparables.
+ * Edges between similar memories from the stored vectors (never calls the embedder). Each
+ * memory contributes its nearest neighbours above the threshold, undirected, and only vectors
+ * of the most used model are compared: different models are not comparable.
  */
 export function relatedLinks(
   db: DB,
@@ -66,9 +65,8 @@ export function relatedLinks(
 
 /**
  * Edges from measured co-use: which memories one turn used together. Where `relatedLinks`
- * compares what each memory says, this comes from what actually happened. The weight is
- * NPMI rather than the count, because a memory used in every turn co-occurs with
- * everything while orienting nobody — see `connectome.ts`.
+ * compares what each memory says, this comes from what happened. The weight is NPMI, not the
+ * count, because a memory used in every turn co-occurs with everything while orienting nobody.
  */
 export function coUseLinks(db: DB, memoryIds: readonly string[], minN = 1): GraphLink[] {
   return coUseEdges(db, { ids: memoryIds, minN }).map((e) => ({
@@ -80,7 +78,7 @@ export function coUseLinks(db: DB, memoryIds: readonly string[], minN = 1): Grap
   }));
 }
 
-/** Los arrays de ids viven como JSON en una columna de texto: uno roto no rompe la respuesta. */
+/** Id arrays live as JSON in a text column: a broken one must not break the response. */
 export function parseIds(raw: string | null): string[] {
   try {
     const value: unknown = JSON.parse(raw ?? "[]");

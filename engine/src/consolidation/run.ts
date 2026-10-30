@@ -16,20 +16,20 @@ import {
 export interface RunOptions {
   minAgeHours?: number;
   minEpisodesPerScope?: number;
-  /** Días sin episodios nuevos tras los que un ámbito chico se consolida igual. */
+  /** Days without new episodes after which a small scope consolidates anyway. */
   quietDays?: number;
   maxEpisodesPerBatch?: number;
   scopeFilter?: string;
   dryRun?: boolean;
-  /** Si true, pre-filtra episodios L0 (Pareto) y los marca como noise sin llamar al LLM. Default true. */
+  /** If true, pre-filters L0 episodes (Pareto) and marks them as noise without calling the LLM. Default true. */
   paretoPrefilter?: boolean;
-  /** Tope de caracteres de episodios por llamada; lo que no entra queda para la tanda siguiente. */
+  /** Per-call cap on episode characters; what does not fit stays for the next batch. */
   maxPromptChars?: number;
-  /** Un episodio más largo que esto viaja recortado (principio y final). */
+  /** An episode longer than this travels truncated (head and tail). */
   maxEpisodeChars?: number;
-  /** Tope de llamadas al LLM por corrida; lo pendiente queda para la próxima. */
+  /** Cap on LLM calls per run; what is left waits for the next one. */
   maxCalls?: number;
-  /** Tandas en que el LLM puede ignorar un episodio antes de darlo por ruido. */
+  /** Batches in which the LLM may ignore an episode before it counts as noise. */
   uncitedStrikes?: number;
   llm?: LlmConfig;
   distillFn?: DistillFn;
@@ -43,24 +43,24 @@ export interface RunSummary {
   scopes_failed: number;
   episodes_consolidated: number;
   episodes_dropped_pareto_l0: number;
-  /** Episodios que el LLM no logró procesar ni solos: siguen pendientes para la próxima corrida. */
+  /** Episodes the LLM could not process even alone: they stay pending for the next run. */
   episodes_skipped: number;
-  /** Episodios que el LLM leyó y no citó, con strike pendiente: vuelven en la próxima corrida. */
+  /** Episodes the LLM read and did not cite, with a pending strike: they come back next run. */
   episodes_uncited_pending: number;
   memories_created: number;
   llm_calls: number;
-  /** El proveedor rechazó credenciales o saldo y la corrida se cortó. */
+  /** The provider rejected credentials or balance and the run stopped. */
   aborted: boolean;
   errors: { scope: string; error: string }[];
   duration_ms: number;
 }
 
-// Dos semanas sin episodios nuevos: ese ámbito ya no va a juntar el mínimo (una charla vieja
-// importada, un proyecto que se dejó) y sin esto quedaba pendiente para siempre.
+// Two weeks with no new episodes: that scope will not reach the minimum (an old imported
+// chat, an abandoned project), and without this it stayed pending forever.
 const DEFAULT_QUIET_DAYS = 14;
-// Que el LLM no cite un episodio puede ser ruido real o un olvido suyo. Darlo por ruido
-// a la primera lo ponía en la fila de borrado de forget; reintentarlo cuesta los tokens
-// de una tanda que ya se paga, no una llamada extra.
+// The LLM not citing an episode can be real noise or its own mistake. Calling it noise on
+// the first try put it in forget's deletion queue; retrying costs the tokens of a batch
+// already paid, not an extra call.
 const DEFAULT_UNCITED_STRIKES = 3;
 
 interface ScopeRow {
@@ -147,7 +147,7 @@ export async function runConsolidation(
     }
     try {
       beginScope(state);
-      // Tandas hasta vaciar el ámbito o llegar al tope; una tanda sin avance corta.
+      // Batches until the scope is empty or the cap is hit; a batch with no progress stops.
       for (;;) {
         const created = await processScope(ctx, state, scope);
         summary.memories_created += created.memories;
@@ -177,8 +177,8 @@ export async function runConsolidation(
   // on a run that already spent them.
   summary.llm_calls = state.llmCalls;
 
-  // Backfill de embeddings para las memorias nuevas (y cualquier rezagada).
-  // Opcional: si no hay Ollama, degrada sin afectar la consolidación.
+  // Embedding backfill for new memories (and any straggler).
+  // Optional: without Ollama it degrades without affecting consolidation.
   if (!ctx.dryRun) {
     try {
       const emb = await embedPendingMemories(db, { timeoutMs: 120_000, batchSize: 8 });
@@ -186,7 +186,7 @@ export async function runConsolidation(
         log(`[consolidation] embeddings: pendientes=${emb.pending} embebidas=${emb.embedded} fallidas=${emb.failed}`);
       }
     } catch {
-      /* la capa semántica nunca rompe el ciclo de sueño */
+      /* the semantic layer never breaks the sleep cycle */
     }
   }
 

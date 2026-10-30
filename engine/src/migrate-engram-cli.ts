@@ -1,9 +1,7 @@
 #!/usr/bin/env node
-/**
- * mismem-migrate-engram CLI: migrates observations, sessions and user_prompts from an Engram
- * SQLite database (engram.db) into mismem as episodes. The reading and the writing live in
- * `ingest/engram.ts`; this file only parses arguments, prints and reports.
- */
+// mismem-migrate-engram: migrates observations, sessions and user_prompts from an Engram
+// SQLite database into misMEM episodes. Reading and writing live in `ingest/engram.ts`;
+// this file only parses arguments, prints and reports.
 import { openDefaultDb, defaultDbPath } from "./store/db.js";
 import { ArgsError, EXIT_USAGE } from "./cli-args.js";
 import { migrateEngram, readEngramDb } from "./ingest/engram.js";
@@ -42,7 +40,7 @@ async function main(): Promise<void> {
     help();
     return;
   }
-  // Falta de un argumento obligatorio es error de uso, igual que dárselo sin valor.
+  // A missing required argument is a usage error, just like giving it without a value.
   if (!opts.source) {
     console.error("[migrate] falta --source (ruta a engram.db)\n");
     help();

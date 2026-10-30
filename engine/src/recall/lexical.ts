@@ -28,9 +28,9 @@ export interface TraitCandidate {
 interface MemoryCandidate extends SalienceRow {
   id: string;
   scope: string;
-  /** Lo que se devuelve: el gist. */
+  /** What is returned: the gist. */
   text: string;
-  /** Lo que indexa FTS5 y sobre lo que se cuenta: gist y detalles. */
+  /** What FTS5 indexes and what is counted: gist and details. */
   search_text: string;
   fts_rank: number;
 }
@@ -42,12 +42,12 @@ export interface EpisodeCandidate {
   created_at: number;
 }
 
-/** Lo mínimo para ordenar candidatos rescatados: texto, id y puesto de FTS5. */
+/** The minimum to order rescued candidates: text, id and FTS5 rank. */
 export interface RankedCandidate {
   id: string;
-  /** Lo que se devuelve al cliente. */
+  /** What is returned to the client. */
   text: string;
-  /** Lo que indexa FTS5; si falta, se puntúa `text` (rasgos y episodios). */
+  /** What FTS5 indexes; when absent, `text` is scored (traits and episodes). */
   search_text?: string;
   fts_rank: number;
 }
@@ -59,7 +59,7 @@ export function lexicalCandidates(
   db: DB,
   input: ReturnType<typeof RecallInput.parse>,
   at: number,
-  /** Sin capa semántica que responda, el rescate es lo único que encuentra una frase natural. */
+  /** With no semantic layer answering, the rescue is the only thing that finds a natural phrase. */
   { rescue = true }: { rescue?: boolean } = {},
 ): {
   traits: TraitCandidate[];
@@ -109,16 +109,16 @@ export function lexicalCandidates(
     episodes: episodeStmt.all({ q, scope: input.scope, limit: CANDIDATE_POOL_LIMIT }) as RankedEpisode[],
   });
 
-  // La estricta manda sobre la consulta entera: si encontró algo en cualquier capa, el
-  // resultado es el de siempre. El rescate sólo entra cuando no hubo ni un candidato, para
-  // que una paráfrasis no altere una búsqueda que ya funcionaba.
+  // The strict query rules over the whole query: if it found anything in any layer, the
+  // result is the usual one. Rescue only comes in when there was not a single candidate, so
+  // a paraphrase does not alter a search that already worked.
   const strictRows = run(strict);
   const strictEmpty =
     strictRows.traits.length === 0 &&
     strictRows.memories.length === 0 &&
     strictRows.episodes.length === 0;
-  // Sólo se consulta la frecuencia cuando de verdad hace falta rescatar: son hasta doce
-  // cuentas sobre memories_fts que una búsqueda normal no debe pagar.
+  // Frequency is only queried when a rescue is really needed: up to twelve counts over
+  // memories_fts that a normal search must not pay for.
   let rescuedTerms: RelaxedTerm[] | null = null;
   let rescuedWordCount = 0;
   let rows = strictRows;
@@ -128,8 +128,8 @@ export function lexicalCandidates(
     if (relaxed !== strict) {
       rows = run(relaxed);
       rescuedTerms = informativeTerms(db, terms);
-      // La proporción cuenta lo que de verdad se busca; RELAXED_MAX_TERMS ya recortó la
-      // consulta, y exigir por palabras que no llegaron a buscar sería inalcanzable.
+      // The ratio counts what is actually searched; RELAXED_MAX_TERMS already trimmed the
+      // query, and demanding words that never got searched would be unreachable.
       rescuedWordCount = Math.min(wordCount, RELAXED_MAX_TERMS);
     }
   }
@@ -144,9 +144,9 @@ export function lexicalCandidates(
       : rows.episodes
   ).map(({ fts_rank: _ftsRank, ...row }) => row);
 
-  // El rescate ya viene ordenado por coincidencias y recortado a RELAXED_MAX_RESULTS. El
-  // estricto conserva el orden de FTS5 y desempata por la saliencia ya decaída: la cruda
-  // favorecía lo que se usó hace mucho y no es la que ve el cliente en el hit.
+  // Rescue already comes ordered by matches and cut to RELAXED_MAX_RESULTS. The strict path
+  // keeps FTS5's order and breaks ties by decayed salience: the raw value favoured what was
+  // used long ago and is not what the client sees in the hit.
   const orderedMemories = rescuedTerms
     ? relaxRows(rows.memories, rescuedTerms, rescuedWordCount)
     : rows.memories.sort(

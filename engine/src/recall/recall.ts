@@ -9,8 +9,8 @@ import { semanticSearchMemories } from "../embeddings/store.js";
 import { reinforceMemories } from "../memory/salience.js";
 
 /**
- * Reforzar lo que el recall devuelve premia a un recuerdo que aparece siempre y no sirve
- * nunca. Con el hook del cliente puesto, el refuerzo llega por `reinforce` y esto se apaga.
+ * Reinforcing what recall returns rewards a memory that always shows up and never helps.
+ * With the client hook in place, reinforcement arrives through `reinforce` and this is off.
  */
 function reinforcesOnRecall(): boolean {
   return (process.env.MISMEM_REINFORCE_ON_RECALL ?? "on").trim().toLowerCase() !== "off";
@@ -55,8 +55,8 @@ function finalizeHits(
 }
 
 /**
- * Recall léxico puro: es el camino sin capa semántica, así que siempre puede rescatar.
- * `recallHybrid` es quien apaga el rescate cuando hay vectores comparables que puntuar.
+ * Pure lexical recall: the path with no semantic layer, so it can always rescue.
+ * `recallHybrid` is what turns rescue off when there are comparable vectors to score.
  */
 export function recall(
   db: DB,
@@ -76,9 +76,8 @@ export function recall(
 }
 
 /**
- * Recall híbrido: FTS5 (léxico) + coseno sobre embeddings (semántico).
- * Si no hay embedder disponible (Ollama caído / MISMEM_EMBEDDINGS=off),
- * el resultado es idéntico a recall().
+ * Hybrid recall: FTS5 (lexical) plus cosine over embeddings (semantic). With no embedder
+ * available (Ollama down / MISMEM_EMBEDDINGS=off) the result is identical to `recall()`.
  */
 export async function recallHybrid(
   db: DB,
@@ -103,11 +102,9 @@ export async function recallHybrid(
         model: semanticModel,
       })
     : [];
-  // El rescate léxico sólo entra cuando no hay capa semántica: embeddings apagados, el
-  // embedder sin responder o ningún vector del modelo activo. Medido con 2.527 memorias, con
-  // embeddings el rescate apenas suma aciertos y en cambio empuja la respuesta buena hacia
-  // abajo y trae recuerdos a preguntas ajenas; sin ellos, es lo que lleva el recall de 0,1 a
-  // 2,5 recuerdos por pregunta.
+  // Lexical rescue only comes in with no semantic layer: embeddings off, the embedder not
+  // answering, or no vector of the active model. The measurement behind that cut is in
+  // docs/recall.md#el-rescate.
   const semanticLayer =
     queryVec !== undefined &&
     hasComparableVectors(db, { model: semanticModel, dims: queryVec.length, scope: input.scope });

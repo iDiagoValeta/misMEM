@@ -1,7 +1,5 @@
-/**
- * Server core — registra las 6 tools canónicas + alias engram-compat.
- * Reusado por `server.ts` (stdio) y `server-http.ts` (StreamableHTTP).
- */
+// Server core: registers the six canonical tools plus the engram-compat aliases, shared by
+// `server.ts` (stdio) and `server-http.ts` (Streamable HTTP).
 import { createRequire } from "node:module";
 import { Server } from "@modelcontextprotocol/sdk/server/index.js";
 import {
@@ -165,12 +163,12 @@ export function createServer(db: DB): Server {
           break;
         case "consolidate": {
           result = consolidate(db, args);
-          // Best-effort: si hay embedder local, la memoria nueva queda
-          // embebida ya; si no, el backfill nocturno la levanta después.
+          // Best effort: with a local embedder the new memory is embedded right away; the
+          // nightly backfill picks it up otherwise.
           try {
             await embedPendingMemories(db);
           } catch {
-            /* semántica es opcional; nunca rompe el write path */
+            /* semantics are optional and never break the write path */
           }
           break;
         }

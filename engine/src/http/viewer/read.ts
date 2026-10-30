@@ -1,19 +1,6 @@
-/**
- * misMEM viewer — API de lectura y UI compilada.
- *
- * Endpoints (todos detrás de la misma BasicAuth de /mcp):
- *   GET /viewer            → la interfaz compilada (ui/ → dist/ui), ver viewer-static.ts
- *   GET /api/stats         → totales por capa + top scopes
- *   GET /api/recent        → últimas N filas de una capa (?layer=&scope=&limit=)
- *   GET /api/search        → recall híbrido read-only (?q=&scope=&limit=)
- *   El resto de GET /api/* (scopes, memories, memory/:id, trait/:id, graph) vive en viewer-api.ts.
- *
- * Nada de acá escribe: las acciones (editar, desconsolidar, los dos forget en dos
- * pasos, cristalizar, lanzar una consolidación) viven en viewer-actions.ts.
- *
- * Las consultas viven en engine/src/queries/: acá sólo se valida la entrada, se llama y se
- * responde. Cero dependencias nuevas.
- */
+// Read-only viewer API and the compiled interface. Nothing here writes; the actions (edit,
+// unconsolidate, the two forgets, crystallize, start a consolidation) are in actions.ts. The
+// queries live in engine/src/queries/: here the input is validated and the answer sent.
 import type { ServerResponse } from "node:http";
 import type { Database as DB } from "better-sqlite3";
 import { countPendingEpisodes, pendingEpisodes } from "../../memory/pending.js";
@@ -38,8 +25,8 @@ export function clampLimit(raw: string | null, def: number, max: number): number
 }
 
 /**
- * Un offset inválido o negativo cuenta como 0; SQLite no acepta NaN ni Infinity. Pasado
- * MAX_SAFE_INTEGER (1e20) deja de ser un entero que SQLite pueda bindear: se recorta.
+ * An invalid or negative offset counts as 0; SQLite accepts neither NaN nor Infinity. Past
+ * MAX_SAFE_INTEGER (1e20) it stops being an integer SQLite can bind, so it is clamped.
  */
 export function parseOffset(raw: string | null): number {
   const n = Number(raw);
@@ -60,11 +47,11 @@ export function handleRecent(db: DB, res: ServerResponse, url: URL): void {
   const scope = url.searchParams.get("scope");
   const limit = clampLimit(url.searchParams.get("limit"), 50, 200);
 
-  // Sólo los episodios tienen estado de consolidación: en las otras capas `pending` no
-  // cambia nada y la respuesta sigue siendo la de siempre, sin `total`.
+  // Only episodes have a consolidation state: on the other layers `pending` changes nothing
+  // and the response stays as it always was, without `total`.
   if (layer === "episode" && url.searchParams.get("pending") === "1") {
     const offset = parseOffset(url.searchParams.get("offset"));
-    // El total es el de todos los pendientes: el cliente pagina con él, no con el tamaño de la página.
+    // The total counts every pending episode: the client pages with it, not with the page size.
     const total = countPendingEpisodes(db, scope);
     const rows = pendingEpisodes(db, scope, limit, offset);
     json(res, 200, { layer, scope, rows, total });

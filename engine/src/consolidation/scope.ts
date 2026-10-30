@@ -1,7 +1,5 @@
-/**
- * Una tanda de un ámbito: qué episodios entran, qué se le pide al LLM y qué se apunta de
- * lo que devolvió. `run.ts` la repite hasta vaciar el ámbito o gastar las llamadas.
- */
+// One batch of a scope: which episodes go in, what the LLM is asked and what is recorded of
+// what it returned. `run.ts` repeats it until the scope is empty or the calls run out.
 import type { Database as DB } from "better-sqlite3";
 import { consolidate } from "../memory/consolidate.js";
 import type { EpisodeRow } from "../store/rows.js";
@@ -28,7 +26,7 @@ export interface Limits {
   maxCalls: number;
 }
 
-/** Lo fijo de una corrida: no cambia entre ámbitos ni entre tandas. */
+/** The fixed part of a run: it does not change across scopes or batches. */
 export interface RunContext {
   db: DB;
   cutoff: number;
@@ -42,20 +40,20 @@ export interface RunContext {
 }
 
 /**
- * Lo que se gasta y lo que se da por visto. Las llamadas duran toda la corrida; el tope
- * de la tanda y los episodios ya vistos son de cada ámbito y `beginScope` los limpia.
+ * What is spent and what counts as seen. Calls last the whole run; the batch cap and the
+ * episodes already seen belong to each scope, and `beginScope` clears them.
  */
 export interface RunState {
   llmCalls: number;
-  /** Cuántos episodios entran en una respuesta; baja si una respuesta llega cortada. */
+  /** How many episodes fit in one answer; it drops if an answer comes back truncated. */
   cap: { episodes: number };
-  /** Lo que no entró ni solo en esta corrida: no se reintenta hasta la próxima. */
+  /** What did not fit even alone in this run: it is not retried until the next one. */
   skipped: Set<string>;
-  /** Lo que el LLM leyó y no citó: tampoco se repaga en esta corrida. */
+  /** What the LLM read and did not cite: it is not paid again in this run either. */
   deferred: Set<string>;
 }
 
-/** Lo que una tanda aportó al resumen; `skipped` avisa de que queda algo para la próxima. */
+/** What one batch added to the summary; `skipped` warns that something is left for next time. */
 interface ScopeOutcome {
   memories: number;
   episodes: number;
@@ -75,14 +73,14 @@ export function newRunState(): RunState {
   };
 }
 
-/** El gasto de llamadas no se toca: es de la corrida, no del ámbito. */
+/** Call spending is not touched: it belongs to the run, not to the scope. */
 export function beginScope(state: RunState): void {
   state.cap.episodes = Number.POSITIVE_INFINITY;
   state.skipped.clear();
   state.deferred.clear();
 }
 
-/** Queda presupuesto de llamadas; `limits.maxCalls` es el tope de la corrida. */
+/** There is call budget left; `limits.maxCalls` is the run's cap. */
 export function hasCallsLeft(ctx: RunContext, state: RunState): boolean {
   return state.llmCalls < ctx.limits.maxCalls;
 }
@@ -108,7 +106,7 @@ export async function processScope(
 
   if (episodes.length === 0) return { memories: 0, episodes: 0, dropped_l0: 0 };
 
-  // Pareto pre-filter: aparta L0 (ruido) y los marca con stub para forget posterior.
+  // Pareto pre-filter: sets L0 (noise) aside and marks it with a stub for a later forget.
   let dropped_l0 = 0;
   let candidates = episodes;
   if (paretoPrefilter && !dryRun) {
@@ -138,7 +136,7 @@ export async function processScope(
     return { memories: dropped_l0 > 0 ? 1 : 0, episodes: dropped_l0, dropped_l0 };
   }
 
-  // Sólo viaja lo que entra en el presupuesto; el resto queda pendiente para la tanda siguiente.
+  // Only what fits the budget travels; the rest stays pending for the next batch.
   const forPrompt = fitPrompt(candidates, {
     maxEpisodes: state.cap.episodes,
     maxPromptChars: limits.maxPromptChars,
@@ -163,13 +161,13 @@ export async function processScope(
     } catch (err) {
       const splittable = err instanceof LlmTruncatedError || err instanceof LlmInvalidJsonError;
       if (splittable && forPrompt.length === 1) {
-        // Marcarlo ruido lo borraba con el próximo forget; fallar trababa el ámbito cada noche
-        // contra el mismo episodio. Queda pendiente y la corrida sigue con el resto.
+        // Marking it noise deleted it with the next forget; failing blocked the scope every
+        // night on the same episode. It stays pending and the run goes on with the rest.
         const why = err instanceof LlmTruncatedError ? "respuesta cortada" : "JSON inválido";
         log(`[consolidation] scope="${scope}" -> ${why} con 1 episodio: queda pendiente para la próxima corrida`);
         for (const e of candidates) state.skipped.add(e.id);
-        // Con JSON inválido el veneno era el episodio, no el tamaño: la tanda vuelve a llenarse.
-        // Con respuesta cortada el tope chico se mantiene: el modelo no entra más.
+        // With invalid JSON the poison was the episode, not the size: the batch fills again.
+        // With a truncated answer the small cap stays: the model does not fit more.
         if (err instanceof LlmInvalidJsonError) state.cap.episodes = Number.POSITIVE_INFINITY;
         return { memories: dropped_l0 > 0 ? 1 : 0, episodes: dropped_l0, dropped_l0, skipped: true };
       }
@@ -207,12 +205,11 @@ export async function processScope(
     totalEpisodes += result.consolidated;
   }
 
-  // Lo que el LLM leyó y no citó puede no tener señal, o puede habérsele pasado. Cada
-  // tanda sin citar suma un strike y recién al agotarlos pasa a ruido; mientras le queden,
-  // vuelve en la próxima corrida. Una lista vacía ("sin señal") cuenta igual para toda la
-  // tanda: antes la mandaba entera a ruido a la primera, y un mal día del modelo (o un
-  // episodio que le pide devolver la lista vacía) se llevaba hasta maxBatch episodios.
-  // Una respuesta con todo inventado, en cambio, deja los episodios pendientes y sin strike.
+  // What the LLM read and did not cite may carry no signal, or it may have missed it. Each
+  // uncited batch adds a strike, and only at the last one does it become noise; while strikes
+  // remain it returns next run. An empty list ("no signal") counts for the whole batch: before,
+  // it sent everything to noise on the first try, and one bad model day (or an episode asking
+  // for the empty list) wiped up to maxBatch; all invented leaves them pending and unstruck.
   if (distilled.length === 0) {
     log(`[consolidation] scope="${scope}" -> LLM dijo "sin se\u00f1al" para ${candidates.length} episodios: strike a todos`);
   }
