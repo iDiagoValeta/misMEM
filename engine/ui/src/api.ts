@@ -77,19 +77,36 @@ export interface GraphNode {
   label: string;
   salience?: number;
   strength?: number;
+  /** Only with the connectome on: accumulated association and neighbours above the floor. */
+  co_use?: { degree: number; strength: number };
 }
 
 export interface GraphLink {
   source: string;
   target: string;
-  kind: "origin" | "evidence" | "related";
+  kind: "origin" | "evidence" | "related" | "co_use";
+  /** Cosine, `related` only. */
   score?: number;
+  /** Turns backing the edge, `co_use` only: strength does not read without its support. */
+  n?: number;
+  /** NPMI, `co_use` only. */
+  strength?: number;
+}
+
+/** The sample behind the lateral layer: what lets the panel say the figures mean nothing yet. */
+export interface ConnectomeSummary {
+  turns: number;
+  pairs: number;
+  shown: number;
+  min_n: number;
+  hubs: Array<{ id: string; degree: number; strength: number }>;
 }
 
 export interface GraphData {
   nodes: GraphNode[];
   links: GraphLink[];
   truncated: { memories: boolean; traits: boolean; episodes: boolean };
+  connectome?: ConnectomeSummary;
 }
 
 /** One page of `/api/recent?layer=episode&pending=1`. */
@@ -213,8 +230,25 @@ export const api = {
   // The top 50: this is a relevance list and the tail adds nothing.
   search: (q: string, scope: string | undefined, signal?: AbortSignal) =>
     get<{ hits: SearchHit[] }>("search", { q, scope, limit: "50" }, signal),
-  graph: (scope: string | undefined, episodes: boolean, signal?: AbortSignal) =>
-    get<GraphData>("graph", { scope, related: "1", episodes: episodes ? "1" : undefined }, signal),
+  // `co_use_min_n` goes to the server and not to the client so the hubs and the sample it
+  // reports describe the same edges that get drawn.
+  graph: (
+    scope: string | undefined,
+    episodes: boolean,
+    coUse: { enabled: boolean; minN: number },
+    signal?: AbortSignal,
+  ) =>
+    get<GraphData>(
+      "graph",
+      {
+        scope,
+        related: "1",
+        episodes: episodes ? "1" : undefined,
+        co_use: coUse.enabled ? "1" : undefined,
+        co_use_min_n: coUse.enabled ? String(coUse.minN) : undefined,
+      },
+      signal,
+    ),
   memory: (id: string, signal?: AbortSignal) => get<MemoryDetail>(`memory/${encodeURIComponent(id)}`, {}, signal),
   trait: (id: string, signal?: AbortSignal) => get<TraitDetail>(`trait/${encodeURIComponent(id)}`, {}, signal),
 };

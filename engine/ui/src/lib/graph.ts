@@ -9,8 +9,35 @@ export interface GraphFilters {
   orphans: boolean;
   related: boolean;
   episodes: boolean;
+  /** The lateral layer: edges from measured co-use, which also light the drawing. */
+  coUse: boolean;
   query: string;
   local: { enabled: boolean; depth: 1 | 2 | 3; centerId?: string };
+}
+
+/**
+ * Below this many measured turns the strength is noise by construction: two memories used once,
+ * that once together, score 1. The panel says so instead of letting the drawing lie.
+ */
+export const THIN_SAMPLE_TURNS = 20;
+
+/**
+ * How brightly a lateral edge is drawn. Only a positive association lights up: at zero the pair
+ * is indistinguishable from chance and below it they avoid each other, and neither deserves ink.
+ */
+export function coUseGlow(strength: number | undefined): { alpha: number; width: number } {
+  const lit = Math.min(1, Math.max(0, strength ?? 0));
+  return { alpha: 0.2 + 0.8 * lit, width: 0.7 + 2.3 * lit };
+}
+
+/**
+ * A node's halo, normalized against the strongest in view: a graph of weak associations would
+ * otherwise read as dark and one of strong associations as burnt, when what matters is who
+ * stands out among what is drawn.
+ */
+export function hubGlow(strength: number | undefined, max: number): number {
+  if (max <= 0 || strength === undefined || strength <= 0) return 0;
+  return Math.min(1, strength / max);
 }
 
 /** A link at two moments: fresh from the API and already mutated by force-graph. */
@@ -91,7 +118,10 @@ export function filterGraph(data: GraphData, filters: GraphFilters): GraphData {
       (node) => node.label.toLowerCase().includes(query) || node.scope.toLowerCase().includes(query),
     );
   }
-  let links = data.links.filter((link) => filters.related || link.kind !== "related");
+  let links = data.links.filter(
+    (link) =>
+      (filters.related || link.kind !== "related") && (filters.coUse || link.kind !== "co_use"),
+  );
 
   // Links of a node that is gone count for nothing that follows.
   let alive = new Set(nodes.map((node) => node.id));

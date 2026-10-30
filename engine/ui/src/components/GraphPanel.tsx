@@ -15,6 +15,8 @@ export interface GraphSettings {
   orphans: boolean;
   related: boolean;
   episodes: boolean;
+  coUse: boolean;
+  coUseMinN: number;
   localEnabled: boolean;
   depth: 1 | 2 | 3;
   colorByScope: boolean;
@@ -33,6 +35,10 @@ export const DEFAULT_SETTINGS: GraphSettings = {
   orphans: true,
   related: true,
   episodes: false,
+  // Off by default: it is a second reading of the same graph, and the drawing that opens is
+  // the one the mock-up approved.
+  coUse: false,
+  coUseMinN: 1,
   localEnabled: false,
   depth: 2,
   colorByScope: true,
@@ -171,6 +177,26 @@ export function GraphPanel({ settings, onChange, scopes, width }: Props) {
             checked={settings.episodes}
             onChange={(v) => onChange({ episodes: v })}
           />
+        </Section>
+
+        <Section title="Conectoma" defaultOpen>
+          <ToggleRow
+            id="gp-co-use"
+            label="Aristas por co-uso"
+            checked={settings.coUse}
+            onChange={(v) => onChange({ coUse: v })}
+          />
+          {settings.coUse && (
+            <SliderRow
+              id="gp-co-use-min-n"
+              label="Soporte mínimo"
+              value={settings.coUseMinN}
+              min={1}
+              max={10}
+              step={1}
+              onValueChange={(v) => onChange({ coUseMinN: v })}
+            />
+          )}
         </Section>
 
         <Section title="Grupos" defaultOpen>
