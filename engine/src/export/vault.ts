@@ -1,6 +1,6 @@
 // The vault on disk: the manifest, the ownership proof and the write/remove pass. Note text is
 // built by `notes.ts`; this module never reads the database.
-import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
+import { existsSync, lstatSync, mkdirSync, readFileSync, realpathSync, rmSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve, sep } from "node:path";
 import { yaml } from "./notes.js";
 
@@ -23,7 +23,7 @@ export interface ExportStats {
   written: number;
   unchanged: number;
   removed: number;
-  /** Manifest entries not removed because they cannot be proven to be ours. */
+  /** Notes not written or removed: not provably ours, or a symlink would take them out of the export root. */
   skipped: number;
   dry_run: boolean;
 }
@@ -78,6 +78,37 @@ function readManifest(path: string): Map<string, ManifestEntry | null> | null {
   return entries;
 }
 
+/**
+ * The real path of `path` or of its closest existing ancestor. On a first export only the
+ * vault exists, so the folders of the notes cannot be resolved on their own. Only ENOENT
+ * means "missing"; any other failure counts as outside the export root.
+ */
+function realPathOf(path: string): string | null {
+  let current = path;
+  for (;;) {
+    try {
+      return realpathSync(current);
+    } catch (err) {
+      if ((err as NodeJS.ErrnoException).code !== "ENOENT") return null;
+      // A missing path is safe to walk up only if no link is in the way: a dangling link
+      // is not "not created yet", it points somewhere the export must not write through.
+      if (isSymlink(current)) return null;
+      const parent = dirname(current);
+      if (parent === current) return null;
+      current = parent;
+    }
+  }
+}
+
+/** Only a missing path is not a link: an unreadable or looping one is treated as one. */
+function isSymlink(path: string): boolean {
+  try {
+    return lstatSync(path).isSymbolicLink();
+  } catch (err) {
+    return (err as NodeJS.ErrnoException).code !== "ENOENT";
+  }
+}
+
 /** The file is ours only if its frontmatter still declares the id the manifest recorded. */
 function ownedBy(file: string, id: string): boolean {
   let content: string;
@@ -98,6 +129,11 @@ export function writeVault(
 ): ExportStats {
   const root = resolve(opts.dir, EXPORT_ROOT);
   const manifestPath = join(root, MANIFEST);
+  // Writing through a symlinked manifest would land wherever it points; check before reading,
+  // so a link to a FIFO cannot block the export first.
+  if (isSymlink(manifestPath)) {
+    throw new Error(`el manifiesto es un enlace simbólico o no se puede comprobar: ${manifestPath}. Revísalo a mano: no se toca la bóveda`);
+  }
   const manifestExists = existsSync(manifestPath);
   const previous = readManifest(manifestPath);
   // Writing a new manifest over an unreadable one loses the trail of the old notes forever:
@@ -113,12 +149,26 @@ export function writeVault(
     const file = resolve(root, rel);
     return file.startsWith(root + sep) ? file : null;
   };
+  // `resolve` follows no symlink, so a note or a folder replaced by one still looks inside.
+  // Compare real paths instead, against the export root; the root itself may be a symlink and
+  // that one is allowed.
+  const realRoot = realPathOf(root) ?? root;
+  const insideReal = (path: string): boolean => {
+    const real = realPathOf(path);
+    return real !== null && (real === realRoot || real.startsWith(realRoot + sep));
+  };
 
   let written = 0;
   let unchanged = 0;
+  let skipped = 0;
   for (const [rel, { content }] of files) {
     const file = inside(rel);
     if (!file) continue;
+    // A note replaced by a symlink, or reached through one, would write where it points.
+    if (isSymlink(file) || !insideReal(dirname(file))) {
+      skipped++;
+      continue;
+    }
     let current: string | undefined;
     try {
       current = readFileSync(file, "utf8");
@@ -141,7 +191,6 @@ export function writeVault(
   for (const [rel, { id, scope }] of files) manifest.files[rel] = { id, scope };
 
   let removed = 0;
-  let skipped = 0;
   for (const [rel, entry] of previous ?? []) {
     if (files.has(rel)) continue;
     // Old format: without an id there is no telling our note from one of the person's.
@@ -155,7 +204,15 @@ export function writeVault(
     }
     const file = inside(rel);
     if (!file) continue;
-    if (!existsSync(file)) {
+    // A folder replaced by a symlink would make rmSync delete the file it points at; a symlink
+    // as the note itself is removed as the link it is, never its target. Checked first, so a
+    // note behind such a folder is not counted as removed either.
+    if (!insideReal(dirname(file))) {
+      skipped++;
+      continue;
+    }
+    // A symlink left at the note path is not a missing note: the write pass skips it too.
+    if (!existsSync(file) && !isSymlink(file)) {
       // The note is gone: the entry is stale.
       removed++;
       continue;
