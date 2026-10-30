@@ -36,7 +36,7 @@ La semántica cubre deliberadamente sólo `memories`; `episodes` y `traits` cons
 Backfill y reindexado: `mismem-embed` (`--status`, `--force`).
 
 También habla con cualquier servidor compatible con OpenAI (`/v1/embeddings`, por ejemplo
-`llama-server --embedding`). **Si tus memorias no están en inglés, usa EmbeddingGemma 2**: con memorias en
+`llama-server --embedding`). **Si las memorias no están en inglés, conviene EmbeddingGemma 2**: con memorias en
 castellano encontró 34 de 50 paráfrasis frente a 4 de 50 de `nomic-embed-text` (medido en la issue #72), y
 en CPU no gasta VRAM. Va con sus prefijos y un corte de 0,65 (con 0,68 sale casi igual):
 

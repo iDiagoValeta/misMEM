@@ -47,7 +47,8 @@ docker pull ghcr.io/lucasmella-stack/mismem-brain:latest
 ```
 
 Trae `linux/amd64` o `linux/arm64` según el servidor. Los tags son la versión exacta
-(`X.Y.Z`), `major.minor` (`X.Y`) y `latest`, que sale del release estable más alto.
+(`X.Y.Z`), `major.minor` (`X.Y`) y `latest`, que sale del release estable más alto salvo en una
+republicación manual (ver más abajo).
 
 Opción B — build en el servidor, para probar un cambio sin pasar por un release:
 
@@ -300,7 +301,7 @@ Detalle de la consolidación en
 ## Medir el recall
 
 `mismem-bench` cuenta cuántas veces la memoria esperada sale entre las
-devueltas, con un banco de preguntas armado desde tu propia memoria. No
+devueltas, con un banco de preguntas armado desde la propia memoria. No
 refuerza, así que se puede correr contra la base viva:
 
 ```bash
@@ -389,6 +390,7 @@ modelo y la URL base se proponen como respuesta por defecto, y `MISMEM_INSTALL_A
 | `MISMEM_INSTALL_MODEL` | el de una instalación anterior, si no vacío | Modelo de consolidación. Obligatorio con `openai` y `compatible`; con los otros, vacío usa el de misMEM |
 | `MISMEM_INSTALL_BASE_URL` | el de una instalación anterior, si no `http://127.0.0.1:11434/v1` | Con proveedor `compatible`, URL base del servidor (con `/v1`) |
 | `MISMEM_INSTALL_HOOKS` | `yes` con `--yes` | `yes` o `no` para los hooks de Claude Code. Si la versión instalada no trae `mismem-inject` y `mismem-used`, queda en `no` |
+| `MISMEM_INSTALL_GEMMA_GGUF` | `<XDG_DATA_HOME>/mismem/models/embeddinggemma-2-Q8_0.gguf` | Ruta de un GGUF de EmbeddingGemma 2 que ya se tenga; con `--embeddings gemma` evita la descarga |
 | `MISMEM_INSTALL_VERSION` | `latest` | Al instalar desde npm (`--from-npm`), la versión del paquete |
 | `REPLACE_EXISTING` | `no` | Con `yes`, el instalador reemplaza un MCP `mismem` de opencode que ya tiene otro comando; sin ella lo deja como está y avisa. En Claude Code, Claude Desktop, VS Code y Cursor la entrada `mismem` se reescribe siempre, y unos hooks de misMEM de Claude Code configurados de otra forma nunca se tocan |
 
@@ -489,7 +491,7 @@ Nunca sale con error ni escribe en stdout: un hook que rompe no vale un punto de
 
 ### Antes de apagar el refuerzo por aparición
 
-Primero, qué reforzaría, sin escribir nada:
+Primero se puede ver qué reforzaría, sin escribir nada:
 
 ```bash
 mismem-used --transcript ~/.claude/projects/<proyecto>/<sesión>.jsonl --dry-run
@@ -555,7 +557,7 @@ archivo. Nunca los imprime.
 }
 ```
 
-### Antes de activarlo: qué sale de tu máquina
+### Antes de activarlo: qué sale de la máquina
 
 Lo inyectado viaja en **cada prompt** al proveedor del modelo. Un recuerdo personal
 entra en una conversación de trabajo salvo que lo excluyas:
@@ -564,7 +566,7 @@ entra en una conversación de trabajo salvo que lo excluyas:
 MISMEM_HOOK_EXCLUDE_SCOPES=personal,chatgpt,lucas,bardon
 ```
 
-Primero, qué inyectaría, sin mandar nada:
+Primero se puede ver qué inyectaría, sin mandar nada:
 
 ```bash
 echo '{"prompt":"tu pregunta"}' | mismem-inject --dry-run

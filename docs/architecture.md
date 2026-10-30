@@ -138,4 +138,4 @@ el grado es popularidad.
 - **Almacenamiento**: SQLite con WAL, `better-sqlite3`.
 - **Búsqueda**: FTS5 más RRF semántico para las memories, manteniendo traits > memories > episodes.
 - **Protocolo**: [Model Context Protocol](https://modelcontextprotocol.io/) con `@modelcontextprotocol/sdk`.
-- **Validación**: Zod en los bordes de MCP, HTTP, LLM y CLI; la entrada de los hooks se parsea a la defensiva.
+- **Validación**: Zod en las entradas de las herramientas MCP, los cuerpos POST del visor, la salida del LLM y el banco de `mismem-bench`; los argumentos de cada CLI se validan en su `*-args.ts` y la entrada de los hooks se parsea a la defensiva.
