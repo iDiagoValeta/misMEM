@@ -25,33 +25,33 @@ export async function editMemory(
       input.details?.trim() || null,
       id,
     );
-    // El vector viejo describe otro texto: sin borrarlo, la búsqueda semántica seguiría
-    // encontrando la memoria por lo que decía antes.
+    // The old vector describes another text: without deleting it, semantic search would
+    // keep finding the memory by what it used to say.
     db.prepare("DELETE FROM memory_embeddings WHERE memory_id = ?").run(id);
   })();
   try {
     await reembed(db);
     return { id, reembedded: true };
   } catch {
-    // Sin embedder la memoria se sigue encontrando por palabras; el backfill la recupera.
+    // Without an embedder the memory is still found by words; the backfill catches it up.
     return { id, reembedded: false };
   }
 }
 
-/** Deshace la consolidación: los episodios vuelven a pendientes por el ON DELETE SET NULL. */
+/** Undoes consolidation: the episodes become pending again through ON DELETE SET NULL. */
 export function unconsolidateMemory(db: DB, id: string): { id: string; episodes_released: number } {
   return db.transaction(() => {
     const { n } = db.prepare("SELECT COUNT(*) AS n FROM episodes WHERE consolidated_into = ?").get(id) as {
       n: number;
     };
-    // Vuelven sin strikes: que el LLM no los citara antes no dice nada de la próxima vez.
+    // They return without strikes: the LLM not citing them before says nothing about next time.
     db.prepare("UPDATE episodes SET uncited_count = 0 WHERE consolidated_into = ?").run(id);
     db.prepare("DELETE FROM memories WHERE id = ?").run(id);
     return { id, episodes_released: n };
   })();
 }
 
-/** Olvida como `forget`: la memoria y lo que la respaldaba. */
+/** Forgets like `forget`: the memory and what backed it. */
 export function forgetMemory(db: DB, id: string): { id: string; episodes_deleted: number } {
   return db.transaction(() => {
     const episodes = db.prepare("DELETE FROM episodes WHERE consolidated_into = ?").run(id).changes;

@@ -8,7 +8,7 @@ export function capture(db: DB, raw: unknown): { id: string; deduped: boolean } 
   const input = CaptureInput.parse(raw);
   const hash = contentHash(input.body);
 
-  // Idéntico (scope, body) ya inscripto → no duplicar; re-ingestar es idempotente.
+  // Same (scope, body) already stored → do not duplicate; re-ingesting is idempotent.
   const existing = db
     .prepare(
       "SELECT id FROM episodes WHERE scope = ? AND content_hash = ? LIMIT 1",

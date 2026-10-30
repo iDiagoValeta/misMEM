@@ -19,7 +19,7 @@ const GRAPH_MAX_EPISODES = 2000;
 const GRAPH_LABEL_CHARS = 120;
 const GRAPH_MAX_HUBS = 20;
 
-/** Topes por capa; los tests los bajan para no sembrar cientos de filas. */
+/** Caps per layer; the tests lower them so they do not seed hundreds of rows. */
 export interface GraphCaps {
   memories?: number;
   traits?: number;
@@ -31,7 +31,7 @@ export interface GraphQuery {
   withEpisodes: boolean;
   withRelated: boolean;
   withCoUse: boolean;
-  /** Fuerza mínima del co-uso; el llamador ya la normalizó desde el parámetro. */
+  /** Minimum co-use strength; the caller already normalized it from the query parameter. */
   coUseMinN?: number;
   at?: number;
   caps?: GraphCaps;
@@ -116,8 +116,8 @@ export function graphData(db: DB, query: GraphQuery): GraphBody {
   }
   if (query.withEpisodes && memoryIds.size > 0) {
     const idsJson = JSON.stringify([...memoryIds]);
-    // Los episodios del grafo son los que cuelgan de las memorias visibles; el recorte
-    // ocurre sobre ese conjunto, así que el total se cuenta con el mismo WHERE.
+    // The graph's episodes are those hanging from the visible memories; the cut happens over
+    // that set, so the total is counted with the same WHERE.
     const episodeTotal = (
       db
         .prepare(

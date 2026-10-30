@@ -7,7 +7,7 @@ export function forgetImpact(db: DB, layer: "memory" | "trait", id: string): Rec
     const { n } = db
       .prepare("SELECT json_array_length(evidence_memory_ids) AS n FROM traits WHERE id = ?")
       .get(id) as { n: number };
-    // Las memorias que cita no se borran; se cuentan para que el diálogo lo diga.
+    // The memories it cites are not deleted; they are counted so the dialog can say so.
     return { memories_cited: n };
   }
   const count = (sql: string): number => (db.prepare(sql).get(id) as { n: number }).n;

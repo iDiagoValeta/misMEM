@@ -6,9 +6,9 @@ import { registerTurn } from "../store/connectome.js";
 import { reinforceMemories } from "./salience.js";
 
 /**
- * Índice hebbiano: cuenta el uso de cada recuerdo y el co-uso de cada par que
- * se usó en el mismo turno. Vive acá y no en `reinforceMemories` porque a esa
- * la llama también el camino de recall, donde aparecer no es haberse usado.
+ * The Hebbian index: counts each memory's use and the co-use of every pair used in the
+ * same turn. It lives here and not in `reinforceMemories`, which the recall path also
+ * calls, where appearing is not having been used.
  */
 function recordUse(db: DB, memoryIds: readonly string[], at: number): void {
   const ids = [...new Set(memoryIds)].sort();
@@ -34,11 +34,9 @@ function recordUse(db: DB, memoryIds: readonly string[], at: number): void {
 }
 
 /**
- * Refuerza los recuerdos que una respuesta usó de verdad.
- *
- * Los rasgos se cuentan aparte en vez de caer en `unknown`: la inyección también los
- * adelanta, así que mezclarlos dejaba esa alarma —la de "alguien manda ids inventados"—
- * sonando desde el primer día. Un rasgo gana fuerza al cristalizar, no al usarse.
+ * Reinforces the memories a response actually used. Traits are counted apart, not as
+ * `unknown`: injection forwards them too, and mixing them kept that alarm ringing. A trait
+ * gains strength on crystallization, not on use.
  */
 export function reinforce(
   db: DB,

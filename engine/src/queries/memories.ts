@@ -36,7 +36,7 @@ function countBy(db: DB, sql: string): Map<string, number> {
   return new Map(rows.map((r) => [r.key, r.n]));
 }
 
-/** Cuántos rasgos citan a cada memoria. */
+/** How many traits cite each memory. */
 function traitCounts(db: DB): Map<string, number> {
   return countBy(
     db,
@@ -45,7 +45,7 @@ function traitCounts(db: DB): Map<string, number> {
   );
 }
 
-/** Cuántos episodios siguen atados a cada memoria (los demás ya los borró forget). */
+/** How many episodes remain tied to each memory (forget already deleted the rest). */
 function episodeCounts(db: DB): Map<string, number> {
   return countBy(
     db,
@@ -70,7 +70,7 @@ export function listMemories(db: DB, query: MemoryListQuery): MemoryList {
       episodes_left: episodes.get(row.id) ?? 0,
       traits: traits.get(row.id) ?? 0,
     }))
-    // Por la salience de hoy, como el recall; a igualdad, lo más nuevo primero.
+    // By today's salience, like recall; on a tie, the newest first.
     .sort((a, b) => b.salience - a.salience || b.created_at - a.created_at || a.id.localeCompare(b.id));
 
   return { total: memories.length, memories: memories.slice(query.offset, query.offset + query.limit) };
@@ -90,8 +90,8 @@ export function memoryDetail(db: DB, id: string, at: number): MemoryDetail | nul
   const row = db.prepare(`SELECT ${MEMORY_COLUMNS} FROM memories WHERE id = ?`).get(id) as MemoryRow | undefined;
   if (!row) return null;
 
-  // Las fuentes que la memoria declara y las que todavía apuntan a ella; si forget ya
-  // borró alguna, queda marcada en vez de desaparecer de la cadena.
+  // The sources the memory declares and those still pointing at it; one that forget already
+  // deleted stays marked instead of vanishing from the chain.
   const getEpisode = db.prepare(
     "SELECT id, scope, body, created_at, consolidated_into FROM episodes WHERE id = ?",
   );
@@ -108,7 +108,7 @@ export function memoryDetail(db: DB, id: string, at: number): MemoryDetail | nul
       scope: e.scope,
       text: e.body,
       created_at: e.created_at,
-      // Un episodio re-consolidado en otra memoria sigue en la lista, pero se nota.
+      // An episode re-consolidated into another memory stays in the list, but it shows.
       linked_here: e.consolidated_into === id,
     };
   });
@@ -127,7 +127,7 @@ export function memoryDetail(db: DB, id: string, at: number): MemoryDetail | nul
   return { memory: memoryView(row, at), episodes, traits };
 }
 
-/** Los ámbitos de unas memorias: lo que valida que la evidencia de un rasgo existe y es del suyo. */
+/** The scopes of some memories: what validates that a trait's evidence exists in its scope. */
 export function memoryScopes(db: DB, ids: readonly string[]): Array<{ id: string; scope: string }> {
   return db
     .prepare("SELECT id, scope FROM memories WHERE id IN (SELECT value FROM json_each(?))")

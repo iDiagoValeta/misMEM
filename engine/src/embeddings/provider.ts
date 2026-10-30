@@ -1,10 +1,5 @@
-/**
- * Owns the embedding provider config (env) and the HTTP client that turns text into vectors.
- *
- * Embeddings via Ollama local (default: nomic-embed-text) o cualquier servidor
- * compatible con OpenAI (`/v1/embeddings`, p. ej. llama-server). Si el servidor
- * no responde, todo degrada silenciosamente a FTS5 puro.
- */
+// Owns the embedding provider config (env) and the HTTP client that turns text into vectors.
+// Local Ollama or any OpenAI-compatible server; if it does not answer, everything degrades silently to plain FTS5.
 
 import { envPositiveNumber } from "../env.js";
 
@@ -17,12 +12,12 @@ export interface EmbeddingConfig {
   url: string;
   model: string;
   timeoutMs: number;
-  /** Algunos modelos (EmbeddingGemma) esperan un prefijo distinto para consulta y documento. */
+  /** Some models (EmbeddingGemma) expect a different prefix for query and document. */
   queryPrefix: string;
   docPrefix: string;
-  /** Coseno mínimo para que un recuerdo cuente como parecido; depende del modelo. */
+  /** Minimum cosine for a memory to count as similar; it depends on the model. */
   minScore: number;
-  /** Tope del texto de cada documento; el resumen va adelante y nunca se pierde. */
+  /** Cap on each document's text; the gist goes first and is never truncated. */
   maxChars: number;
 }
 
@@ -31,14 +26,14 @@ const DEFAULT_MIN_SCORE = 0.5;
 // Measured in issue #72: 0.65 leaves off-topic queries with 0 memories and loses no hits.
 const NOMIC_MIN_SCORE = 0.65;
 const OLLAMA_DEFAULT_URL = "http://127.0.0.1:11434";
-// El puerto por defecto de llama-server: con el proveedor openai, el de Ollama respondería 404 en silencio.
+// llama-server's default port: with the openai provider, Ollama's would answer 404 silently.
 const OPENAI_DEFAULT_URL = "http://127.0.0.1:8080";
 const DEFAULT_MAX_CHARS = 4000;
 
 export function loadEmbeddingConfig(): EmbeddingConfig {
   const provider: EmbeddingProvider =
     process.env.MISMEM_EMBEDDING_PROVIDER === "openai" ? "openai" : "ollama";
-  // Number("") es 0: sin la variable no hay corte elegido, y 0 sí es una elección válida (traer todo).
+  // Number("") is 0: without the variable no cut is chosen, and 0 is a valid choice (bring everything).
   const minScore = Number(process.env.MISMEM_EMBEDDING_MIN_SCORE || Number.NaN);
   const maxChars = Number(process.env.MISMEM_EMBEDDING_MAX_CHARS);
   const model = process.env.MISMEM_EMBEDDING_MODEL ?? "nomic-embed-text";
@@ -82,7 +77,7 @@ async function requestVectors(
   return data.embeddings ?? null;
 }
 
-/** Pide los vectores al servidor configurado. Devuelve null ante cualquier fallo (sin throw). */
+/** Asks the configured server for vectors. Returns null on any failure (it never throws). */
 export async function embedTexts(
   texts: string[],
   cfg: EmbeddingConfig = loadEmbeddingConfig(),

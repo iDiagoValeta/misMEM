@@ -7,9 +7,9 @@ import { effectiveSalience } from "../memory/salience.js";
 import { excludeNoiseSql } from "../store/rows.js";
 
 const RRF_K = 60;
-// Menor que un puesto de RRF en la cima (1/61 - 1/62 ≈ 0.00026): ahí la saliencia
-// sólo desempata. Más abajo los puestos se achican (≈ 0.00008 al final de los 50
-// candidatos) y una saliencia alta puede adelantar dos o tres lugares.
+// Below one RRF slot at the top (1/61 - 1/62 ≈ 0.00026), so salience only breaks ties there;
+// lower down the slots shrink (≈ 0.00008 at the end of the 50 candidates) and a high
+// salience can move two or three places.
 const SALIENCE_RRF_WEIGHT = 0.0002;
 
 function semanticHitToRecall(hit: SemanticHit, at: number): RecallHit {
@@ -25,14 +25,9 @@ function semanticHitToRecall(hit: SemanticHit, at: number): RecallHit {
 }
 
 /**
- * Si la búsqueda semántica de esta consulta tiene algo que puntuar: algún vector del mismo
- * modelo (si se filtró por modelo) y mismas dimensiones en el ámbito. Sin ninguno, el vector
- * de la consulta no encuentra nada y el recall queda en manos de lo léxico.
- *
- * Lleva los mismos filtros de selección que `semanticSearchMemories` (ámbito, modelo, dims y
- * ruido), no su corte por puntuación: un vector de ruido nunca se puntúa, así que no puede
- * encender la capa. El backfill no excluía el ruido hasta tarde, así que hay bases con vectores
- * de memorias `[noise]` y `[pareto:l0]`.
+ * Whether the semantic search has anything to score: a vector of the same model and dimensions
+ * in scope. It applies the same filters as `semanticSearchMemories` but not the score cutoff:
+ * a noise vector never scores, so it cannot turn the layer on.
  */
 export function hasComparableVectors(
   db: DB,

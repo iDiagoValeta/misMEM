@@ -14,8 +14,8 @@ export function updateEngramTarget(
   return db.transaction((): EngramUpdateTarget | null => {
     const memory = db.prepare("UPDATE memories SET gist = ? WHERE id = ?").run(content, id);
     if (memory.changes > 0) {
-      // El vector viejo describe otro texto: sin borrarlo, la búsqueda semántica seguiría
-      // encontrando la memoria por lo que decía antes. El backfill la vuelve a calcular.
+      // The old vector describes another text: without deleting it, semantic search would
+      // keep finding the memory by what it used to say. The backfill recomputes it.
       db.prepare("DELETE FROM memory_embeddings WHERE memory_id = ?").run(id);
       return "memory";
     }

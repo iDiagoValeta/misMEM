@@ -164,8 +164,8 @@ function migrate(db: DB): void {
     db.exec("ALTER TABLE memories ADD COLUMN use_count INTEGER NOT NULL DEFAULT 0");
   }
 
-  // Legacy triggers reindexaban FTS ante cualquier UPDATE, incluso cuando
-  // solo cambiaban salience, timestamps o strength.
+  // Legacy triggers reindexed FTS on any UPDATE, even when only salience,
+  // timestamps or strength changed.
   db.exec(`
     DROP TRIGGER IF EXISTS memories_au;
     CREATE TRIGGER memories_au AFTER UPDATE OF gist, details ON memories BEGIN
