@@ -2,6 +2,18 @@
 
 ## Sin publicar
 
+### El SQL del visor y de los CLI sale de la entrega (#165)
+
+- Las lecturas de `engine/src/http/viewer/read.ts` y `api.ts` pasan a `engine/src/queries/`: `stats.ts` (los
+  conteos del visor y el resumen de los dos CLI, con una función por forma), `recent.ts`, `scopes.ts`,
+  `memories.ts` (lista y detalle), `traits.ts` (detalle), `graph.ts` y `forget-impact.ts`, más `views.ts` con
+  la forma de una memoria y un rasgo. Las escrituras de `actions.ts` pasan a `engine/src/memory/edit.ts`.
+- Los handlers y `mismem-stats` / `mismem-ingest` quedan en validar, llamar y responder. Las consultas, el
+  orden de las operaciones, las claves y los códigos de las respuestas y la salida de los CLI se mueven sin
+  editarlos.
+- `engine/tests/queries.test.ts` cubre cada módulo, y `engine/tests/architecture.test.ts` pierde las cinco
+  excepciones de SQL que ya no hacen falta. `AGENTS.md` y `docs/architecture.md` describen el corte.
+
 ### El despacho HTTP se prueba sin abrir un puerto (#164)
 
 - `engine/src/server-http.ts` queda en leer el entorno, abrir la base, componer y escuchar. El despacho

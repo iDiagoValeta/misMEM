@@ -21,7 +21,7 @@ import { createHash } from "node:crypto";
 import { existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from "node:fs";
 import { dirname, join, resolve, sep } from "node:path";
 import type { Database as DB } from "better-sqlite3";
-import { excludeNoiseSql, type EpisodeRow, type MemoryRow, type TraitRow } from "../store/rows.js";
+import { excludeNoiseSql, type ConsolidatedEpisodeRow, type MemoryRow, type TraitRow } from "../store/rows.js";
 import { effectiveSalience } from "../memory/salience.js";
 import { parseIds, relatedLinks } from "../queries/relations.js";
 
@@ -58,8 +58,6 @@ export interface ExportStats {
 /** The columns the export selects: `source_episode_ids` is not needed here. */
 type ExportMemoryRow = Omit<MemoryRow, "source_episode_ids">;
 type ExportTraitRow = Omit<TraitRow, "created_at">;
-/** The query keeps only consolidated episodes, so the link is never null here. */
-type ExportEpisodeRow = EpisodeRow & { consolidated_into: string };
 
 /** Un nombre de fichero válido en Obsidian y en Windows, legible y corto. */
 export function safeName(text: string, max = 60): string {
@@ -117,7 +115,7 @@ export function exportObsidian(db: DB, opts: ExportOptions): ExportStats {
       `SELECT e.id, e.scope, e.body, e.created_at, e.consolidated_into FROM episodes e
        WHERE e.consolidated_into IN (SELECT value FROM json_each(?)) ORDER BY e.created_at`,
     )
-    .all(JSON.stringify(memories.map((m) => m.id))) as ExportEpisodeRow[];
+    .all(JSON.stringify(memories.map((m) => m.id))) as ConsolidatedEpisodeRow[];
 
   const salience = new Map(memories.map((m) => [m.id, effectiveSalience(m, at)]));
   const memoryPath = new Map(memories.map((m) => [m.id, `Memorias/${safeName(m.gist)} (${shortId(m.id)})`]));
@@ -147,14 +145,14 @@ export function exportObsidian(db: DB, opts: ExportOptions): ExportStats {
     const hash = createHash("sha256").update(s, "utf8").digest("hex").slice(0, 6);
     return `Ámbitos/${base} (${hash})`;
   };
-  const episodePath = (e: ExportEpisodeRow): string =>
+  const episodePath = (e: ConsolidatedEpisodeRow): string =>
     `Episodios/${day(e.created_at)} ${safeName(e.body, 40)} (${shortId(e.id)})`;
   // Una etiqueta de wikilink no puede contener el cierre del enlace ni partir la línea: un
   // `\` final escapaba el `]]` y un salto dejaba el enlace abierto en dos líneas.
   const linkLabel = (label: string): string => label.replace(/[[\]|\\<>]/g, " ").replace(/\s+/g, " ").trim();
   const link = (path: string, label?: string): string => (label ? `[[${path}|${linkLabel(label)}]]` : `[[${path}]]`);
 
-  const byMemory = new Map<string, ExportEpisodeRow[]>();
+  const byMemory = new Map<string, ConsolidatedEpisodeRow[]>();
   for (const e of episodes) byMemory.set(e.consolidated_into, [...(byMemory.get(e.consolidated_into) ?? []), e]);
   const citedBy = new Map<string, ExportTraitRow[]>();
   for (const t of traits) {

@@ -36,6 +36,9 @@ export interface EpisodeRow {
   consolidated_into: string | null;
 }
 
+/** An episode read through its memory link: the query's join or IN filter rules out null. */
+export type ConsolidatedEpisodeRow = EpisodeRow & { consolidated_into: string };
+
 export const MEMORY_COLUMNS =
   "id, scope, gist, details, source_episode_ids, salience, created_at, last_accessed_at, salience_updated_at";
 

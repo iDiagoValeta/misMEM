@@ -10,13 +10,11 @@ import { crystallize } from "../src/memory/crystallize.js";
 import {
   ForgetConfirmations,
   crystallizeFromUi,
-  editMemory,
-  forgetMemory,
   handleAction,
   loadAllowDelete,
-  unconsolidateMemory,
   writeGuard,
 } from "../src/http/viewer/actions.js";
+import { editMemory, forgetMemory, unconsolidateMemory } from "../src/memory/edit.js";
 
 let db: DB;
 beforeEach(() => {

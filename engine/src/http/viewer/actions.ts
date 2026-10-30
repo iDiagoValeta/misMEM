@@ -20,6 +20,9 @@
  * no borra. Responde 409 con lo que se perdería y un token de un solo uso, ligado a ese id y
  * válido 60 s; borra el segundo POST, el que trae {confirm_token}. Así la UI tiene que enseñar
  * el impacto antes de preguntar, y un request forjado suelto no alcanza.
+ *
+ * Las escrituras y su SQL viven en engine/src/memory/edit.ts; el impacto que se enseña antes
+ * de confirmar y los ámbitos que valida la evidencia, en engine/src/queries/.
  */
 import { randomBytes } from "node:crypto";
 import type { IncomingMessage, ServerResponse } from "node:http";
@@ -27,7 +30,15 @@ import type { Database as DB } from "better-sqlite3";
 import { z } from "zod";
 import { CrystallizeInput, Scope } from "../../schema.js";
 import { crystallize } from "../../memory/crystallize.js";
-import { embedPendingMemories } from "../../embeddings/store.js";
+import {
+  editMemory,
+  forgetMemory,
+  forgetTrait,
+  unconsolidateMemory,
+  type Reembed,
+} from "../../memory/edit.js";
+import { forgetImpact } from "../../queries/forget-impact.js";
+import { entityExists, memoryScopes } from "../../queries/memories.js";
 import { JobError, type ConsolidationJob } from "../../consolidation/job.js";
 import { json } from "../respond.js";
 
@@ -51,76 +62,6 @@ export function writeGuard(req: IncomingMessage): { status: number; error: strin
   }
   if (originHost !== req.headers.host) return { status: 403, error: "Origin ajeno" };
   return null;
-}
-
-const EditInput = z.object({
-  gist: z.string().trim().min(1).max(2000),
-  details: z.string().max(20_000).nullable().optional(),
-});
-
-type Reembed = (db: DB) => Promise<unknown>;
-
-const defaultReembed: Reembed = (db) => embedPendingMemories(db);
-
-function exists(db: DB, table: "memories" | "traits", id: string): boolean {
-  return db.prepare(`SELECT 1 FROM ${table} WHERE id = ?`).get(id) !== undefined;
-}
-
-export async function editMemory(
-  db: DB,
-  id: string,
-  raw: unknown,
-  reembed: Reembed = defaultReembed,
-): Promise<{ id: string; reembedded: boolean }> {
-  const input = EditInput.parse(raw);
-  db.transaction(() => {
-    db.prepare("UPDATE memories SET gist = ?, details = ? WHERE id = ?").run(
-      input.gist,
-      input.details?.trim() || null,
-      id,
-    );
-    // El vector viejo describe otro texto: sin borrarlo, la búsqueda semántica seguiría
-    // encontrando la memoria por lo que decía antes.
-    db.prepare("DELETE FROM memory_embeddings WHERE memory_id = ?").run(id);
-  })();
-  try {
-    await reembed(db);
-    return { id, reembedded: true };
-  } catch {
-    // Sin embedder la memoria se sigue encontrando por palabras; el backfill la recupera.
-    return { id, reembedded: false };
-  }
-}
-
-/** Deshace la consolidación: los episodios vuelven a pendientes por el ON DELETE SET NULL. */
-export function unconsolidateMemory(db: DB, id: string): { id: string; episodes_released: number } {
-  return db.transaction(() => {
-    const { n } = db.prepare("SELECT COUNT(*) AS n FROM episodes WHERE consolidated_into = ?").get(id) as {
-      n: number;
-    };
-    // Vuelven sin strikes: que el LLM no los citara antes no dice nada de la próxima vez.
-    db.prepare("UPDATE episodes SET uncited_count = 0 WHERE consolidated_into = ?").run(id);
-    db.prepare("DELETE FROM memories WHERE id = ?").run(id);
-    return { id, episodes_released: n };
-  })();
-}
-
-/** Lo que se pierde al olvidar: lo que el primer paso enseña antes de pedir confirmación. */
-function forgetImpact(db: DB, layer: "memory" | "trait", id: string): Record<string, number> {
-  if (layer === "trait") {
-    const { n } = db
-      .prepare("SELECT json_array_length(evidence_memory_ids) AS n FROM traits WHERE id = ?")
-      .get(id) as { n: number };
-    // Las memorias que cita no se borran; se cuentan para que el diálogo lo diga.
-    return { memories_cited: n };
-  }
-  const count = (sql: string): number => (db.prepare(sql).get(id) as { n: number }).n;
-  return {
-    episodes: count("SELECT COUNT(*) AS n FROM episodes WHERE consolidated_into = ?"),
-    traits_citing: count(
-      "SELECT COUNT(DISTINCT t.id) AS n FROM traits t, json_each(t.evidence_memory_ids) j WHERE j.value = ?",
-    ),
-  };
 }
 
 const CONFIRM_TTL_SECONDS = 60;
@@ -154,27 +95,11 @@ export function loadAllowDelete(env: NodeJS.ProcessEnv = process.env): boolean {
 
 const ConfirmInput = z.object({ confirm_token: z.string().min(1).max(128).optional() });
 
-/** Olvida como `forget`: la memoria y lo que la respaldaba. */
-export function forgetMemory(db: DB, id: string): { id: string; episodes_deleted: number } {
-  return db.transaction(() => {
-    const episodes = db.prepare("DELETE FROM episodes WHERE consolidated_into = ?").run(id).changes;
-    db.prepare("DELETE FROM memories WHERE id = ?").run(id);
-    return { id, episodes_deleted: episodes };
-  })();
-}
-
-function forgetTrait(db: DB, id: string): { id: string } {
-  db.prepare("DELETE FROM traits WHERE id = ?").run(id);
-  return { id };
-}
-
 /** Como la tool `crystallize`, pero sin aceptar memorias que no existen o de otro ámbito. */
 export function crystallizeFromUi(db: DB, raw: unknown): ReturnType<typeof crystallize> {
   const input = CrystallizeInput.parse(raw);
   const ids = [...new Set(input.evidence_memory_ids)];
-  const found = db
-    .prepare("SELECT id, scope FROM memories WHERE id IN (SELECT value FROM json_each(?))")
-    .all(JSON.stringify(ids)) as Array<{ id: string; scope: string }>;
+  const found = memoryScopes(db, ids);
   const missing = ids.filter((id) => !found.some((m) => m.id === id));
   if (missing.length > 0) throw new ActionError(400, `memorias que no existen: ${missing.join(", ")}`);
   const foreign = found.filter((m) => m.scope !== input.scope).map((m) => m.id);
@@ -210,7 +135,6 @@ export async function handleAction(
     confirmations?: ForgetConfirmations;
   } = {},
 ): Promise<boolean> {
-  const reembed = opts.reembed ?? defaultReembed;
   try {
     if (pathname === "/api/consolidate" && opts.job) {
       const scope = z.object({ scope: Scope.optional() }).parse(body ?? {}).scope;
@@ -226,13 +150,12 @@ export async function handleAction(
     const [, layer, rawId, action] = match;
     const id = decodeURIComponent(rawId ?? "");
     const target = layer === "trait" ? "trait" : "memory";
-    const table = target === "trait" ? "traits" : "memories";
-    if (!exists(db, table, id)) {
+    if (!entityExists(db, target, id)) {
       json(res, 404, { error: `no existe ${target === "trait" ? "el rasgo" : "la memoria"}: ${id}` });
       return true;
     }
     if (target === "trait" && action !== "forget") return false;
-    if (action === "edit") json(res, 200, await editMemory(db, id, body, reembed));
+    if (action === "edit") json(res, 200, await editMemory(db, id, body, opts.reembed));
     else if (action === "unconsolidate") json(res, 200, unconsolidateMemory(db, id));
     else {
       if (!opts.allowDelete || !opts.confirmations) {

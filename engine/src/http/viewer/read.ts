@@ -11,11 +11,14 @@
  * Nada de acá escribe: las acciones (editar, desconsolidar, los dos forget en dos
  * pasos, cristalizar, lanzar una consolidación) viven en viewer-actions.ts.
  *
- * Cero dependencias nuevas.
+ * Las consultas viven en engine/src/queries/: acá sólo se valida la entrada, se llama y se
+ * responde. Cero dependencias nuevas.
  */
 import type { ServerResponse } from "node:http";
 import type { Database as DB } from "better-sqlite3";
 import { countPendingEpisodes, pendingEpisodes } from "../../memory/pending.js";
+import { recentRows } from "../../queries/recent.js";
+import { viewerStats } from "../../queries/stats.js";
 import { recallHybrid } from "../../recall/recall.js";
 import type { EmbedFn } from "../../embeddings/provider.js";
 import { Layer } from "../../schema.js";
@@ -44,36 +47,7 @@ export function parseOffset(raw: string | null): number {
 }
 
 export function handleStats(db: DB, res: ServerResponse): void {
-  const counts = {
-    episodes: (
-      db.prepare("SELECT COUNT(*) AS n FROM episodes").get() as { n: number }
-    ).n,
-    memories: (
-      db.prepare("SELECT COUNT(*) AS n FROM memories").get() as { n: number }
-    ).n,
-    traits: (
-      db.prepare("SELECT COUNT(*) AS n FROM traits").get() as { n: number }
-    ).n,
-    consolidated: (
-      db
-        .prepare(
-          "SELECT COUNT(*) AS n FROM episodes WHERE consolidated_into IS NOT NULL",
-        )
-        .get() as { n: number }
-    ).n,
-  };
-  const topScopes = db
-    .prepare(
-      `SELECT scope, COUNT(*) AS n FROM episodes
-       GROUP BY scope ORDER BY n DESC LIMIT 10`,
-    )
-    .all() as Array<{ scope: string; n: number }>;
-  const last = db
-    .prepare(
-      "SELECT id, scope, created_at FROM episodes ORDER BY created_at DESC, rowid DESC LIMIT 1",
-    )
-    .get() as { id: string; scope: string; created_at: number } | undefined;
-  json(res, 200, { counts, topScopes, last: last ?? null });
+  json(res, 200, viewerStats(db));
 }
 
 export function handleRecent(db: DB, res: ServerResponse, url: URL): void {
@@ -97,36 +71,7 @@ export function handleRecent(db: DB, res: ServerResponse, url: URL): void {
     return;
   }
 
-  let rows: unknown[];
-  if (layer === "episode") {
-    rows = db
-      .prepare(
-        `SELECT id, scope, body AS text, created_at, consolidated_into
-         FROM episodes
-         WHERE (@scope IS NULL OR scope = @scope)
-         ORDER BY created_at DESC, rowid DESC LIMIT @limit`,
-      )
-      .all({ scope, limit });
-  } else if (layer === "memory") {
-    rows = db
-      .prepare(
-        `SELECT id, scope, gist AS text, details, salience, created_at, last_accessed_at
-         FROM memories
-         WHERE (@scope IS NULL OR scope = @scope)
-         ORDER BY salience DESC, created_at DESC LIMIT @limit`,
-      )
-      .all({ scope, limit });
-  } else {
-    rows = db
-      .prepare(
-        `SELECT id, scope, name AS text, strength, polarity, created_at, updated_at
-         FROM traits
-         WHERE (@scope IS NULL OR scope = @scope)
-         ORDER BY strength DESC, updated_at DESC LIMIT @limit`,
-      )
-      .all({ scope, limit });
-  }
-  json(res, 200, { layer, scope, rows });
+  json(res, 200, { layer, scope, rows: recentRows(db, layer, scope, limit) });
 }
 
 export async function handleSearch(
