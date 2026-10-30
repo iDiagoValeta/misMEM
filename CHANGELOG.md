@@ -10,6 +10,11 @@
   memoria con vector competía en los candidatos; ahora vuelve al default del modelo. El `0` explícito sigue
   valiendo como elección, y `MAX_CHARS` no cambia para ningún valor.
 
+### `.env.example` remite a la guía que existe (#203)
+
+- El comentario del servidor compatible con OpenAI apunta a `DEPLOY.md`, «Búsqueda por significado», en vez de a
+  una sección del README que no existe, y el ejemplo de EmbeddingGemma 2 usa el corte de 0,65 que recomienda la guía.
+
 ### La documentación dice lo que hace el código (#186)
 
 - `DEPLOY.md` daba a entender que EmbeddingGemma 2 arranca en 0,65: sólo `nomic-embed-text` sube el default a 0,65;
