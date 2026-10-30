@@ -42,8 +42,9 @@ const episode = (id: string, body: string, scope = "a"): NoteEpisode => ({ id, s
 
 /**
  * Hand-written paths: these tests pin each note's body, so they must not derive
- * their links from the path functions (tested below); the real wiring is covered
- * by `obsidian.test.ts` through `exportObsidian`.
+ * their links from the path functions (tested below); the real wiring (which map carries
+ * each id, and the scope resolver fed by the whole db) is covered by `obsidian.test.ts`
+ * through `exportObsidian`.
  */
 const PATHS: NotePaths = {
   memory: new Map([

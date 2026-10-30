@@ -45,7 +45,8 @@ const ROOT_FILES = [
 // the Zod boundary are shared vocabulary, not a capability.
 const ROOT_LEAVES = new Set(["env.ts", "cli-args.ts", "schema.ts"]);
 
-// Layers a capability may depend on, on top of itself and the root leaves.
+// Layers a capability may depend on, on top of itself and the root leaves. The matrix is
+// acyclic and this rule keeps no exception: `memory` does not reach back into `recall`.
 const ALLOWED: Record<string, string[]> = {
   domain: [],
   store: ["domain"],
