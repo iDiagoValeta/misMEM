@@ -20,8 +20,8 @@ la interfaz es React, Vite y Tailwind. Gestor de paquetes: pnpm, nunca npm.
 
 | Ruta | Qué posee | Se toca cuando |
 |---|---|---|
-| `engine/src/domain/` | `hash.ts` (hash del contenido, dedup de `capture`), `terms.ts` (tokenización compartida por la búsqueda y la medición de uso), `noise.ts` (marcadores de ruido). Sin I/O ni entorno | cambia uno de esos tres criterios |
-| `engine/src/store/` | `db.ts` (`SCHEMA`, migraciones aditivas en `migrate()`, apertura con permisos `0600`), `connectome.ts` (turnos y pares de uso) | cambia una tabla, una columna o cómo se abre la base |
+| `engine/src/domain/` | `hash.ts` (hash del contenido, dedup de `capture`), `terms.ts` (tokenización compartida por la búsqueda y la medición de uso), `noise.ts` (marcadores de ruido y sus prefijos). Sin I/O, entorno ni SQL | cambia uno de esos tres criterios |
+| `engine/src/store/` | `db.ts` (`SCHEMA`, migraciones aditivas en `migrate()`, apertura con permisos `0600`), `connectome.ts` (turnos y pares de uso), `rows.ts` (las formas de fila y `MEMORY_COLUMNS` que comparten el visor y la exportación, más `excludeNoiseSql`) | cambia una tabla, una columna o cómo se abre la base |
 | `engine/src/memory/` | `tools.ts` (las operaciones MCP: `capture`, `recall` y `recallHybrid`, `reinforce`, `consolidate`, `crystallize`, `forget` y la lista de episodios pendientes), `salience.ts` (decay y refuerzo) | cambia lo que hace una herramienta o la fórmula de saliencia |
 | `engine/src/recall/` | `search.ts` (ranking: consulta FTS5, rescate y fusión RRF con la saliencia), `bench.ts` (medición del recall) | cambia el ranking (pide `mismem-bench`) |
 | `engine/src/queries/` | `relations.ts`: lecturas que comparten el visor y la exportación a Obsidian (memorias parecidas por vector) | cambia cómo se relacionan las memorias |

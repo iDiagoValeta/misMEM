@@ -18,8 +18,8 @@ import {
   decayMemories,
   effectiveSalience,
   reinforceMemories,
-  type SalienceRow,
 } from "./salience.js";
+import type { SalienceRow } from "../store/rows.js";
 
 const now = (): number => Date.now();
 

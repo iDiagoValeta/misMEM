@@ -1,10 +1,10 @@
 // Owns FTS query building, rescue and ranking for recall, apart from tools.ts so a ranking change does not share a diff with the write paths.
 import type { Database as DB } from "better-sqlite3";
 import type { RecallInput, RecallHit } from "../schema.js";
-import { excludeNoiseSql } from "../domain/noise.js";
 import { plain, searchTerms } from "../domain/terms.js";
 import type { SemanticHit } from "../embeddings/store.js";
-import { effectiveSalience, type SalienceRow } from "../memory/salience.js";
+import { effectiveSalience } from "../memory/salience.js";
+import { excludeNoiseSql, type SalienceRow } from "../store/rows.js";
 
 export const CANDIDATE_POOL_LIMIT = 50;
 const MEMORY_FTS_SCAN_LIMIT = 200;
