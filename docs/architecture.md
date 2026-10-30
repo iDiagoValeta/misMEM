@@ -63,7 +63,8 @@ quedan fuera (`engine/src/domain/noise.ts`).
 | Pieza | Qué es |
 |---|---|
 | `engine/src/server.ts` | Servidor MCP por stdio, para uso local |
-| `engine/src/server-http.ts` | Streamable HTTP para despliegue remoto: BasicAuth opcional y `/healthz`. Ver [DEPLOY.md](../DEPLOY.md) |
+| `engine/src/server-http.ts` | Streamable HTTP para despliegue remoto: BasicAuth opcional y `/healthz`. Lee el entorno, abre la base, compone el despacho y escucha. Ver [DEPLOY.md](../DEPLOY.md) |
+| `engine/src/http/routes.ts` | El despacho de cada petición en su orden (Host → `/healthz` → `/mcp` → visor y API → 404), con la base, la auth, el tope del cuerpo, el job de consolidación y el transporte del MCP inyectados. `respond.ts` reúne las respuestas JSON y de texto |
 | `engine/ui/` | La interfaz (React y Vite, compilada a `dist/ui/`) que `server-http` sirve en `/viewer`: memorias por saliencia de hoy, rasgos, lo pendiente y de dónde sale cada recuerdo. `pnpm dev:ui` la levanta en desarrollo contra un servidor en `:3200` |
 | `engine/src/http/viewer/read.ts`, `api.ts` | Su API de sólo lectura: `/api/{stats,recent,search,scopes,memories,graph}` y `/api/{memory,trait}/:id`. La saliencia que devuelven es la efectiva, con el decay aplicado a hoy, la misma que usa el recall |
 | `engine/src/http/viewer/actions.ts` | Lo que la interfaz puede cambiar, sólo por POST JSON desde el propio origen: corregir una memoria, deshacer su consolidación, cristalizar y lanzar una consolidación. Olvidar una memoria (con sus episodios) o un rasgo no tiene vuelta atrás y está apagado salvo con `MISMEM_VIEWER_ALLOW_DELETE=1`; aun así va en dos pasos: el primer POST devuelve qué se perdería y un token de 60 s, y borra el segundo, el que lo trae |

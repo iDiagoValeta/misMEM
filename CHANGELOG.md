@@ -2,6 +2,18 @@
 
 ## Sin publicar
 
+### El despacho HTTP se prueba sin abrir un puerto (#164)
+
+- `engine/src/server-http.ts` queda en leer el entorno, abrir la base, componer y escuchar. El despacho
+  (Host, `/healthz`, `/mcp`, el POST del visor, los GET, 404 y 405) pasa a `engine/src/http/routes.ts`, que
+  recibe por parámetro la base, la auth, los Hosts permitidos, el tope del cuerpo, el job de consolidación,
+  las opciones de borrado, el transporte del MCP y la interfaz compilada.
+- `engine/src/http/respond.ts` reúne `json` (que sale de `viewer/read.ts`) y las respuestas de texto que se
+  repetían: 401 con su reto, 404, 405 y 413. Códigos, cabeceras, cuerpos y el orden de las comprobaciones no
+  cambian.
+- `engine/tests/http-routes.test.ts` llama al handler con peticiones y respuestas simuladas y fija ese orden;
+  `server-http.test.ts` sigue lanzando el proceso real para bind, auth y Host.
+
 ### Una herramienta por fichero (#163)
 
 - `engine/src/memory/tools.ts` (419 líneas) queda en `capture.ts`, `pending.ts` (la lista de episodios
