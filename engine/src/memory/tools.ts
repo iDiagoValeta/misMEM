@@ -11,7 +11,8 @@ import {
 } from "../schema.js";
 import { contentHash } from "../domain/hash.js";
 import { registerTurn } from "../store/connectome.js";
-import { CANDIDATE_POOL_LIMIT, fuseMemories, hasComparableVectors, lexicalCandidates } from "../recall/search.js";
+import { CANDIDATE_POOL_LIMIT, lexicalCandidates } from "../recall/lexical.js";
+import { fuseMemories, hasComparableVectors } from "../recall/fuse.js";
 import { embedTexts, loadEmbeddingConfig, type EmbedFn } from "../embeddings/provider.js";
 import { semanticSearchMemories } from "../embeddings/store.js";
 import {

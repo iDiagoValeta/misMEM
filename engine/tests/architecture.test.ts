@@ -62,10 +62,11 @@ const ALLOWED: Record<string, string[]> = {
   http: ["domain", "store", "embeddings", "memory", "recall", "queries", "consolidation"],
 };
 
-// `memory` reaches back into `recall` for the fusion helpers while both live as
-// whole files; the split in a later PR removes the cycle.
+// `memory` reaches back into `recall` for the lexical pool and the fusion helpers
+// while `tools.ts` still owns the recall path; the tools split removes the cycle.
 const LAYER_EXCEPTIONS: Record<string, string> = {
-  "src/memory/tools.ts -> src/recall/search.ts (capa)": "search.ts is still one file; the split removes the cycle",
+  "src/memory/tools.ts -> src/recall/lexical.ts (capa)": "the lexical pool still lives in recall; the tools split removes the cycle",
+  "src/memory/tools.ts -> src/recall/fuse.ts (capa)": "the fusion helpers still live in recall; the tools split removes the cycle",
 };
 
 // SQL belongs to the capabilities that own the schema. The delivery layer (root,
@@ -89,7 +90,6 @@ const SIZE_EXCEPTIONS: Record<string, string> = {
   "src/consolidation/run.ts (400 líneas)": "awaits the consolidation split",
   "src/export/obsidian.ts (400 líneas)": "awaits the export split",
   "src/memory/tools.ts (400 líneas)": "awaits the tools split",
-  "src/recall/search.ts (400 líneas)": "awaits the search split",
 };
 
 const MAX_LINES = 400;

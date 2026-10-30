@@ -2,6 +2,14 @@
 
 ## Sin publicar
 
+### El ranking del recall se parte por política (#162)
+
+- `engine/src/recall/search.ts` (510 líneas) queda en `fts.ts` (sintaxis de la consulta FTS5), `rescue.ts`
+  (rescate laxo y sus constantes), `lexical.ts` (candidatos léxicos y sus tipos) y `fuse.ts` (RRF con la
+  saliencia). No hay barril: cada import nombra el fichero que lo exporta.
+- Sólo cambian rutas e imports: las constantes, las consultas y el orden de las operaciones se mueven sin
+  editarlas, así que el ranking es el mismo.
+
 ### Una sola definición de las formas de fila (#161)
 
 - `engine/src/store/rows.ts` reúne `MemoryRow`, `TraitRow` y `EpisodeRow` con los tipos del esquema de `db.ts`,
